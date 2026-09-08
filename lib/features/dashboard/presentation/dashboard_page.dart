@@ -17,7 +17,7 @@ class DashboardPage extends ConsumerWidget {
     final plannedSections =
         user.isHead
             ? const ['Newspapers', 'Billing', 'Collections', 'Reports']
-            : const ['My customers', 'My areas', 'Collections', 'Profile'];
+            : const ['Collections', 'Profile'];
 
     return Scaffold(
       appBar: AppBar(
@@ -102,7 +102,7 @@ class DashboardPage extends ConsumerWidget {
             ),
             const SizedBox(height: 24),
             Text(
-              user.isHead ? 'Phase 2 operations' : 'Workspace modules',
+              user.isHead ? 'Business operations' : 'Workspace modules',
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
                 color: AppTheme.ink,
                 fontWeight: FontWeight.w800,
@@ -144,27 +144,40 @@ class DashboardPage extends ConsumerWidget {
                       ),
                       _WorkspaceActionCard(
                         width: width,
-                        icon: Icons.swap_horiz,
-                        title: 'Customer assignments',
-                        subtitle: 'Assign and transfer existing customers',
-                        onTap: () => context.go('/customer-assignments'),
+                        icon: Icons.people_alt_outlined,
+                        title: 'Customers',
+                        subtitle: 'Profiles, routes, search, and assignments',
+                        onTap: () => context.go('/customers'),
                       ),
                     ],
                   );
                 },
               )
             else
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  for (final section in plannedSections)
-                    Chip(
-                      avatar: const Icon(Icons.lock_outline, size: 18),
-                      label: Text(section),
-                      side: BorderSide.none,
-                      backgroundColor: Colors.white,
-                    ),
+                  _WorkspaceActionCard(
+                    width: double.infinity,
+                    icon: Icons.people_alt_outlined,
+                    title: 'My customers',
+                    subtitle: 'Assigned customer routes and house details',
+                    onTap: () => context.go('/customers'),
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final section in plannedSections)
+                        Chip(
+                          avatar: const Icon(Icons.lock_outline, size: 18),
+                          label: Text(section),
+                          side: BorderSide.none,
+                          backgroundColor: Colors.white,
+                        ),
+                    ],
+                  ),
                 ],
               ),
             const SizedBox(height: 24),
@@ -183,8 +196,8 @@ class DashboardPage extends ConsumerWidget {
                     const SizedBox(height: 8),
                     Text(
                       user.isHead
-                          ? 'Employee invitations, member access, delivery areas, and existing-customer assignments use live Firestore data. Financial modules remain intentionally unavailable.'
-                          : 'Your active membership and assigned-customer access are enforced by Firestore Security Rules.',
+                          ? 'Employee access, delivery areas, and paginated customer management use live Firestore data. Financial modules remain intentionally unavailable.'
+                          : 'Your active membership, assigned areas, and customer access are enforced by Firestore Security Rules.',
                       style: const TextStyle(
                         color: Color(0xFF627D98),
                         height: 1.45,

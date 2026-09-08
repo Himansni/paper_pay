@@ -68,7 +68,7 @@ void main() {
     expect(find.text('Business settings'), findsOneWidget);
     expect(find.text('Employees'), findsOneWidget);
     expect(find.text('Areas'), findsOneWidget);
-    expect(find.text('Customer assignments'), findsOneWidget);
+    expect(find.text('Customers'), findsOneWidget);
     await tester.drag(find.byType(Scrollable), const Offset(0, -500));
     await tester.pumpAndSettle();
     expect(find.text('Connected workflows'), findsOneWidget);

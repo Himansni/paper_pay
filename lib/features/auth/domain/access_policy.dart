@@ -28,6 +28,32 @@ class AccessPolicy {
       (member.isHead ||
           member.permissions.contains(PermissionKey.addCustomers));
 
+  bool canEditCustomer({
+    required AppUser member,
+    required String customerBusinessId,
+    required String assignedEmployeeId,
+    required bool isArchived,
+  }) =>
+      !isArchived &&
+      canReadCustomer(
+        member: member,
+        customerBusinessId: customerBusinessId,
+        assignedEmployeeId: assignedEmployeeId,
+      ) &&
+      (member.isHead ||
+          member.permissions.contains(PermissionKey.editAssignedCustomers));
+
+  bool canManageCustomerLifecycle(AppUser member) =>
+      member.hasActiveAccess && member.isHead;
+
+  bool canSetOpeningBalance(AppUser member) =>
+      member.hasActiveAccess && member.isHead;
+
+  bool canUseArea(AppUser member, String areaId) =>
+      member.hasActiveAccess &&
+      areaId.isNotEmpty &&
+      (member.isHead || member.areaIds.contains(areaId));
+
   bool canRecordPayment({
     required AppUser member,
     required String customerBusinessId,

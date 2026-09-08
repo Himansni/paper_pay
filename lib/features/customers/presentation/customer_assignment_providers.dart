@@ -1,16 +1,7 @@
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:paper_route/features/customers/data/firebase_customer_assignment_repository.dart';
-import 'package:paper_route/features/customers/domain/customer_assignment.dart';
-import 'package:paper_route/features/customers/domain/customer_assignment_repository.dart';
+// Compatibility export for Phase 2 imports. The provider now serves the full
+// Phase 3 customer repository.
+import 'customer_providers.dart';
 
-final customerAssignmentRepositoryProvider =
-    Provider<CustomerAssignmentRepository>((ref) {
-      return FirebaseCustomerAssignmentRepository.fromDefaultApp();
-    });
+export 'customer_providers.dart';
 
-final customerAssignmentsProvider = StreamProvider.autoDispose
-    .family<List<CustomerAssignment>, String>((ref, businessId) {
-      return ref
-          .watch(customerAssignmentRepositoryProvider)
-          .watchCustomers(businessId);
-    });
+final customerAssignmentRepositoryProvider = customerRepositoryProvider;

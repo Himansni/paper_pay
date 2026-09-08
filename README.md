@@ -4,7 +4,7 @@ PaperRoute is an Android-first Flutter application for Indian newspaper agents. 
 
 ## Current status
 
-Phases 0 and 1 are complete. Phase 2 connected Head operations are implemented and locally verified:
+Phases 0 through 3 are complete in the development project. Phase 3 customer management is implemented, its reviewed Firestore Rules and indexes are deployed to `paperroutedev`, and an approved synthetic Head smoke test has verified the connected live workflows:
 
 - Flutter project for Android, iOS, and web
 - Firebase project `paperroutedev` connected for Android and Web
@@ -17,13 +17,17 @@ Phases 0 and 1 are complete. Phase 2 connected Head operations are implemented a
 - Head business settings for the permitted name, phone, and address fields
 - secure employee invitations, employee details, status, and permission management
 - delivery-area creation/editing/archiving and authoritative employee-area assignment
-- assignment and transfer of real existing customers, with no placeholder customer creation
-- append-only audit records for every Phase 2 write workflow
+- full customer creation, paginated directory, Firestore-native search, detail, editing, archive/reactivate, assignment, and transfer workflows
+- permission-aware employee creation and editing of only active customers assigned to that employee in an authorized area
+- mobile-readable house, address, landmark, location-note, contact, delivery, and billing-preference details
+- optional GPS coordinates only when customer consent is recorded
+- Head-authorized opening balances stored as integer paise and immutable after creation
+- append-only audit records paired with every customer creation, profile change, lifecycle change, assignment, and transfer
 - deterministic monthly billing domain engine
 - append-only payment/reversal ledger calculations
 - Dart unit/widget tests and Firebase Emulator Security Rules tests
 
-Full customer CRUD, catalog, billing finalization, collections, dashboard metrics, reports, and exports are not yet implemented. The dashboard exposes only connected workflows and identifies later modules honestly instead of displaying fabricated data.
+Newspaper catalog, full subscription management, billing finalization, collections UI, dashboard metrics, reports, and exports are not yet implemented. Customer records are archived rather than physically deleted. The dashboard exposes only connected workflows and identifies later modules honestly instead of displaying fabricated data.
 
 Progress is tracked in [IMPLEMENTATION_CHECKLIST.md](IMPLEMENTATION_CHECKLIST.md).
 
@@ -47,7 +51,7 @@ lib/
     business/             Head business settings
     employees/            invitations and member access management
     areas/                delivery areas and employee coverage
-    customers/            existing-customer assignment foundation
+    customers/            paginated customer management and assignment
     billing/domain/       pure monthly billing calculation
     collections/domain/   pure payment ledger calculation
     dashboard/            role-aware authenticated landing page
@@ -56,6 +60,8 @@ test/
   features/               Dart business-rule tests
   firestore/              emulator Security Rules tests
 docs/                     architecture, schema, and setup guides
+integration_test/         emulator-backed Head and employee customer lifecycle
+tool/                     local-demo emulator seed utilities
 ```
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/FIRESTORE_SCHEMA.md](docs/FIRESTORE_SCHEMA.md) for the design rationale.
@@ -81,7 +87,8 @@ The Android emulator connects to the host through `10.0.2.2`; web and Apple plat
 ## Tests and checks
 
 ```sh
-dart format --output=none --set-exit-if-changed lib test
+dart format --output=none --set-exit-if-changed \
+  lib test integration_test test_driver
 flutter analyze
 flutter test
 env JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" \
@@ -89,9 +96,20 @@ env JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" \
   npm run test:rules
 ```
 
-The last local verification completed on 8 September 2026 with no analyzer issues, 29 passing Dart/widget tests, and 18 passing Firestore Rules tests. The Rules suite covers unauthenticated denial, tenant isolation, assigned-customer access, role escalation denial, pricing denial, append-only payments and audits, verified invitation acceptance, permitted Head business/member/area writes, employee restrictions, customer transfer visibility, and inactive-account isolation.
+The last local verification completed on 9 September 2026 with no analyzer issues, 42 passing Dart/widget tests, 26 passing Firestore Rules tests, and one passing emulator-backed Chrome integration test. The Rules suite covers unauthenticated denial, tenant isolation, assigned-customer access, role escalation denial, pricing denial, append-only payments and audits, verified invitation acceptance, permitted Head business/member/area writes, inactive-account isolation, customer schema integrity, employee areas and permissions, financial-field immutability, collision overwrite denial, archive/reactivate behavior, transfer restrictions, and tenant-constrained paginated search.
 
-An emulator-backed app smoke test also signed in as a synthetic Head and exercised the real repositories for business updates, area creation, employee-area assignment, employee permission/status changes, invitation creation/revocation, existing-customer assignment, and audit creation. A synthetic disabled employee then reached only the inactive-account gate. The live development project was inspected read-only and no live test records were created.
+The Phase 3 integration test signs in as a synthetic verified Head, creates a complete customer with an opening balance, assigns the customer, edits the profile, archives and reactivates it, and verifies the audit history. It then signs in as the assigned synthetic employee, verifies assignment-scoped visibility and the hidden Head financial view, and saves an authorized location-note edit through the real repository and local Security Rules. All data is recreated in the local `demo-paper-route` emulators; no live Firebase customer records are created.
+
+To reproduce that connected test, start the Auth and Firestore emulators in one terminal, then use another terminal:
+
+```sh
+npm run seed:phase3-emulator
+flutter run -d chrome \
+  --target integration_test/phase3_customer_smoke_test.dart \
+  --dart-define=USE_FIREBASE_EMULATORS=true
+```
+
+The seed script is hard-coded to `127.0.0.1` and Firebase demo project `demo-paper-route`; it clears only those ephemeral emulator records.
 
 ## Security model
 
@@ -103,6 +121,9 @@ An emulator-backed app smoke test also signed in as a synthetic Head and exercis
 - Employee self-registration is useful only with a pending invite for the exact verified email.
 - Invite consumption, membership creation, and user-profile creation happen in one transaction and are validated using `getAfter()`.
 - Employees can read only customers assigned to their UID.
+- Employee customer creation is limited to the employee's own UID, an area in their authoritative membership, and a zero opening balance.
+- Employee profile edits require the explicit permission, an active assigned customer, immutable tenant/assignment/lifecycle/financial fields, and a paired audit record.
+- Customer status changes, assignment transfers, and opening balances remain Head-only; customer documents cannot be physically deleted.
 - Bills, confirmed payments, reversals, delivery exceptions, and audit records are append-only.
 - Payment document IDs are idempotency keys; a repeated create cannot duplicate a payment.
 - The client-side `AccessPolicy` improves UX, but Firestore Rules are always authoritative.

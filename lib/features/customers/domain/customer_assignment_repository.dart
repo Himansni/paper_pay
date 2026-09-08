@@ -1,13 +1,7 @@
-import 'package:paper_route/features/customers/domain/customer_assignment.dart';
+// Compatibility alias for Phase 2 imports. The implementation now exposes the
+// full paginated customer repository contract.
+import 'customer_repository.dart';
 
-abstract interface class CustomerAssignmentRepository {
-  Stream<List<CustomerAssignment>> watchCustomers(String businessId);
+export 'customer_repository.dart';
 
-  Future<void> assignCustomer({
-    required String businessId,
-    required String actorId,
-    required String customerId,
-    required String employeeId,
-    required String areaId,
-  });
-}
+typedef CustomerAssignmentRepository = CustomerRepository;

@@ -15,6 +15,7 @@ class AppUser {
     this.role,
     this.status = AccountStatus.pending,
     this.permissions = const {},
+    this.areaIds = const {},
   });
 
   final String uid;
@@ -25,6 +26,7 @@ class AppUser {
   final UserRole? role;
   final AccountStatus status;
   final Set<String> permissions;
+  final Set<String> areaIds;
 
   bool get hasActiveAccess =>
       businessId != null && role != null && status == AccountStatus.active;

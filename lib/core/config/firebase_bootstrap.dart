@@ -30,7 +30,10 @@ abstract final class FirebaseBootstrap {
       if (_useEmulators) {
         await Firebase.initializeApp(
           options: const FirebaseOptions(
-            apiKey: 'demo-api-key',
+            // Auth Web validates the API-key shape before routing requests to
+            // the local emulator. This syntactically valid key is disposable
+            // and is never used against a live Firebase project.
+            apiKey: 'AIzaSy000000000000000000000000000000000',
             appId: '1:1234567890:web:paper-route-demo',
             messagingSenderId: '1234567890',
             projectId: 'demo-paper-route',

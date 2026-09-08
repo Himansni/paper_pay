@@ -1,31 +1,7 @@
-class CustomerAssignment {
-  const CustomerAssignment({
-    required this.id,
-    required this.customerCode,
-    required this.name,
-    required this.phone,
-    required this.areaId,
-    required this.assignedEmployeeId,
-    required this.status,
-  });
+// Kept as a compatibility export for Phase 2 imports. Customer management now
+// uses the complete Customer model rather than a 100-record assignment view.
+import 'customer.dart';
 
-  factory CustomerAssignment.fromMap(String id, Map<String, Object?> data) {
-    return CustomerAssignment(
-      id: id,
-      customerCode: data['customerCode'] as String? ?? id,
-      name: data['name'] as String? ?? 'Unnamed customer',
-      phone: data['phone'] as String? ?? '',
-      areaId: data['areaId'] as String? ?? '',
-      assignedEmployeeId: data['assignedEmployeeId'] as String? ?? '',
-      status: data['status'] as String? ?? 'active',
-    );
-  }
+export 'customer.dart';
 
-  final String id;
-  final String customerCode;
-  final String name;
-  final String phone;
-  final String areaId;
-  final String assignedEmployeeId;
-  final String status;
-}
+typedef CustomerAssignment = Customer;

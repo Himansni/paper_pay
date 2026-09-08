@@ -9,16 +9,22 @@ import {
 import {
   arrayUnion,
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
+  limit,
+  orderBy,
   query,
+  setLogLevel,
   serverTimestamp,
   setDoc,
   updateDoc,
   where,
   writeBatch,
 } from 'firebase/firestore';
+
+setLogLevel('silent');
 
 const projectId = 'demo-paper-route';
 let environment;
@@ -28,6 +34,63 @@ const auth = (uid, email) =>
     email,
     email_verified: true,
   }).firestore();
+
+const completeCustomer = ({
+  id,
+  businessId = 'business-a',
+  assignedEmployeeId = 'employee-a',
+  areaId = 'east',
+  status = 'active',
+  openingBalancePaise = 0,
+  createdBy = 'head-a',
+  lastAuditId = 'seed-audit',
+} = {}) => ({
+  businessId,
+  customerCode: id,
+  name: 'Managed Customer',
+  searchName: 'managed customer',
+  phone: '8888888888',
+  searchPhone: '8888888888',
+  alternatePhone: '',
+  address: '1 Main Road, Paper Town',
+  areaId,
+  landmark: 'Clock Tower',
+  searchLandmark: 'clock tower',
+  searchTokens: ['name:ma', 'name:man', 'phone:888', 'landmark:cl'],
+  houseNumber: '1',
+  buildingInfo: 'Ground floor',
+  locationNotes: 'Blue gate',
+  locationConsent: false,
+  coordinates: null,
+  assignedEmployeeId,
+  status,
+  subscriptionStatus: 'notConfigured',
+  deliveryPreferences: { placement: 'doorstep' },
+  billingPreferences: { cycle: 'monthly' },
+  openingBalancePaise,
+  notes: '',
+  createdBy,
+  updatedBy: createdBy,
+  lastAuditId,
+  createdAt: new Date(),
+  updatedAt: new Date(),
+});
+
+const customerAudit = ({
+  businessId = 'business-a',
+  actorId,
+  action,
+  entityId,
+  extra = {},
+}) => ({
+  businessId,
+  actorId,
+  action,
+  entityType: 'customer',
+  entityId,
+  ...extra,
+  createdAt: serverTimestamp(),
+});
 
 async function seed() {
   await environment.withSecurityRulesDisabled(async (context) => {
@@ -57,7 +120,7 @@ async function seed() {
       role: 'employee',
       status: 'active',
       permissions: ['recordPayments'],
-      areaIds: [],
+      areaIds: ['east'],
     });
     await setDoc(doc(db, 'businesses/business-a/members/employee-c'), {
       businessId: 'business-a',
@@ -66,7 +129,7 @@ async function seed() {
       displayName: 'Employee C',
       role: 'employee',
       status: 'active',
-      permissions: [],
+      permissions: ['addCustomers', 'editAssignedCustomers'],
       areaIds: ['east'],
     });
     await setDoc(doc(db, 'businesses/business-b/members/employee-b'), {
@@ -87,11 +150,28 @@ async function seed() {
       assignedEmployeeId: 'another-employee',
       name: 'Other Customer',
     });
+    await setDoc(
+      doc(db, 'businesses/business-a/customers/C-MANAGED'),
+      completeCustomer({ id: 'C-MANAGED' }),
+    );
+    await setDoc(
+      doc(db, 'businesses/business-a/customers/C-EMPLOYEE'),
+      completeCustomer({
+        id: 'C-EMPLOYEE',
+        assignedEmployeeId: 'employee-c',
+      }),
+    );
     await setDoc(doc(db, 'businesses/business-a/areas/east'), {
       businessId: 'business-a',
       name: 'East',
       status: 'active',
-      assignedEmployeeIds: ['employee-c'],
+      assignedEmployeeIds: ['employee-a', 'employee-c'],
+    });
+    await setDoc(doc(db, 'businesses/business-a/areas/west'), {
+      businessId: 'business-a',
+      name: 'West',
+      status: 'active',
+      assignedEmployeeIds: [],
     });
     await setDoc(doc(db, 'businesses/business-a/newspapers/times'), {
       businessId: 'business-a',
@@ -448,9 +528,11 @@ describe('Phase 2 Head operations', () => {
   test('Head transfer changes which employee can read the customer', async () => {
     const headDb = auth('head-a', 'head-a@example.com');
     const batch = writeBatch(headDb);
-    batch.update(doc(headDb, 'businesses/business-a/customers/assigned'), {
+    batch.update(doc(headDb, 'businesses/business-a/customers/C-MANAGED'), {
       assignedEmployeeId: 'employee-c',
       areaId: 'east',
+      updatedBy: 'head-a',
+      lastAuditId: 'customer-transfer',
       updatedAt: serverTimestamp(),
     });
     batch.set(
@@ -460,10 +542,10 @@ describe('Phase 2 Head operations', () => {
         actorId: 'head-a',
         action: 'customerAssignmentUpdated',
         entityType: 'customer',
-        entityId: 'assigned',
+        entityId: 'C-MANAGED',
         previousEmployeeId: 'employee-a',
         employeeId: 'employee-c',
-        previousAreaId: '',
+        previousAreaId: 'east',
         areaId: 'east',
         createdAt: serverTimestamp(),
       },
@@ -474,7 +556,7 @@ describe('Phase 2 Head operations', () => {
       getDoc(
         doc(
           auth('employee-a', 'employee-a@example.com'),
-          'businesses/business-a/customers/assigned',
+          'businesses/business-a/customers/C-MANAGED',
         ),
       ),
     );
@@ -482,7 +564,7 @@ describe('Phase 2 Head operations', () => {
       getDoc(
         doc(
           auth('employee-c', 'employee-c@example.com'),
-          'businesses/business-a/customers/assigned',
+          'businesses/business-a/customers/C-MANAGED',
         ),
       ),
     );
@@ -513,6 +595,399 @@ describe('Phase 2 Head operations', () => {
       where('businessId', '==', 'business-a'),
     );
     await assertSucceeds(getDocs(customers));
+  });
+});
+
+describe('Phase 3 customer management', () => {
+  test('Head creates a complete customer with opening balance and paired audit', async () => {
+    const db = auth('head-a', 'head-a@example.com');
+    const batch = writeBatch(db);
+    batch.set(
+      doc(db, 'businesses/business-a/customers/C-HEAD-CREATED'),
+      {
+        ...completeCustomer({
+          id: 'C-HEAD-CREATED',
+          assignedEmployeeId: '',
+          openingBalancePaise: 12500,
+          lastAuditId: 'head-create-audit',
+        }),
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      },
+    );
+    batch.set(
+      doc(db, 'businesses/business-a/auditRecords/head-create-audit'),
+      customerAudit({
+        actorId: 'head-a',
+        action: 'customerCreated',
+        entityId: 'C-HEAD-CREATED',
+        extra: {
+          employeeId: '',
+          areaId: 'east',
+          openingBalancePaise: 12500,
+        },
+      }),
+    );
+    await assertSucceeds(batch.commit());
+
+    const collision = writeBatch(db);
+    collision.set(
+      doc(db, 'businesses/business-a/customers/C-HEAD-CREATED'),
+      {
+        ...completeCustomer({
+          id: 'C-HEAD-CREATED',
+          assignedEmployeeId: '',
+          openingBalancePaise: 12500,
+          lastAuditId: 'collision-create-audit',
+        }),
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      },
+    );
+    collision.set(
+      doc(db, 'businesses/business-a/auditRecords/collision-create-audit'),
+      customerAudit({
+        actorId: 'head-a',
+        action: 'customerCreated',
+        entityId: 'C-HEAD-CREATED',
+        extra: {
+          employeeId: '',
+          areaId: 'east',
+          openingBalancePaise: 12500,
+        },
+      }),
+    );
+    await assertFails(collision.commit());
+  });
+
+  test('authorized employee creates only a self-assigned zero-balance customer in a permitted area', async () => {
+    const db = auth('employee-c', 'employee-c@example.com');
+    const allowed = writeBatch(db);
+    allowed.set(
+      doc(db, 'businesses/business-a/customers/C-EMPLOYEE-CREATED'),
+      {
+        ...completeCustomer({
+          id: 'C-EMPLOYEE-CREATED',
+          assignedEmployeeId: 'employee-c',
+          createdBy: 'employee-c',
+          lastAuditId: 'employee-create-audit',
+        }),
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      },
+    );
+    allowed.set(
+      doc(db, 'businesses/business-a/auditRecords/employee-create-audit'),
+      customerAudit({
+        actorId: 'employee-c',
+        action: 'customerCreated',
+        entityId: 'C-EMPLOYEE-CREATED',
+        extra: {
+          employeeId: 'employee-c',
+          areaId: 'east',
+          openingBalancePaise: 0,
+        },
+      }),
+    );
+    await assertSucceeds(allowed.commit());
+
+    for (const [id, overrides] of [
+      ['C-OTHER-ASSIGNEE', { assignedEmployeeId: 'employee-a' }],
+      ['C-WRONG-AREA', { areaId: 'west' }],
+      ['C-EMPLOYEE-BALANCE', { openingBalancePaise: 500 }],
+    ]) {
+      const auditId = `${id}-audit`;
+      const denied = writeBatch(db);
+      denied.set(doc(db, `businesses/business-a/customers/${id}`), {
+        ...completeCustomer({
+          id,
+          assignedEmployeeId: 'employee-c',
+          createdBy: 'employee-c',
+          lastAuditId: auditId,
+          ...overrides,
+        }),
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      denied.set(
+        doc(db, `businesses/business-a/auditRecords/${auditId}`),
+        customerAudit({
+          actorId: 'employee-c',
+          action: 'customerCreated',
+          entityId: id,
+        }),
+      );
+      await assertFails(denied.commit());
+    }
+  });
+
+  test('employee edits only profile fields on an active assigned customer with audit', async () => {
+    const db = auth('employee-c', 'employee-c@example.com');
+    const allowed = writeBatch(db);
+    allowed.update(
+      doc(db, 'businesses/business-a/customers/C-EMPLOYEE'),
+      {
+        name: 'Managed Customer Updated',
+        searchName: 'managed customer updated',
+        searchTokens: ['name:ma', 'name:man', 'phone:888', 'landmark:cl'],
+        updatedBy: 'employee-c',
+        lastAuditId: 'employee-profile-audit',
+        updatedAt: serverTimestamp(),
+      },
+    );
+    allowed.set(
+      doc(db, 'businesses/business-a/auditRecords/employee-profile-audit'),
+      customerAudit({
+        actorId: 'employee-c',
+        action: 'customerUpdated',
+        entityId: 'C-EMPLOYEE',
+        extra: { changedFields: ['name', 'searchName', 'searchTokens'] },
+      }),
+    );
+    await assertSucceeds(allowed.commit());
+
+    await assertFails(
+      updateDoc(doc(db, 'businesses/business-a/customers/C-EMPLOYEE'), {
+        openingBalancePaise: 1,
+        updatedBy: 'employee-c',
+        updatedAt: serverTimestamp(),
+      }),
+    );
+    await assertFails(
+      updateDoc(doc(db, 'businesses/business-a/customers/C-EMPLOYEE'), {
+        businessId: 'business-b',
+        updatedBy: 'employee-c',
+        updatedAt: serverTimestamp(),
+      }),
+    );
+  });
+
+  test('employee cannot transfer or archive a customer even with a forged paired audit', async () => {
+    const db = auth('employee-c', 'employee-c@example.com');
+    const transfer = writeBatch(db);
+    transfer.update(
+      doc(db, 'businesses/business-a/customers/C-EMPLOYEE'),
+      {
+        assignedEmployeeId: 'employee-a',
+        updatedBy: 'employee-c',
+        lastAuditId: 'forged-transfer',
+        updatedAt: serverTimestamp(),
+      },
+    );
+    transfer.set(
+      doc(db, 'businesses/business-a/auditRecords/forged-transfer'),
+      customerAudit({
+        actorId: 'employee-c',
+        action: 'customerAssignmentUpdated',
+        entityId: 'C-EMPLOYEE',
+      }),
+    );
+    await assertFails(transfer.commit());
+
+    const archive = writeBatch(db);
+    archive.update(
+      doc(db, 'businesses/business-a/customers/C-EMPLOYEE'),
+      {
+        status: 'archived',
+        updatedBy: 'employee-c',
+        lastAuditId: 'forged-archive',
+        updatedAt: serverTimestamp(),
+      },
+    );
+    archive.set(
+      doc(db, 'businesses/business-a/auditRecords/forged-archive'),
+      customerAudit({
+        actorId: 'employee-c',
+        action: 'customerArchived',
+        entityId: 'C-EMPLOYEE',
+      }),
+    );
+    await assertFails(archive.commit());
+  });
+
+  test('Head archives and reactivates without allowing physical deletion', async () => {
+    const db = auth('head-a', 'head-a@example.com');
+    const archive = writeBatch(db);
+    archive.update(
+      doc(db, 'businesses/business-a/customers/C-MANAGED'),
+      {
+        status: 'archived',
+        updatedBy: 'head-a',
+        lastAuditId: 'archive-audit',
+        updatedAt: serverTimestamp(),
+      },
+    );
+    archive.set(
+      doc(db, 'businesses/business-a/auditRecords/archive-audit'),
+      customerAudit({
+        actorId: 'head-a',
+        action: 'customerArchived',
+        entityId: 'C-MANAGED',
+      }),
+    );
+    await assertSucceeds(archive.commit());
+    await assertFails(
+      deleteDoc(doc(db, 'businesses/business-a/customers/C-MANAGED')),
+    );
+
+    const reactivate = writeBatch(db);
+    reactivate.update(
+      doc(db, 'businesses/business-a/customers/C-MANAGED'),
+      {
+        status: 'active',
+        updatedBy: 'head-a',
+        lastAuditId: 'reactivate-audit',
+        updatedAt: serverTimestamp(),
+      },
+    );
+    reactivate.set(
+      doc(db, 'businesses/business-a/auditRecords/reactivate-audit'),
+      customerAudit({
+        actorId: 'head-a',
+        action: 'customerReactivated',
+        entityId: 'C-MANAGED',
+      }),
+    );
+    await assertSucceeds(reactivate.commit());
+  });
+
+  test('Head transfer enforces active employee coverage for the selected area', async () => {
+    const db = auth('head-a', 'head-a@example.com');
+    const allowed = writeBatch(db);
+    allowed.update(doc(db, 'businesses/business-a/customers/C-MANAGED'), {
+      assignedEmployeeId: 'employee-c',
+      areaId: 'east',
+      updatedBy: 'head-a',
+      lastAuditId: 'valid-transfer-audit',
+      updatedAt: serverTimestamp(),
+    });
+    allowed.set(
+      doc(db, 'businesses/business-a/auditRecords/valid-transfer-audit'),
+      customerAudit({
+        actorId: 'head-a',
+        action: 'customerAssignmentUpdated',
+        entityId: 'C-MANAGED',
+        extra: {
+          previousEmployeeId: 'employee-a',
+          employeeId: 'employee-c',
+          previousAreaId: 'east',
+          areaId: 'east',
+        },
+      }),
+    );
+    await assertSucceeds(allowed.commit());
+
+    const denied = writeBatch(db);
+    denied.update(doc(db, 'businesses/business-a/customers/C-EMPLOYEE'), {
+      assignedEmployeeId: 'employee-c',
+      areaId: 'west',
+      updatedBy: 'head-a',
+      lastAuditId: 'wrong-coverage-audit',
+      updatedAt: serverTimestamp(),
+    });
+    denied.set(
+      doc(db, 'businesses/business-a/auditRecords/wrong-coverage-audit'),
+      customerAudit({
+        actorId: 'head-a',
+        action: 'customerAssignmentUpdated',
+        entityId: 'C-EMPLOYEE',
+      }),
+    );
+    await assertFails(denied.commit());
+
+    const mismatchedAudit = writeBatch(db);
+    mismatchedAudit.update(
+      doc(db, 'businesses/business-a/customers/C-EMPLOYEE'),
+      {
+        assignedEmployeeId: 'employee-a',
+        updatedBy: 'head-a',
+        lastAuditId: 'mismatched-transfer-audit',
+        updatedAt: serverTimestamp(),
+      },
+    );
+    mismatchedAudit.set(
+      doc(
+        db,
+        'businesses/business-a/auditRecords/mismatched-transfer-audit',
+      ),
+      customerAudit({
+        actorId: 'head-a',
+        action: 'customerAssignmentUpdated',
+        entityId: 'C-EMPLOYEE',
+        extra: {
+          previousEmployeeId: 'employee-a',
+          employeeId: 'employee-a',
+          previousAreaId: 'east',
+          areaId: 'east',
+        },
+      }),
+    );
+    await assertFails(mismatchedAudit.commit());
+  });
+
+  test('customer changes require a same-write audit reference and opening balance stays immutable', async () => {
+    const db = auth('head-a', 'head-a@example.com');
+    await assertFails(
+      updateDoc(doc(db, 'businesses/business-a/customers/C-MANAGED'), {
+        name: 'Silent Rewrite',
+        searchName: 'silent rewrite',
+        updatedBy: 'head-a',
+        lastAuditId: 'missing-audit',
+        updatedAt: serverTimestamp(),
+      }),
+    );
+    await assertFails(
+      updateDoc(doc(db, 'businesses/business-a/customers/C-MANAGED'), {
+        openingBalancePaise: 99999,
+        updatedBy: 'head-a',
+        updatedAt: serverTimestamp(),
+      }),
+    );
+
+    const employeeDb = auth('employee-c', 'employee-c@example.com');
+    await assertFails(
+      setDoc(
+        doc(employeeDb, 'businesses/business-a/auditRecords/unpaired-audit'),
+        customerAudit({
+          actorId: 'employee-c',
+          action: 'customerUpdated',
+          entityId: 'C-EMPLOYEE',
+        }),
+      ),
+    );
+  });
+
+  test('paginated search queries preserve employee assignment and tenant isolation', async () => {
+    const employeeDb = auth('employee-c', 'employee-c@example.com');
+    const assignedSearch = query(
+      collection(employeeDb, 'businesses/business-a/customers'),
+      where('businessId', '==', 'business-a'),
+      where('assignedEmployeeId', '==', 'employee-c'),
+      where('status', '==', 'active'),
+      where('searchTokens', 'array-contains', 'name:ma'),
+      orderBy('searchName'),
+      limit(25),
+    );
+    await assertSucceeds(getDocs(assignedSearch));
+
+    const broadSearch = query(
+      collection(employeeDb, 'businesses/business-a/customers'),
+      where('businessId', '==', 'business-a'),
+      where('status', '==', 'active'),
+      orderBy('searchName'),
+      limit(25),
+    );
+    await assertFails(getDocs(broadSearch));
+
+    const otherTenant = query(
+      collection(employeeDb, 'businesses/business-b/customers'),
+      where('businessId', '==', 'business-b'),
+      where('assignedEmployeeId', '==', 'employee-c'),
+      where('status', '==', 'active'),
+      orderBy('searchName'),
+      limit(25),
+    );
+    await assertFails(getDocs(otherTenant));
   });
 });
 

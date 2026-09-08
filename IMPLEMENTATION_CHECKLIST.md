@@ -1,6 +1,6 @@
 # PaperRoute implementation checklist
 
-Updated: 8 September 2026
+Updated: 9 September 2026
 
 ## Phase 0 — Environment and architecture
 
@@ -45,12 +45,17 @@ Updated: 8 September 2026
 
 ## Phase 3 — Customer management
 
-- [ ] Customer CRUD with full address and landmark details
-- [ ] Head and permission-aware employee creation
-- [ ] Assignment and transfer history
-- [ ] Search by ID, name, phone, area, and landmark
-- [ ] Customer detail operational view
-- [ ] Optional consented map coordinates
+- [x] Customer create/read/update with archive/reactivate semantics and full address details
+- [x] Head and permission-aware employee creation
+- [x] Area assignment, employee transfer, and append-only change history
+- [x] Firestore-native search by ID, name, phone, area, and landmark
+- [x] Cursor-based customer pagination without the former 100-record limit
+- [x] Mobile-readable customer detail and house-identification view
+- [x] Optional coordinates gated by recorded customer consent
+- [x] Head-only opening-balance creation with integer paise and immutable follow-up writes
+- [x] Flutter domain/widget tests, Firestore Rules tests, and emulator-backed Head/employee lifecycle smoke test
+- [x] Deploy the reviewed Phase 3 rules and indexes to `paperroutedev` after explicit owner approval
+- [x] Run an approved live-development smoke test after the Phase 3 rules and indexes are active
 
 ## Phase 4 — Newspapers and subscriptions
 

@@ -14,6 +14,7 @@ import 'package:paper_route/features/customers/domain/customer_assignment.dart';
 import 'package:paper_route/features/customers/domain/customer_assignment_repository.dart';
 import 'package:paper_route/features/customers/presentation/customer_assignment_providers.dart';
 import 'package:paper_route/features/customers/presentation/customer_assignments_page.dart';
+import 'package:paper_route/features/customers/presentation/customer_detail_page.dart';
 import 'package:paper_route/features/employees/domain/employee_invitation.dart';
 import 'package:paper_route/features/employees/domain/employee_member.dart';
 import 'package:paper_route/features/employees/domain/employee_repository.dart';
@@ -233,11 +234,14 @@ void main() {
         CustomerAssignment(
           id: 'customer-1',
           customerCode: 'C-001',
+          businessId: 'business-a',
           name: 'Customer One',
           phone: '8888888888',
-          areaId: '',
+          areaId: 'east',
           assignedEmployeeId: '',
-          status: 'active',
+          status: CustomerStatus.active,
+          address: '1 Main Road',
+          landmark: 'Clock tower',
         ),
       ],
     );
@@ -254,18 +258,19 @@ void main() {
             customerRepository,
           ),
         ],
-        child: const MaterialApp(home: CustomerAssignmentsPage(user: head)),
+        child: const MaterialApp(
+          home: CustomerDetailPage(user: head, customerId: 'customer-1'),
+        ),
       ),
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byTooltip('Change assignment'));
+    await tester.tap(find.text('Change assignment'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Unassigned').first);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('East').last);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Unassigned').last);
+    expect(find.byType(AlertDialog), findsOneWidget);
+    final employeeDropdown = find.byType(DropdownButtonFormField<String>).last;
+    await tester.ensureVisible(employeeDropdown);
+    await tester.tap(employeeDropdown);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Employee One').last);
     await tester.pumpAndSettle();
@@ -297,11 +302,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('No customer records yet'), findsOneWidget);
-    expect(
-      find.textContaining('This screen reads real Firestore customers only.'),
-      findsOneWidget,
-    );
+    expect(find.text('No active customers'), findsOneWidget);
+    expect(find.textContaining('Create the first customer'), findsOneWidget);
   });
 }
 
@@ -451,13 +453,29 @@ class _FakeCustomerRepository implements CustomerAssignmentRepository {
   String? assignedAreaId;
 
   @override
-  Stream<List<CustomerAssignment>> watchCustomers(String businessId) =>
-      Stream.value(customers);
+  Future<CustomerPage> fetchCustomers(CustomerListRequest request) async =>
+      CustomerPage(customers: customers, nextCursor: null, hasMore: false);
+
+  @override
+  Stream<CustomerAssignment?> watchCustomer({
+    required String businessId,
+    required String customerId,
+  }) {
+    for (final customer in customers) {
+      if (customer.id == customerId) return Stream.value(customer);
+    }
+    return Stream.value(null);
+  }
+
+  @override
+  Stream<List<CustomerAuditEntry>> watchCustomerHistory({
+    required String businessId,
+    required String customerId,
+  }) => Stream.value(const []);
 
   @override
   Future<void> assignCustomer({
-    required String businessId,
-    required String actorId,
+    required AppUser actor,
     required String customerId,
     required String employeeId,
     required String areaId,
@@ -466,4 +484,24 @@ class _FakeCustomerRepository implements CustomerAssignmentRepository {
     assignedEmployeeId = employeeId;
     assignedAreaId = areaId;
   }
+
+  @override
+  Future<String> createCustomer({
+    required AppUser actor,
+    required CustomerInput input,
+  }) async => 'C-CREATED';
+
+  @override
+  Future<void> setCustomerArchived({
+    required AppUser actor,
+    required String customerId,
+    required bool archived,
+  }) async {}
+
+  @override
+  Future<void> updateCustomerProfile({
+    required AppUser actor,
+    required String customerId,
+    required CustomerInput input,
+  }) async {}
 }

@@ -6,7 +6,9 @@ import 'package:paper_route/features/auth/presentation/email_verification_page.d
 import 'package:paper_route/features/auth/presentation/login_page.dart';
 import 'package:paper_route/features/areas/presentation/areas_page.dart';
 import 'package:paper_route/features/business/presentation/business_settings_page.dart';
-import 'package:paper_route/features/customers/presentation/customer_assignments_page.dart';
+import 'package:paper_route/features/customers/presentation/customer_detail_page.dart';
+import 'package:paper_route/features/customers/presentation/customer_form_page.dart';
+import 'package:paper_route/features/customers/presentation/customers_page.dart';
 import 'package:paper_route/features/dashboard/presentation/dashboard_page.dart';
 import 'package:paper_route/features/employees/presentation/employees_page.dart';
 
@@ -15,7 +17,10 @@ enum AuthenticatedDestination {
   businessSettings,
   employees,
   areas,
-  customerAssignments,
+  customers,
+  customerCreate,
+  customerDetail,
+  customerEdit,
 }
 
 /// Single source of truth for auth and role routing. UI routes never trust a
@@ -23,10 +28,12 @@ enum AuthenticatedDestination {
 class AuthGate extends ConsumerWidget {
   const AuthGate({
     this.destination = AuthenticatedDestination.dashboard,
+    this.resourceId,
     super.key,
   });
 
   final AuthenticatedDestination destination;
+  final String? resourceId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -51,7 +58,13 @@ class AuthGate extends ConsumerWidget {
         if (user == null) return const LoginPage();
         if (!user.isEmailVerified) return EmailVerificationPage(user: user);
         if (!user.hasActiveAccess) return AccessPendingPage(user: user);
-        if (!user.isHead) return DashboardPage(user: user);
+        final headOnly = switch (destination) {
+          AuthenticatedDestination.businessSettings ||
+          AuthenticatedDestination.employees ||
+          AuthenticatedDestination.areas => true,
+          _ => false,
+        };
+        if (headOnly && !user.isHead) return DashboardPage(user: user);
         return switch (destination) {
           AuthenticatedDestination.dashboard => DashboardPage(user: user),
           AuthenticatedDestination.businessSettings => BusinessSettingsPage(
@@ -59,8 +72,18 @@ class AuthGate extends ConsumerWidget {
           ),
           AuthenticatedDestination.employees => EmployeesPage(user: user),
           AuthenticatedDestination.areas => AreasPage(user: user),
-          AuthenticatedDestination.customerAssignments =>
-            CustomerAssignmentsPage(user: user),
+          AuthenticatedDestination.customers => CustomersPage(user: user),
+          AuthenticatedDestination.customerCreate => CustomerFormRoutePage(
+            user: user,
+          ),
+          AuthenticatedDestination.customerDetail => CustomerDetailPage(
+            user: user,
+            customerId: resourceId ?? '',
+          ),
+          AuthenticatedDestination.customerEdit => CustomerFormRoutePage(
+            user: user,
+            customerId: resourceId ?? '',
+          ),
         };
       },
     );

@@ -106,7 +106,21 @@ After explicit owner approval on 8 September 2026, the Phase 2 rule permitting a
 npx firebase deploy --only firestore:rules --project paperroutedev
 ```
 
-Every other business read still requires active membership. The active rules were read back from the Firebase Rules API and matched `firestore.rules` exactly at SHA-256 `9856e3fb24d29b1d95328bf3cd2a3dbfbf82cf0ed1675957c4669b8977f2e712`. The post-deployment emulator suite passed all 18 security tests. Indexes and all unrelated Firebase services were unchanged.
+Every other business read still requires active membership. The active rules were read back from the Firebase Rules API and matched the then-current `firestore.rules` exactly at SHA-256 `9856e3fb24d29b1d95328bf3cd2a3dbfbf82cf0ed1675957c4669b8977f2e712`. The post-deployment emulator suite passed all 18 security tests. Indexes and all unrelated Firebase services were unchanged.
+
+### Phase 3 deployment and live smoke verification — complete
+
+Before deployment, a read-only collection-group inventory found zero existing customer documents in the development tenant, so no legacy migration or customer rewrite was required. After explicit owner approval on 9 September 2026, only the reviewed Firestore Rules and indexes were deployed with:
+
+```sh
+npx firebase deploy \
+  --only firestore:rules,firestore:indexes \
+  --project paperroutedev
+```
+
+The active Rules API source matches `firestore.rules` at SHA-256 `b1e00abbad701e859b7fa70a7467ec0f327eeb9bd07ca3c2f25ea917f3eb663e`. All 11 composite indexes in `firestore.indexes.json` were matched through the Firestore Admin API and reached `READY`; no required or unexpected index remained. The complete post-deployment emulator suite passed all 26 Security Rules tests. Functions, Hosting, billing, and unrelated Firebase services were not changed.
+
+An explicitly approved live Head smoke test created two development-only areas and one synthetic customer. It verified customer creation, listing, mobile-readable detail, name/phone/code/landmark search, area filtering, a cross-area transfer, an audited profile edit, archive, reactivation, and append-only history. The customer and both areas were left archived/inactive. Readback confirmed `locationConsent: false`, `coordinates: null`, `openingBalancePaise: 0`, ten retained audit records, and zero related subscriptions, bills, or payments.
 
 ## 6. Bootstrap the first Head securely — complete
 

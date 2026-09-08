@@ -71,14 +71,50 @@ class _PaperRouteAppState extends State<PaperRouteApp> {
                     : SetupRequiredPage(message: widget.startup.message),
       ),
       GoRoute(
-        path: '/customer-assignments',
+        path: '/customers',
         builder:
             (context, state) =>
                 widget.startup.isReady
                     ? const AuthGate(
-                      destination: AuthenticatedDestination.customerAssignments,
+                      destination: AuthenticatedDestination.customers,
                     )
                     : SetupRequiredPage(message: widget.startup.message),
+      ),
+      GoRoute(
+        path: '/customers/new',
+        builder:
+            (context, state) =>
+                widget.startup.isReady
+                    ? const AuthGate(
+                      destination: AuthenticatedDestination.customerCreate,
+                    )
+                    : SetupRequiredPage(message: widget.startup.message),
+      ),
+      GoRoute(
+        path: '/customers/:customerId',
+        builder:
+            (context, state) =>
+                widget.startup.isReady
+                    ? AuthGate(
+                      destination: AuthenticatedDestination.customerDetail,
+                      resourceId: state.pathParameters['customerId'],
+                    )
+                    : SetupRequiredPage(message: widget.startup.message),
+      ),
+      GoRoute(
+        path: '/customers/:customerId/edit',
+        builder:
+            (context, state) =>
+                widget.startup.isReady
+                    ? AuthGate(
+                      destination: AuthenticatedDestination.customerEdit,
+                      resourceId: state.pathParameters['customerId'],
+                    )
+                    : SetupRequiredPage(message: widget.startup.message),
+      ),
+      GoRoute(
+        path: '/customer-assignments',
+        redirect: (context, state) => '/customers',
       ),
     ],
   );

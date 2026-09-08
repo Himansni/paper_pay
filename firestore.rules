@@ -39,6 +39,14 @@ service cloud.firestore {
       return /databases/$(database)/documents/businesses/$(businessId)/customers/$(customerId);
     }
 
+    function areaPath(businessId, areaId) {
+      return /databases/$(database)/documents/businesses/$(businessId)/areas/$(areaId);
+    }
+
+    function auditPath(businessId, auditId) {
+      return /databases/$(database)/documents/businesses/$(businessId)/auditRecords/$(auditId);
+    }
+
     function canReadCustomerData(businessId, data) {
       return activeMember(businessId)
         && data.businessId == businessId
@@ -50,6 +58,262 @@ service cloud.firestore {
         businessId,
         get(customerPath(businessId, customerId)).data
       );
+    }
+
+    function activeArea(businessId, areaId) {
+      return areaId is string
+        && areaId.size() > 0
+        && exists(areaPath(businessId, areaId))
+        && get(areaPath(businessId, areaId)).data.businessId == businessId
+        && get(areaPath(businessId, areaId)).data.status == 'active';
+    }
+
+    function validActiveEmployeeForArea(businessId, employeeId, areaId) {
+      let employee = get(memberPath(businessId, employeeId)).data;
+      return employeeId is string
+        && exists(memberPath(businessId, employeeId))
+        && employee.businessId == businessId
+        && employee.uid == employeeId
+        && employee.role == 'employee'
+        && employee.status == 'active'
+        && employee.areaIds is list
+        && employee.areaIds.hasAny([areaId]);
+    }
+
+    function activeEmployeeForArea(businessId, employeeId, areaId) {
+      return employeeId == ''
+        || validActiveEmployeeForArea(businessId, employeeId, areaId);
+    }
+
+    function validCustomerCoordinates(data) {
+      return (
+          data.locationConsent == false
+          && data.coordinates == null
+        ) || (
+          data.locationConsent == true
+          && data.coordinates is map
+          && data.coordinates.keys().hasAll(['latitude', 'longitude'])
+          && data.coordinates.keys().hasOnly(['latitude', 'longitude'])
+          && data.coordinates.latitude is number
+          && data.coordinates.latitude >= -90
+          && data.coordinates.latitude <= 90
+          && data.coordinates.longitude is number
+          && data.coordinates.longitude >= -180
+          && data.coordinates.longitude <= 180
+        );
+    }
+
+    function validCustomerPreferences(data) {
+      return data.deliveryPreferences is map
+        && data.deliveryPreferences.keys().hasAll(['placement'])
+        && data.deliveryPreferences.keys().hasOnly(['placement'])
+        && data.deliveryPreferences.placement in [
+          'doorstep', 'handToCustomer', 'reception', 'collectionPoint'
+        ]
+        && data.billingPreferences is map
+        && data.billingPreferences.keys().hasAll(['cycle'])
+        && data.billingPreferences.keys().hasOnly(['cycle'])
+        && data.billingPreferences.cycle in [
+          'monthly', 'fortnightly', 'weekly'
+        ];
+    }
+
+    function validCustomerShape(businessId, customerId, data) {
+      return data.keys().hasOnly([
+          'businessId', 'customerCode', 'name', 'searchName', 'phone',
+          'searchPhone', 'alternatePhone', 'address', 'areaId', 'landmark',
+          'searchLandmark', 'searchTokens', 'houseNumber', 'buildingInfo',
+          'locationNotes', 'locationConsent', 'coordinates',
+          'assignedEmployeeId', 'status', 'subscriptionStatus',
+          'deliveryPreferences', 'billingPreferences', 'openingBalancePaise',
+          'notes', 'createdBy', 'updatedBy', 'lastAuditId', 'createdAt',
+          'updatedAt'
+        ])
+        && data.businessId == businessId
+        && data.customerCode == customerId
+        && data.name is string
+        && data.name.size() >= 2
+        && data.name.size() <= 100
+        && data.searchName is string
+        && data.searchName.size() >= 2
+        && data.phone is string
+        && data.phone.size() >= 7
+        && data.phone.size() <= 24
+        && data.searchPhone is string
+        && data.searchPhone.size() >= 7
+        && data.searchPhone.size() <= 15
+        && data.alternatePhone is string
+        && data.alternatePhone.size() <= 24
+        && data.address is string
+        && data.address.size() >= 5
+        && data.address.size() <= 300
+        && data.areaId is string
+        && data.landmark is string
+        && data.landmark.size() >= 2
+        && data.landmark.size() <= 120
+        && data.searchLandmark is string
+        && data.searchTokens is list
+        && data.searchTokens.size() <= 300
+        && data.houseNumber is string
+        && data.houseNumber.size() <= 80
+        && data.buildingInfo is string
+        && data.buildingInfo.size() <= 120
+        && data.locationNotes is string
+        && data.locationNotes.size() <= 300
+        && data.locationConsent is bool
+        && data.assignedEmployeeId is string
+        && data.status in ['active', 'archived']
+        && data.subscriptionStatus == 'notConfigured'
+        && data.openingBalancePaise is int
+        && data.openingBalancePaise >= 0
+        && data.openingBalancePaise <= 100000000
+        && data.notes is string
+        && data.notes.size() <= 500
+        && data.createdBy is string
+        && data.updatedBy is string
+        && data.lastAuditId is string
+        && data.lastAuditId.size() > 0
+        && validCustomerCoordinates(data)
+        && validCustomerPreferences(data);
+    }
+
+    function validCustomerAuditAfter(businessId, customerId, auditId, action) {
+      let audit = getAfter(auditPath(businessId, auditId)).data;
+      return existsAfter(auditPath(businessId, auditId))
+        && audit.businessId == businessId
+        && audit.actorId == request.auth.uid
+        && audit.entityType == 'customer'
+        && audit.entityId == customerId
+        && audit.action == action
+        && audit.createdAt == request.time;
+    }
+
+    function validCustomerCreateAuditAfter(businessId, customerId, auditId) {
+      let audit = getAfter(auditPath(businessId, auditId)).data;
+      return validCustomerAuditAfter(
+          businessId,
+          customerId,
+          auditId,
+          'customerCreated'
+        )
+        && audit.employeeId == request.resource.data.assignedEmployeeId
+        && audit.areaId == request.resource.data.areaId
+        && audit.openingBalancePaise == request.resource.data.openingBalancePaise;
+    }
+
+    function validCustomerProfileAuditAfter(businessId, customerId, auditId) {
+      let audit = getAfter(auditPath(businessId, auditId)).data;
+      return validCustomerAuditAfter(
+          businessId,
+          customerId,
+          auditId,
+          'customerUpdated'
+        )
+        && audit.changedFields is list
+        && audit.changedFields.size() > 0
+        && audit.changedFields.hasOnly([
+          'name', 'searchName', 'phone', 'searchPhone', 'alternatePhone',
+          'address', 'landmark', 'searchLandmark', 'searchTokens',
+          'houseNumber', 'buildingInfo', 'locationNotes', 'locationConsent',
+          'coordinates', 'deliveryPreferences', 'billingPreferences', 'notes'
+        ]);
+    }
+
+    function validCustomerAssignmentAuditAfter(
+      businessId,
+      customerId,
+      auditId
+    ) {
+      let audit = getAfter(auditPath(businessId, auditId)).data;
+      return validCustomerAuditAfter(
+          businessId,
+          customerId,
+          auditId,
+          'customerAssignmentUpdated'
+        )
+        && audit.previousEmployeeId == resource.data.assignedEmployeeId
+        && audit.employeeId == request.resource.data.assignedEmployeeId
+        && audit.previousAreaId == resource.data.areaId
+        && audit.areaId == request.resource.data.areaId;
+    }
+
+    function customerReferencesAuditAfter(businessId, customerId, auditId) {
+      let customer = getAfter(customerPath(businessId, customerId)).data;
+      return existsAfter(customerPath(businessId, customerId))
+        && customer.businessId == businessId
+        && customer.lastAuditId == auditId
+        && customer.updatedBy == request.auth.uid
+        && customer.updatedAt == request.time;
+    }
+
+    function validCustomerProfileUpdate(businessId, customerId) {
+      return resource.data.status == 'active'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'name', 'searchName', 'phone', 'searchPhone', 'alternatePhone',
+          'address', 'landmark', 'searchLandmark', 'searchTokens',
+          'houseNumber', 'buildingInfo', 'locationNotes', 'locationConsent',
+          'coordinates', 'deliveryPreferences', 'billingPreferences', 'notes',
+          'updatedBy', 'lastAuditId', 'updatedAt'
+        ])
+        && request.resource.data.updatedBy == request.auth.uid
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.lastAuditId != resource.data.lastAuditId
+        && validCustomerProfileAuditAfter(
+          businessId,
+          customerId,
+          request.resource.data.lastAuditId
+        );
+    }
+
+    function validCustomerStatusUpdate(businessId, customerId) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status', 'updatedBy', 'lastAuditId', 'updatedAt'
+        ])
+        && request.resource.data.status != resource.data.status
+        && request.resource.data.updatedBy == request.auth.uid
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.lastAuditId != resource.data.lastAuditId
+        && (
+          (
+            request.resource.data.status == 'archived'
+            && validCustomerAuditAfter(
+              businessId,
+              customerId,
+              request.resource.data.lastAuditId,
+              'customerArchived'
+            )
+          ) || (
+            request.resource.data.status == 'active'
+            && validCustomerAuditAfter(
+              businessId,
+              customerId,
+              request.resource.data.lastAuditId,
+              'customerReactivated'
+            )
+          )
+        );
+    }
+
+    function validCustomerAssignmentUpdate(businessId, customerId) {
+      return resource.data.status == 'active'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'areaId', 'assignedEmployeeId', 'updatedBy', 'lastAuditId',
+          'updatedAt'
+        ])
+        && request.resource.data.updatedBy == request.auth.uid
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.lastAuditId != resource.data.lastAuditId
+        && activeArea(businessId, request.resource.data.areaId)
+        && activeEmployeeForArea(
+          businessId,
+          request.resource.data.assignedEmployeeId,
+          request.resource.data.areaId
+        )
+        && validCustomerAssignmentAuditAfter(
+          businessId,
+          customerId,
+          request.resource.data.lastAuditId
+        );
     }
 
     function acceptedInviteAfter(businessId, invitationId) {
@@ -197,29 +461,57 @@ service cloud.firestore {
       match /customers/{customerId} {
         allow read: if canReadCustomerData(businessId, resource.data);
         allow create: if activeMember(businessId)
-          && request.resource.data.businessId == businessId
+          && validCustomerShape(businessId, customerId, request.resource.data)
+          && request.resource.data.status == 'active'
           && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.updatedBy == request.auth.uid
           && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time
+          && activeArea(businessId, request.resource.data.areaId)
+          && validCustomerCreateAuditAfter(
+            businessId,
+            customerId,
+            request.resource.data.lastAuditId
+          )
           && (
-            head(businessId)
+            (
+              memberData(businessId).role == 'head'
+              && activeEmployeeForArea(
+                businessId,
+                request.resource.data.assignedEmployeeId,
+                request.resource.data.areaId
+              )
+            )
             || (
-              permission(businessId, 'addCustomers')
+              memberData(businessId).role == 'employee'
+              && memberData(businessId).permissions is list
+              && memberData(businessId).permissions.hasAny(['addCustomers'])
               && request.resource.data.assignedEmployeeId == request.auth.uid
+              && request.resource.data.openingBalancePaise == 0
+              && memberData(businessId).areaIds is list
+              && memberData(businessId).areaIds.hasAny([
+                request.resource.data.areaId
+              ])
             )
           );
-        allow update: if (
-            head(businessId)
-            && request.resource.data.businessId == businessId
-            && request.resource.data.updatedAt == request.time
-          ) || (
-            canReadCustomerData(businessId, resource.data)
-            && permission(businessId, 'editAssignedCustomers')
-            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-              'name', 'phone', 'alternatePhone', 'address', 'landmark',
-              'houseNumber', 'buildingInfo', 'locationNotes', 'coordinates',
-              'deliveryPreferences', 'billingPreferences', 'notes', 'updatedAt'
-            ])
-            && request.resource.data.updatedAt == request.time
+        allow update: if validCustomerShape(
+            businessId,
+            customerId,
+            request.resource.data
+          )
+          && (
+            (
+              head(businessId)
+              && (
+                validCustomerProfileUpdate(businessId, customerId)
+                || validCustomerStatusUpdate(businessId, customerId)
+                || validCustomerAssignmentUpdate(businessId, customerId)
+              )
+            ) || (
+              canReadCustomerData(businessId, resource.data)
+              && permission(businessId, 'editAssignedCustomers')
+              && validCustomerProfileUpdate(businessId, customerId)
+            )
           );
         allow delete: if false;
 
@@ -318,7 +610,19 @@ service cloud.firestore {
         allow create: if activeMember(businessId)
           && request.resource.data.businessId == businessId
           && request.resource.data.actorId == request.auth.uid
-          && request.resource.data.createdAt == request.time;
+          && request.resource.data.createdAt == request.time
+          && (
+            head(businessId)
+            || (
+              request.resource.data.entityType == 'customer'
+              && request.resource.data.entityId is string
+              && customerReferencesAuditAfter(
+                businessId,
+                request.resource.data.entityId,
+                auditId
+              )
+            )
+          );
         allow update, delete: if false;
       }
 

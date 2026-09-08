@@ -16,7 +16,7 @@ Riverpod was chosen because it supports dependency overrides in tests, stream st
 
 GoRouter provides declarative routes. `AuthGate` is the role-routing authority in the UI: it observes the repository session and selects login, verification, activation, disabled-account, Head, or Employee state. A route argument is never accepted as proof of role.
 
-Authenticated Phase 2 routes re-enter `AuthGate`; only an active Head membership can reach business settings, employee management, area management, or customer assignment. An employee who enters a Head URL is returned to their own dashboard.
+Every authenticated route re-enters `AuthGate`. Only an active Head membership can reach business settings, employee management, or area management. Customer directory, create, detail, and edit routes admit active employees, but the presentation policy and Firestore Rules independently enforce permissions, assigned areas, and assigned-customer access. An employee who enters a Head-only URL is returned to their own dashboard.
 
 ## Authentication boundary
 
@@ -27,12 +27,21 @@ Firebase Authentication proves identity. Firestore membership proves authorizati
 - fixed role (`head` or `employee`)
 - active/inactive status
 - permission keys
+- authoritative assigned area IDs
 
 The membership document is authoritative for role, status, and permissions. A user profile helps locate the business and provides fallback display details, but missing membership data always produces pending access rather than inheriting profile privileges.
 
 The mobile app does not create Heads. A trusted Firebase project administrator creates the first Head. Heads later create employee invitations, never employee Firebase passwords. Employees create their own passwords, verify ownership of the exact invited email, then atomically consume the invite.
 
 This Spark-compatible design avoids placing Admin SDK credentials in the client. A future trusted backend can replace invitation provisioning if automatic user administration becomes important.
+
+## Customer-management boundary
+
+The customer feature owns a plain-Dart model and repository contract, a Firebase repository, Riverpod providers, and route pages for directory, form, detail, assignment, lifecycle, and audit history. Repository transactions validate active areas and employee coverage before paired customer/audit writes. The document ID is the permanent customer code; UUID collision attempts become unauthorized updates and therefore cannot overwrite an existing record.
+
+Opening balances are parsed to integer paise and may be set only by a Head during customer creation. They cannot be changed by profile, assignment, or lifecycle operations. Full subscription state deliberately remains `notConfigured` until Phase 4 rather than exposing a partial subscription workflow.
+
+Employees can create only self-assigned customers in member-authorized areas when they hold `addCustomers`. They can edit only profile fields of active customers currently assigned to them when they hold `editAssignedCustomers`. The client policy makes unavailable actions clear, while the deployed Phase 3 Rules remain the authority.
 
 ## Billing boundary
 
@@ -47,8 +56,8 @@ Firestore may cache non-financial reads. Financial transactions fail offline and
 ## Query and cost strategy
 
 - Keep all tenant records below the business path.
-- Query customers in pages; employees add `assignedEmployeeId == uid`.
-- Store normalized `searchName`, normalized phone fields, customer code, `areaId`, and landmark tokens for targeted search.
+- Query customers in cursor pages ordered by normalized name and document ID; employees always add `assignedEmployeeId == uid`.
+- Store normalized name/phone/landmark fields and bounded prefix tokens. Search uses exact customer-code equality, `array-contains` for name/phone/landmark prefixes, and an `areaId` equality filter without downloading the whole tenant.
 - Finalize bills on demand once per customer/month.
 - Query payments by business/user/month using collection-group indexes only for authorized Head reports.
 - Maintain month/employee/area summary documents later for dashboards. Treat them as rebuildable projections.

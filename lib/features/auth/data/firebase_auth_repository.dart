@@ -303,6 +303,11 @@ class FirebaseAuthRepository implements AuthRepository {
         rawPermissions is List
             ? rawPermissions.whereType<String>().toSet()
             : <String>{};
+    final rawAreaIds = member?['areaIds'];
+    final areaIds =
+        rawAreaIds is List
+            ? rawAreaIds.whereType<String>().toSet()
+            : <String>{};
 
     return AppUser(
       uid: user.uid,
@@ -319,6 +324,7 @@ class FirebaseAuthRepository implements AuthRepository {
       role: role,
       status: status,
       permissions: permissions,
+      areaIds: areaIds,
     );
   }
 

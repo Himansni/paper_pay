@@ -1,0 +1,335 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function verifiedEmail() {
+      return signedIn() && request.auth.token.email_verified == true;
+    }
+
+    function memberPath(businessId, uid) {
+      return /databases/$(database)/documents/businesses/$(businessId)/members/$(uid);
+    }
+
+    function memberData(businessId) {
+      return get(memberPath(businessId, request.auth.uid)).data;
+    }
+
+    function activeMember(businessId) {
+      return signedIn()
+        && exists(memberPath(businessId, request.auth.uid))
+        && memberData(businessId).status == 'active'
+        && memberData(businessId).businessId == businessId;
+    }
+
+    function head(businessId) {
+      return activeMember(businessId) && memberData(businessId).role == 'head';
+    }
+
+    function permission(businessId, name) {
+      return activeMember(businessId)
+        && memberData(businessId).permissions is list
+        && memberData(businessId).permissions.hasAny([name]);
+    }
+
+    function customerPath(businessId, customerId) {
+      return /databases/$(database)/documents/businesses/$(businessId)/customers/$(customerId);
+    }
+
+    function canReadCustomerData(businessId, data) {
+      return activeMember(businessId)
+        && data.businessId == businessId
+        && (head(businessId) || data.assignedEmployeeId == request.auth.uid);
+    }
+
+    function canReadCustomer(businessId, customerId) {
+      return canReadCustomerData(
+        businessId,
+        get(customerPath(businessId, customerId)).data
+      );
+    }
+
+    function acceptedInviteAfter(businessId, invitationId) {
+      let invite = getAfter(
+        /databases/$(database)/documents/businesses/$(businessId)/invitations/$(invitationId)
+      ).data;
+      return invite.status == 'accepted'
+        && invite.role == 'employee'
+        && invite.email == request.auth.token.email
+        && invite.acceptedBy == request.auth.uid;
+    }
+
+    match /userProfiles/{uid} {
+      allow get: if signedIn() && uid == request.auth.uid;
+      allow list: if false;
+
+      allow create: if verifiedEmail()
+        && uid == request.auth.uid
+        && request.resource.data.keys().hasAll([
+          'uid', 'email', 'displayName', 'businessId', 'role', 'status',
+          'permissions', 'acceptedInviteId', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.uid == uid
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.role == 'employee'
+        && request.resource.data.status == 'active'
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && existsAfter(memberPath(request.resource.data.businessId, uid))
+        && acceptedInviteAfter(
+          request.resource.data.businessId,
+          request.resource.data.acceptedInviteId
+        );
+
+      allow update: if signedIn()
+        && uid == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['displayName', 'phone', 'updatedAt'])
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if false;
+    }
+
+    match /businesses/{businessId} {
+      allow read: if activeMember(businessId);
+      // The first business and Head are bootstrapped through the trusted
+      // Firebase Console. The mobile client can never promote itself to Head.
+      allow create, delete: if false;
+      allow update: if head(businessId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'name', 'phone', 'address', 'updatedAt'
+        ])
+        && request.resource.data.updatedAt == request.time;
+
+      match /members/{memberId} {
+        // A disabled employee can read only their own membership so the app
+        // can show the disabled-account gate. All other business data still
+        // requires activeMember().
+        allow get: if head(businessId)
+          || (
+            signedIn()
+            && memberId == request.auth.uid
+            && resource.data.businessId == businessId
+          );
+        allow list: if head(businessId);
+
+        allow create: if head(businessId)
+          || (
+            verifiedEmail()
+            && memberId == request.auth.uid
+            && request.resource.data.keys().hasAll([
+              'businessId', 'uid', 'email', 'displayName', 'phone', 'role',
+              'status', 'permissions', 'areaIds', 'acceptedInviteId',
+              'createdAt', 'updatedAt'
+            ])
+            && request.resource.data.businessId == businessId
+            && request.resource.data.uid == request.auth.uid
+            && request.resource.data.email == request.auth.token.email
+            && request.resource.data.role == 'employee'
+            && request.resource.data.status == 'active'
+            && request.resource.data.createdAt == request.time
+            && request.resource.data.updatedAt == request.time
+            && acceptedInviteAfter(
+              businessId,
+              request.resource.data.acceptedInviteId
+            )
+          );
+
+        allow update: if head(businessId)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'displayName', 'phone', 'status', 'permissions', 'areaIds',
+            'notes', 'updatedAt'
+          ])
+          && request.resource.data.updatedAt == request.time;
+        allow delete: if false;
+      }
+
+      match /invitations/{invitationId} {
+        allow get: if head(businessId)
+          || (
+            verifiedEmail()
+            && resource.data.status == 'pending'
+            && resource.data.email == request.auth.token.email
+          );
+        allow list: if head(businessId);
+        allow create: if head(businessId)
+          && request.resource.data.keys().hasAll([
+            'businessId', 'email', 'role', 'status', 'permissions', 'areaIds',
+            'createdBy', 'createdAt', 'expiresAt'
+          ])
+          && request.resource.data.businessId == businessId
+          && request.resource.data.role == 'employee'
+          && request.resource.data.status == 'pending'
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.expiresAt > request.time;
+
+        allow update: if head(businessId)
+          || (
+            verifiedEmail()
+            && resource.data.status == 'pending'
+            && resource.data.role == 'employee'
+            && resource.data.email == request.auth.token.email
+            && resource.data.expiresAt > request.time
+            && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['status', 'acceptedBy', 'acceptedAt'])
+            && request.resource.data.status == 'accepted'
+            && request.resource.data.acceptedBy == request.auth.uid
+            && request.resource.data.acceptedAt == request.time
+          );
+        allow delete: if head(businessId);
+      }
+
+      match /areas/{areaId} {
+        allow read: if activeMember(businessId);
+        allow create: if head(businessId)
+          && request.resource.data.businessId == businessId
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.createdAt == request.time;
+        allow update: if head(businessId)
+          && request.resource.data.businessId == businessId
+          && request.resource.data.updatedAt == request.time;
+        allow delete: if head(businessId);
+      }
+
+      match /customers/{customerId} {
+        allow read: if canReadCustomerData(businessId, resource.data);
+        allow create: if activeMember(businessId)
+          && request.resource.data.businessId == businessId
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.createdAt == request.time
+          && (
+            head(businessId)
+            || (
+              permission(businessId, 'addCustomers')
+              && request.resource.data.assignedEmployeeId == request.auth.uid
+            )
+          );
+        allow update: if (
+            head(businessId)
+            && request.resource.data.businessId == businessId
+            && request.resource.data.updatedAt == request.time
+          ) || (
+            canReadCustomerData(businessId, resource.data)
+            && permission(businessId, 'editAssignedCustomers')
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'name', 'phone', 'alternatePhone', 'address', 'landmark',
+              'houseNumber', 'buildingInfo', 'locationNotes', 'coordinates',
+              'deliveryPreferences', 'billingPreferences', 'notes', 'updatedAt'
+            ])
+            && request.resource.data.updatedAt == request.time
+          );
+        allow delete: if false;
+
+        match /subscriptions/{subscriptionId} {
+          allow read: if canReadCustomer(businessId, customerId);
+          allow create, update: if head(businessId)
+            && request.resource.data.businessId == businessId
+            && request.resource.data.customerId == customerId
+            && request.resource.data.updatedAt == request.time;
+          allow delete: if false;
+        }
+
+        match /deliveryExceptions/{exceptionId} {
+          allow read: if canReadCustomer(businessId, customerId);
+          allow create: if canReadCustomer(businessId, customerId)
+            && (
+              head(businessId)
+              || permission(businessId, 'recordDeliveryExceptions')
+            )
+            && request.resource.data.businessId == businessId
+            && request.resource.data.customerId == customerId
+            && request.resource.data.createdBy == request.auth.uid
+            && request.resource.data.createdAt == request.time;
+          allow update, delete: if false;
+        }
+
+        match /bills/{billId} {
+          allow read: if canReadCustomer(businessId, customerId);
+          allow create: if head(businessId)
+            && request.resource.data.businessId == businessId
+            && request.resource.data.customerId == customerId
+            && request.resource.data.status == 'finalized'
+            && request.resource.data.createdBy == request.auth.uid
+            && request.resource.data.createdAt == request.time;
+          allow update, delete: if false;
+        }
+
+        match /payments/{paymentId} {
+          allow read: if canReadCustomer(businessId, customerId);
+          allow create: if canReadCustomer(businessId, customerId)
+            && (
+              head(businessId)
+              || permission(businessId, 'recordPayments')
+            )
+            && request.resource.data.businessId == businessId
+            && request.resource.data.customerId == customerId
+            && request.resource.data.idempotencyKey == paymentId
+            && request.resource.data.amountPaise is int
+            && request.resource.data.amountPaise > 0
+            && request.resource.data.status == 'manuallyConfirmed'
+            && request.resource.data.createdBy == request.auth.uid
+            && request.resource.data.createdAt == request.time;
+          allow update, delete: if false;
+        }
+
+        match /paymentReversals/{reversalId} {
+          allow read: if canReadCustomer(businessId, customerId);
+          allow create: if head(businessId)
+            && request.resource.data.businessId == businessId
+            && request.resource.data.customerId == customerId
+            && request.resource.data.amountPaise is int
+            && request.resource.data.amountPaise > 0
+            && request.resource.data.createdBy == request.auth.uid
+            && request.resource.data.createdAt == request.time;
+          allow update, delete: if false;
+        }
+      }
+
+      match /newspapers/{newspaperId} {
+        allow read: if activeMember(businessId);
+        allow create, update: if head(businessId)
+          && request.resource.data.businessId == businessId
+          && request.resource.data.updatedAt == request.time;
+        allow delete: if false;
+
+        match /priceOverrides/{dateKey} {
+          allow read: if activeMember(businessId);
+          allow create, update: if head(businessId)
+            && request.resource.data.businessId == businessId
+            && request.resource.data.newspaperId == newspaperId
+            && request.resource.data.updatedAt == request.time;
+          allow delete: if false;
+        }
+      }
+
+      match /configuration/{documentId} {
+        allow read: if activeMember(businessId);
+        allow create, update: if head(businessId)
+          && request.resource.data.businessId == businessId
+          && request.resource.data.updatedAt == request.time;
+        allow delete: if false;
+      }
+
+      match /auditRecords/{auditId} {
+        allow read: if head(businessId);
+        allow create: if activeMember(businessId)
+          && request.resource.data.businessId == businessId
+          && request.resource.data.actorId == request.auth.uid
+          && request.resource.data.createdAt == request.time;
+        allow update, delete: if false;
+      }
+
+      match /monthlySummaries/{summaryId} {
+        allow read, create, update: if head(businessId);
+        allow delete: if false;
+      }
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

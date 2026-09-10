@@ -10,6 +10,8 @@ businesses/{businessId}
   areas/{areaId}
   customers/{customerId}
     subscriptions/{subscriptionId}
+      versions/{versionId}
+      pauses/{pauseId}
     deliveryExceptions/{exceptionId}
     bills/{monthKey}
       lineItems/{chargeKey}
@@ -17,7 +19,7 @@ businesses/{businessId}
     payments/{paymentId}
     paymentReversals/{reversalId}
   newspapers/{newspaperId}
-    priceOverrides/{dateKey}
+    priceRules/{priceRuleId}
   configuration/upi
   monthlySummaries/{monthKey}
   auditRecords/{auditId}
@@ -62,9 +64,13 @@ Directories use pages of 25 records, with a maximum repository page size of 50. 
 
 ## Catalog, prices, and subscriptions
 
-A newspaper stores name, edition/language, default price in paise, status, and timestamps. A price override document uses its `YYYY-MM-DD` date as ID and stores the authorized price plus audit fields.
+A newspaper uses a stable random `N-...` document/code and stores `businessId`, `newspaperCode`, name, normalized `searchName`, optional edition/language, immutable initial `defaultPricePaise`, active/archived status, creator/updater, `lastAuditId`, and timestamps. Catalog pages are tenant- and status-constrained, ordered by normalized name and document ID, and use a cursor; code lookup is an exact tenant/status-constrained query. Archiving never deletes pricing or subscription references.
 
-A subscription stores newspaper ID, start/end date, quantity, optional fixed price/discount metadata, status, and timestamps. Pauses should be separate effective-date records once the operational repository is implemented so history is not overwritten.
+`newspapers/{newspaperId}/priceRules/{priceRuleId}` is append-preserving price history. A rule stores tenant/newspaper IDs, kind (`exactDate` or `period`), inclusive `startDate`/`endDate` strings, integer `pricePaise`, reason, active/superseded status, revision and predecessor/replacement IDs, actor/audit IDs, and timestamps. Exact-date rules outrank periods, which outrank the newspaper default. Active periods may not overlap. Corrections create a new revision and supersede the previous rule atomically; existing records are never silently overwritten. Finalized bills in Phase 5 will snapshot resolved prices and will not recalculate after later corrections.
+
+`customers/{customerId}/subscriptions/{newspaperId}` is one stable series for a customer's newspaper, allowing multiple different newspapers per customer. It stores the current version/pause references and current projection: newspaper snapshot, active/paused/ended status, start/end and current-effective dates, quantity, delivery weekdays, optional Head-only custom price and reason, immutable ownership/creator fields, updater/audit IDs, and timestamps.
+
+Each terms change or restart writes a new `versions/{versionId}` and closes the prior current version with predecessor/successor links and effective bounds. `pauses/{pauseId}` stores finite scheduled service exceptions or the one current open pause; resuming closes that pause. Series, versions, pauses, and matching `auditRecords` are retained rather than deleted. Employees require an active assigned customer, coverage of the customer's current area, and `manageAssignedSubscriptions`; only Heads may set custom prices or administer shared catalog pricing.
 
 ## Bills and ledger
 
@@ -88,7 +94,10 @@ Corrections are new `paymentReversals` or `adjustments`; existing financial docu
 - employee customer pages by business + assigned employee + status + normalized customer name, with an optional area filter
 - the same four customer page shapes with `searchTokens` array containment
 - customer audit history by entity type + entity ID + descending creation time
+- newspaper pages by business + status + normalized name
+- price history by business + newspaper + descending start date
+- active exact-date and period conflict/resolution queries by business + newspaper + kind + status + date bounds
 - collection-group payments by business + employee + descending time
 - collection-group payments by business + descending time
 
-The Phase 3 customer and audit indexes are local until the owner explicitly approves deployment. Add indexes only for implemented queries; unused composite indexes increase storage and write fan-out.
+All 15 indexes, including the four Phase 4 newspaper/price indexes, are deployed and `READY` in `paperroutedev`. Add indexes only for implemented queries; unused composite indexes increase storage and write fan-out.

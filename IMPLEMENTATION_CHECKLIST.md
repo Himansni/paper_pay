@@ -1,6 +1,6 @@
 # PaperRoute implementation checklist
 
-Updated: 9 September 2026
+Updated: 11 September 2026
 
 ## Phase 0 — Environment and architecture
 
@@ -59,11 +59,15 @@ Updated: 9 September 2026
 
 ## Phase 4 — Newspapers and subscriptions
 
-- [ ] Newspaper catalog CRUD
-- [ ] Default and date-specific price management
-- [ ] Multiple customer subscriptions
-- [ ] Start/end, pause/resume, quantity, and pricing exceptions
-- [ ] Preserve subscription history
+- [x] Newspaper catalog creation, paginated listing/search, editing, archive, and reactivation
+- [x] Default, exact-date, and effective-period price management with audited corrections
+- [x] Multiple versioned customer subscriptions
+- [x] Start/end/restart, pause/resume, weekday schedule, quantity, and Head pricing exceptions
+- [x] Preserve immutable subscription terms, pause, pricing, and audit history
+- [x] Permission-aware Head/employee UI and repository workflows
+- [x] Flutter domain/widget tests, Firestore Rules tests, and emulator-backed lifecycle smoke test
+- [x] Deploy and read back the reviewed Phase 4 rules and indexes after explicit owner approval
+- [x] Run the approved live-development Head catalog, pricing, subscription-lifecycle, restart, and archival-cleanup smoke test
 
 ## Phase 5 — Billing engine
 

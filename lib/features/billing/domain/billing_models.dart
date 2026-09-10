@@ -9,8 +9,8 @@ class NewspaperSubscription {
     this.quantity = 1,
     this.fixedPricePaise,
     this.pauses = const [],
-  }) : assert(quantity > 0),
-       assert(fixedPricePaise == null || fixedPricePaise >= 0);
+    this.deliveryWeekdays = const {1, 2, 3, 4, 5, 6, 7},
+  });
 
   final String id;
   final String newspaperId;
@@ -23,11 +23,30 @@ class NewspaperSubscription {
   final int? fixedPricePaise;
   final List<LocalDateRange> pauses;
 
+  /// ISO-8601 weekdays where Monday is 1 and Sunday is 7.
+  final Set<int> deliveryWeekdays;
+
   bool isDeliveredOn(LocalDate date) {
     if (date.isBefore(startDate)) return false;
     if (endDate != null && date.isAfter(endDate!)) return false;
+    if (!deliveryWeekdays.contains(date.isoWeekday)) return false;
     return !pauses.any((pause) => pause.contains(date));
   }
+}
+
+class NewspaperPricePeriod {
+  const NewspaperPricePeriod({
+    required this.startDate,
+    required this.endDate,
+    required this.pricePaise,
+  });
+
+  final LocalDate startDate;
+  final LocalDate endDate;
+  final int pricePaise;
+
+  bool contains(LocalDate date) =>
+      !date.isBefore(startDate) && !date.isAfter(endDate);
 }
 
 class NewspaperPriceSchedule {
@@ -35,13 +54,30 @@ class NewspaperPriceSchedule {
     required this.newspaperId,
     required this.defaultPricePaise,
     this.dateOverrides = const {},
-  }) : assert(defaultPricePaise >= 0);
+    this.effectivePeriods = const [],
+  });
 
   final String newspaperId;
   final int defaultPricePaise;
   final Map<LocalDate, int> dateOverrides;
+  final List<NewspaperPricePeriod> effectivePeriods;
 
-  int priceOn(LocalDate date) => dateOverrides[date] ?? defaultPricePaise;
+  int priceOn(LocalDate date) {
+    final exactPrice = dateOverrides[date];
+    if (exactPrice != null) return exactPrice;
+
+    NewspaperPricePeriod? matchingPeriod;
+    for (final period in effectivePeriods) {
+      if (!period.contains(date)) continue;
+      if (matchingPeriod != null) {
+        throw BillingException(
+          'Conflicting price periods for $newspaperId on $date.',
+        );
+      }
+      matchingPeriod = period;
+    }
+    return matchingPeriod?.pricePaise ?? defaultPricePaise;
+  }
 }
 
 class DeliveryException {

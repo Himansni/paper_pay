@@ -438,7 +438,7 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
               _SectionCard(
                 title: 'Delivery and billing preferences',
                 subtitle:
-                    'Preferences are recorded for operations; subscriptions remain unavailable until Phase 4.',
+                    'Set delivery and future billing preferences here. Manage dated newspaper subscriptions from the saved customer.',
                 children: [
                   DropdownButtonFormField<DeliveryPlacement>(
                     value: _deliveryPlacement,
@@ -468,11 +468,6 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
                     onChanged: (value) {
                       if (value != null) setState(() => _billingCycle = value);
                     },
-                  ),
-                  const SizedBox(height: 14),
-                  const _ReadOnlyValue(
-                    label: 'Subscription status',
-                    value: 'Not configured — Phase 4',
                   ),
                 ],
               ),

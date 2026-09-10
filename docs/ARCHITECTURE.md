@@ -39,9 +39,17 @@ This Spark-compatible design avoids placing Admin SDK credentials in the client.
 
 The customer feature owns a plain-Dart model and repository contract, a Firebase repository, Riverpod providers, and route pages for directory, form, detail, assignment, lifecycle, and audit history. Repository transactions validate active areas and employee coverage before paired customer/audit writes. The document ID is the permanent customer code; UUID collision attempts become unauthorized updates and therefore cannot overwrite an existing record.
 
-Opening balances are parsed to integer paise and may be set only by a Head during customer creation. They cannot be changed by profile, assignment, or lifecycle operations. Full subscription state deliberately remains `notConfigured` until Phase 4 rather than exposing a partial subscription workflow.
+Opening balances are parsed to integer paise and may be set only by a Head during customer creation. They cannot be changed by profile, assignment, or lifecycle operations. The legacy customer-level `subscriptionStatus: notConfigured` field remains an immutable compatibility marker so deployed Phase 3 customer documents require no migration; real Phase 4 state is derived from the customer's subscription subcollection.
 
 Employees can create only self-assigned customers in member-authorized areas when they hold `addCustomers`. They can edit only profile fields of active customers currently assigned to them when they hold `editAssignedCustomers`. The client policy makes unavailable actions clear, while the deployed Phase 3 Rules remain the authority.
+
+## Catalog, pricing, and subscription boundary
+
+The newspaper feature owns tenant-scoped catalog records with stable generated codes, normalized name search, status-based cursor pagination, and append-only audits. A newspaper's initial default price is immutable. Later exact-date and effective-period prices are separate records, and a correction creates a replacement revision while marking the prior record superseded in the same transaction. Exact-date rules outrank periods, and periods cannot overlap. A newspaper-level audit lock makes the conflict check safe against concurrent writers.
+
+Each customer can hold one stable subscription series per newspaper. The series points to an immutable current terms version; quantity, delivery weekdays, effective dates, and optional Head-authorized custom price changes create a new version and close the old one. Pause records are separate, an open pause can be resumed, and ended series can be restarted with a new version. No workflow physically deletes catalog, pricing, subscription, version, pause, or audit history.
+
+Heads control catalog, shared prices, and every customer subscription in their tenant. Employees can read the active catalog, but subscription writes require `manageAssignedSubscriptions`, the employee's current customer assignment, and membership coverage of the customer's current area. Employees cannot set or change custom prices. Firestore Rules enforce the same boundaries independently of route guards and widget visibility.
 
 ## Billing boundary
 
@@ -57,6 +65,8 @@ Firestore may cache non-financial reads. Financial transactions fail offline and
 
 - Keep all tenant records below the business path.
 - Query customers in cursor pages ordered by normalized name and document ID; employees always add `assignedEmployeeId == uid`.
+- Query newspapers in cursor pages ordered by normalized name and document ID; code search uses tenant/status-constrained equality.
+- Query only one customer's subscription subcollection and one newspaper's bounded price history at a time; never load all customers to render either workflow.
 - Store normalized name/phone/landmark fields and bounded prefix tokens. Search uses exact customer-code equality, `array-contains` for name/phone/landmark prefixes, and an `areaId` equality filter without downloading the whole tenant.
 - Finalize bills on demand once per customer/month.
 - Query payments by business/user/month using collection-group indexes only for authorized Head reports.

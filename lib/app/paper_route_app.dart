@@ -91,6 +91,43 @@ class _PaperRouteAppState extends State<PaperRouteApp> {
                     : SetupRequiredPage(message: widget.startup.message),
       ),
       GoRoute(
+        path: '/customers/:customerId/subscriptions/new',
+        builder:
+            (context, state) =>
+                widget.startup.isReady
+                    ? AuthGate(
+                      destination: AuthenticatedDestination.subscriptionCreate,
+                      resourceId: state.pathParameters['customerId'],
+                    )
+                    : SetupRequiredPage(message: widget.startup.message),
+      ),
+      GoRoute(
+        path: '/customers/:customerId/subscriptions/:subscriptionId/change',
+        builder:
+            (context, state) =>
+                widget.startup.isReady
+                    ? AuthGate(
+                      destination: AuthenticatedDestination.subscriptionChange,
+                      resourceId: state.pathParameters['customerId'],
+                      secondaryResourceId:
+                          state.pathParameters['subscriptionId'],
+                    )
+                    : SetupRequiredPage(message: widget.startup.message),
+      ),
+      GoRoute(
+        path: '/customers/:customerId/subscriptions/:subscriptionId',
+        builder:
+            (context, state) =>
+                widget.startup.isReady
+                    ? AuthGate(
+                      destination: AuthenticatedDestination.subscriptionDetail,
+                      resourceId: state.pathParameters['customerId'],
+                      secondaryResourceId:
+                          state.pathParameters['subscriptionId'],
+                    )
+                    : SetupRequiredPage(message: widget.startup.message),
+      ),
+      GoRoute(
         path: '/customers/:customerId',
         builder:
             (context, state) =>
@@ -115,6 +152,59 @@ class _PaperRouteAppState extends State<PaperRouteApp> {
       GoRoute(
         path: '/customer-assignments',
         redirect: (context, state) => '/customers',
+      ),
+      GoRoute(
+        path: '/newspapers',
+        builder:
+            (context, state) =>
+                widget.startup.isReady
+                    ? const AuthGate(
+                      destination: AuthenticatedDestination.newspapers,
+                    )
+                    : SetupRequiredPage(message: widget.startup.message),
+      ),
+      GoRoute(
+        path: '/newspapers/new',
+        builder:
+            (context, state) =>
+                widget.startup.isReady
+                    ? const AuthGate(
+                      destination: AuthenticatedDestination.newspaperCreate,
+                    )
+                    : SetupRequiredPage(message: widget.startup.message),
+      ),
+      GoRoute(
+        path: '/newspapers/:newspaperId/edit',
+        builder:
+            (context, state) =>
+                widget.startup.isReady
+                    ? AuthGate(
+                      destination: AuthenticatedDestination.newspaperEdit,
+                      resourceId: state.pathParameters['newspaperId'],
+                    )
+                    : SetupRequiredPage(message: widget.startup.message),
+      ),
+      GoRoute(
+        path: '/newspapers/:newspaperId/prices',
+        builder:
+            (context, state) =>
+                widget.startup.isReady
+                    ? AuthGate(
+                      destination: AuthenticatedDestination.newspaperPricing,
+                      resourceId: state.pathParameters['newspaperId'],
+                    )
+                    : SetupRequiredPage(message: widget.startup.message),
+      ),
+      GoRoute(
+        path: '/newspapers/:newspaperId',
+        builder:
+            (context, state) =>
+                widget.startup.isReady
+                    ? AuthGate(
+                      destination: AuthenticatedDestination.newspaperDetail,
+                      resourceId: state.pathParameters['newspaperId'],
+                    )
+                    : SetupRequiredPage(message: widget.startup.message),
       ),
     ],
   );

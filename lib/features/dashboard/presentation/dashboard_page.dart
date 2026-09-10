@@ -16,7 +16,7 @@ class DashboardPage extends ConsumerWidget {
     final firstName = nameParts.first.isEmpty ? 'there' : nameParts.first;
     final plannedSections =
         user.isHead
-            ? const ['Newspapers', 'Billing', 'Collections', 'Reports']
+            ? const ['Billing', 'Collections', 'Reports']
             : const ['Collections', 'Profile'];
 
     return Scaffold(
@@ -149,6 +149,13 @@ class DashboardPage extends ConsumerWidget {
                         subtitle: 'Profiles, routes, search, and assignments',
                         onTap: () => context.go('/customers'),
                       ),
+                      _WorkspaceActionCard(
+                        width: width,
+                        icon: Icons.newspaper_outlined,
+                        title: 'Newspapers',
+                        subtitle: 'Catalog, effective prices, and history',
+                        onTap: () => context.go('/newspapers'),
+                      ),
                     ],
                   );
                 },
@@ -163,6 +170,14 @@ class DashboardPage extends ConsumerWidget {
                     title: 'My customers',
                     subtitle: 'Assigned customer routes and house details',
                     onTap: () => context.go('/customers'),
+                  ),
+                  const SizedBox(height: 12),
+                  _WorkspaceActionCard(
+                    width: double.infinity,
+                    icon: Icons.newspaper_outlined,
+                    title: 'Newspaper catalog',
+                    subtitle: 'Active publications and dated pricing',
+                    onTap: () => context.go('/newspapers'),
                   ),
                   const SizedBox(height: 12),
                   Wrap(
@@ -196,8 +211,8 @@ class DashboardPage extends ConsumerWidget {
                     const SizedBox(height: 8),
                     Text(
                       user.isHead
-                          ? 'Employee access, delivery areas, and paginated customer management use live Firestore data. Financial modules remain intentionally unavailable.'
-                          : 'Your active membership, assigned areas, and customer access are enforced by Firestore Security Rules.',
+                          ? 'Employee access, delivery areas, paginated customers, catalog pricing, and subscriptions use live Firestore data. Bill finalization remains intentionally unavailable.'
+                          : 'Your active membership, assigned areas, customer access, and subscription permissions are enforced by Firestore Security Rules.',
                       style: const TextStyle(
                         color: Color(0xFF627D98),
                         height: 1.45,

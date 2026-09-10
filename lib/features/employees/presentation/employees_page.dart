@@ -19,6 +19,8 @@ class EmployeesPage extends ConsumerWidget {
   static const Map<String, String> _permissionLabels = {
     PermissionKey.addCustomers: 'Add customers',
     PermissionKey.editAssignedCustomers: 'Edit assigned customers',
+    PermissionKey.manageAssignedSubscriptions:
+        'Manage assigned customer subscriptions',
     PermissionKey.recordPayments: 'Record payments',
     PermissionKey.recordDeliveryExceptions: 'Record delivery exceptions',
   };

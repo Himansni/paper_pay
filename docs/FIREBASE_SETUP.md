@@ -1,6 +1,6 @@
 # Firebase setup and first-Head bootstrap
 
-Android and Web are connected to the Spark project **PaperRouteDev** (`paperroutedev`). FlutterFire generated the platform configuration on 7 September 2026. After explicit owner approval, the repository's tested Firestore rules and four composite indexes were deployed to that development project. No paid service or billing account was enabled.
+Android and Web are connected to the Spark project **PaperRouteDev** (`paperroutedev`). FlutterFire generated the platform configuration on 7 September 2026. The reviewed Phase 4 Firestore rules and all 15 composite indexes are deployed there. No paid service or billing account was enabled.
 
 The project creation, Email/Password provider, Firestore database, CLI login, FlutterFire configuration, first-Head bootstrap, and verified login are complete. Keep these steps as a recovery/reference guide.
 
@@ -121,6 +121,16 @@ npx firebase deploy \
 The active Rules API source matches `firestore.rules` at SHA-256 `b1e00abbad701e859b7fa70a7467ec0f327eeb9bd07ca3c2f25ea917f3eb663e`. All 11 composite indexes in `firestore.indexes.json` were matched through the Firestore Admin API and reached `READY`; no required or unexpected index remained. The complete post-deployment emulator suite passed all 26 Security Rules tests. Functions, Hosting, billing, and unrelated Firebase services were not changed.
 
 An explicitly approved live Head smoke test created two development-only areas and one synthetic customer. It verified customer creation, listing, mobile-readable detail, name/phone/code/landmark search, area filtering, a cross-area transfer, an audited profile edit, archive, reactivation, and append-only history. The customer and both areas were left archived/inactive. Readback confirmed `locationConsent: false`, `coordinates: null`, `openingBalancePaise: 0`, ten retained audit records, and zero related subscriptions, bills, or payments.
+
+### Phase 4 deployment and live smoke verification — complete
+
+Before deployment, a read-only project-wide inventory found one compatible Phase 3 customer, one Head membership, and ten existing customer audits in `news-agency-01`. It found zero newspapers, legacy price overrides, price rules, subscriptions, versions, pauses, Phase 4 audits, or employee memberships. The existing customer matched the strict current schema, so no data migration or rewrite was needed.
+
+After explicit owner approval on 9 September 2026, only `firestore:rules` and `firestore:indexes` were deployed to `paperroutedev`. The active Rules API release `cade41dd-63c5-4d40-b7a3-a09ebbe3aede` matches `firestore.rules` exactly at SHA-256 `ca6726d58cd3f1e86d2e3ae02ff3fe5bcd5daeaa8532969fbc167cca18fb17c2`. All 15 deployed index definitions match `firestore.indexes.json`, with all four new Phase 4 indexes and the previous 11 reporting `READY`. The post-deployment emulator suite passed all 34 security tests.
+
+A read-only live check first used the existing verified Head session. The secure `news-agency-01` workspace, customer directory, archived synthetic customer detail, subscription empty/guard states, newspaper catalog, and pricing empty state loaded without Firestore permission errors.
+
+After separate explicit approval, a minimal live-development smoke test created one synthetic customer, one synthetic area, and two synthetic newspapers. It verified normalized catalog search and pagination, profile editing, archive/reactivate behavior, effective-period and exact-date pricing, deterministic precedence, an audited price correction, multiple subscription schedules, quantities, pauses, resume, end, restart, and a Head-authorized customer-specific price. A restart regression fix ensures an ended subscription's historical `endDate` is never prefilled as the new planned end. Final readback found Alpha with three retained term versions, two closed pauses, eight subscription audits, and three retained price-rule revisions; Beta with one closed term version and two subscription audits. The customer and newspapers were archived and the area made inactive. No bill, payment, collection, UPI, or unrelated live record was created. Functions, Hosting, billing, and unrelated Firebase services were not deployed or enabled.
 
 ## 6. Bootstrap the first Head securely — complete
 

@@ -316,6 +316,793 @@ service cloud.firestore {
         );
     }
 
+    function newspaperPath(businessId, newspaperId) {
+      return /databases/$(database)/documents/businesses/$(businessId)/newspapers/$(newspaperId);
+    }
+
+    function priceRulePath(businessId, newspaperId, ruleId) {
+      return /databases/$(database)/documents/businesses/$(businessId)/newspapers/$(newspaperId)/priceRules/$(ruleId);
+    }
+
+    function subscriptionPath(businessId, customerId, subscriptionId) {
+      return /databases/$(database)/documents/businesses/$(businessId)/customers/$(customerId)/subscriptions/$(subscriptionId);
+    }
+
+    function subscriptionVersionPath(
+      businessId,
+      customerId,
+      subscriptionId,
+      versionId
+    ) {
+      return /databases/$(database)/documents/businesses/$(businessId)/customers/$(customerId)/subscriptions/$(subscriptionId)/versions/$(versionId);
+    }
+
+    function subscriptionPausePath(
+      businessId,
+      customerId,
+      subscriptionId,
+      pauseId
+    ) {
+      return /databases/$(database)/documents/businesses/$(businessId)/customers/$(customerId)/subscriptions/$(subscriptionId)/pauses/$(pauseId);
+    }
+
+    function validDate(value) {
+      return value is string
+        && value.size() == 10
+        && value.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+    }
+
+    function validOptionalDate(value) {
+      return value == null || validDate(value);
+    }
+
+    function validPrice(value) {
+      return value is int && value >= 0 && value <= 1000000;
+    }
+
+    function validCustomPrice(data) {
+      return (
+          data.customPricePaise == null
+          && data.customPriceReason is string
+          && data.customPriceReason == ''
+        ) || (
+          validPrice(data.customPricePaise)
+          && data.customPriceReason is string
+          && data.customPriceReason.size() >= 3
+          && data.customPriceReason.size() <= 200
+        );
+    }
+
+    function validWeekdays(value) {
+      return value is list
+        && value.size() >= 1
+        && value.size() <= 7
+        && value.toSet().size() == value.size()
+        && value.hasOnly([1, 2, 3, 4, 5, 6, 7]);
+    }
+
+    function validPhase4AuditAfter(
+      businessId,
+      auditId,
+      entityType,
+      entityId,
+      action
+    ) {
+      let audit = getAfter(auditPath(businessId, auditId)).data;
+      return existsAfter(auditPath(businessId, auditId))
+        && audit.businessId == businessId
+        && audit.actorId == request.auth.uid
+        && audit.entityType == entityType
+        && audit.entityId == entityId
+        && audit.action == action
+        && audit.createdAt == request.time;
+    }
+
+    function validNewspaperShape(businessId, newspaperId, data) {
+      return data.keys().hasOnly([
+          'businessId', 'newspaperCode', 'name', 'searchName', 'edition',
+          'language', 'defaultPricePaise', 'status', 'createdBy',
+          'updatedBy', 'lastAuditId', 'createdAt', 'updatedAt'
+        ])
+        && data.businessId == businessId
+        && data.newspaperCode == newspaperId
+        && data.name is string
+        && data.name.size() >= 2
+        && data.name.size() <= 120
+        && data.searchName is string
+        && data.searchName.size() >= 2
+        && data.edition is string
+        && data.edition.size() <= 80
+        && data.language is string
+        && data.language.size() <= 80
+        && validPrice(data.defaultPricePaise)
+        && data.status in ['active', 'archived']
+        && data.createdBy is string
+        && data.updatedBy is string
+        && data.lastAuditId is string
+        && data.lastAuditId.size() > 0;
+    }
+
+    function validNewspaperProfileUpdate(businessId, newspaperId) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'name', 'searchName', 'edition', 'language', 'updatedBy',
+          'lastAuditId', 'updatedAt'
+        ])
+        && request.resource.data.updatedBy == request.auth.uid
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.lastAuditId != resource.data.lastAuditId
+        && validPhase4AuditAfter(
+          businessId,
+          request.resource.data.lastAuditId,
+          'newspaper',
+          newspaperId,
+          'newspaperUpdated'
+        );
+    }
+
+    function validNewspaperStatusUpdate(businessId, newspaperId) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status', 'updatedBy', 'lastAuditId', 'updatedAt'
+        ])
+        && request.resource.data.status != resource.data.status
+        && request.resource.data.updatedBy == request.auth.uid
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.lastAuditId != resource.data.lastAuditId
+        && (
+          (
+            request.resource.data.status == 'archived'
+            && validPhase4AuditAfter(
+              businessId,
+              request.resource.data.lastAuditId,
+              'newspaper',
+              newspaperId,
+              'newspaperArchived'
+            )
+          ) || (
+            request.resource.data.status == 'active'
+            && validPhase4AuditAfter(
+              businessId,
+              request.resource.data.lastAuditId,
+              'newspaper',
+              newspaperId,
+              'newspaperReactivated'
+            )
+          )
+        );
+    }
+
+    function validNewspaperPriceLockUpdate(businessId, newspaperId) {
+      let auditId = request.resource.data.lastAuditId;
+      let audit = getAfter(auditPath(businessId, auditId)).data;
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'updatedBy', 'lastAuditId', 'updatedAt'
+        ])
+        && request.resource.data.updatedBy == request.auth.uid
+        && request.resource.data.updatedAt == request.time
+        && audit.priceRuleId is string
+        && (
+          validPhase4AuditAfter(
+            businessId,
+            auditId,
+            'newspaper',
+            newspaperId,
+            'newspaperPriceRuleCreated'
+          ) || validPhase4AuditAfter(
+            businessId,
+            auditId,
+            'newspaper',
+            newspaperId,
+            'newspaperPriceRuleCorrected'
+          )
+        );
+    }
+
+    function validPriceRuleShape(businessId, newspaperId, ruleId, data) {
+      return data.keys().hasOnly([
+          'businessId', 'newspaperId', 'priceRuleId', 'kind', 'startDate',
+          'endDate', 'pricePaise', 'status', 'supersedesRuleId',
+          'supersededByRuleId', 'revision', 'reason', 'createdBy',
+          'updatedBy', 'lastAuditId', 'createdAt', 'updatedAt'
+        ])
+        && data.businessId == businessId
+        && data.newspaperId == newspaperId
+        && data.priceRuleId == ruleId
+        && data.kind in ['exactDate', 'period']
+        && validDate(data.startDate)
+        && (
+          (data.kind == 'exactDate' && data.endDate == null)
+          || (
+            data.kind == 'period'
+            && validDate(data.endDate)
+            && data.endDate >= data.startDate
+          )
+        )
+        && validPrice(data.pricePaise)
+        && data.status in ['active', 'superseded']
+        && data.supersedesRuleId is string
+        && data.supersededByRuleId is string
+        && data.revision is int
+        && data.revision >= 1
+        && data.reason is string
+        && data.reason.size() >= 3
+        && data.reason.size() <= 300
+        && data.createdBy is string
+        && data.updatedBy is string
+        && data.lastAuditId is string
+        && data.lastAuditId.size() > 0;
+    }
+
+    function validPriceRuleCreate(businessId, newspaperId, ruleId) {
+      let data = request.resource.data;
+      let audit = getAfter(auditPath(businessId, data.lastAuditId)).data;
+      return validPriceRuleShape(businessId, newspaperId, ruleId, data)
+        && data.status == 'active'
+        && data.supersededByRuleId == ''
+        && data.createdBy == request.auth.uid
+        && data.updatedBy == request.auth.uid
+        && data.createdAt == request.time
+        && data.updatedAt == request.time
+        && getAfter(newspaperPath(businessId, newspaperId)).data.lastAuditId
+          == data.lastAuditId
+        && audit.priceRuleId == ruleId
+        && audit.kind == data.kind
+        && audit.startDate == data.startDate
+        && audit.endDate == data.endDate
+        && audit.pricePaise == data.pricePaise
+        && (
+          (
+            data.supersedesRuleId == ''
+            && data.revision == 1
+            && get(newspaperPath(businessId, newspaperId)).data.status
+              == 'active'
+            && validPhase4AuditAfter(
+              businessId,
+              data.lastAuditId,
+              'newspaper',
+              newspaperId,
+              'newspaperPriceRuleCreated'
+            )
+          ) || (
+            data.supersedesRuleId != ''
+            && exists(priceRulePath(
+              businessId,
+              newspaperId,
+              data.supersedesRuleId
+            ))
+            && data.revision == get(priceRulePath(
+              businessId,
+              newspaperId,
+              data.supersedesRuleId
+            )).data.revision + 1
+            && getAfter(priceRulePath(
+              businessId,
+              newspaperId,
+              data.supersedesRuleId
+            )).data.status == 'superseded'
+            && getAfter(priceRulePath(
+              businessId,
+              newspaperId,
+              data.supersedesRuleId
+            )).data.supersededByRuleId == ruleId
+            && audit.replacedPriceRuleId == data.supersedesRuleId
+            && validPhase4AuditAfter(
+              businessId,
+              data.lastAuditId,
+              'newspaper',
+              newspaperId,
+              'newspaperPriceRuleCorrected'
+            )
+          )
+        );
+    }
+
+    function validPriceRuleSupersede(businessId, newspaperId, ruleId) {
+      let nextId = request.resource.data.supersededByRuleId;
+      let next = getAfter(priceRulePath(businessId, newspaperId, nextId)).data;
+      return resource.data.status == 'active'
+        && request.resource.data.status == 'superseded'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status', 'supersededByRuleId', 'updatedBy', 'lastAuditId',
+          'updatedAt'
+        ])
+        && next.supersedesRuleId == ruleId
+        && next.revision == resource.data.revision + 1
+        && next.lastAuditId == request.resource.data.lastAuditId
+        && request.resource.data.updatedBy == request.auth.uid
+        && request.resource.data.updatedAt == request.time;
+    }
+
+    function canManageAssignedSubscription(businessId, customerId) {
+      let member = get(memberPath(businessId, request.auth.uid)).data;
+      let customer = get(customerPath(businessId, customerId)).data;
+      return signedIn()
+        && exists(memberPath(businessId, request.auth.uid))
+        && member.status == 'active'
+        && member.businessId == businessId
+        && exists(customerPath(businessId, customerId))
+        && customer.businessId == businessId
+        && customer.status == 'active'
+        && (
+          member.role == 'head'
+          || (
+            customer.assignedEmployeeId == request.auth.uid
+            && member.areaIds is list
+            && member.areaIds.hasAny([customer.areaId])
+            && member.permissions is list
+            && member.permissions.hasAny(['manageAssignedSubscriptions'])
+          )
+        );
+    }
+
+    function validSubscriptionShape(
+      businessId,
+      customerId,
+      subscriptionId,
+      data
+    ) {
+      return data.keys().hasOnly([
+          'businessId', 'customerId', 'subscriptionId', 'newspaperId',
+          'newspaperName', 'currentVersionId', 'currentPauseId', 'status',
+          'startDate', 'endDate', 'currentEffectiveFrom', 'quantity',
+          'deliveryWeekdays', 'customPricePaise', 'customPriceReason',
+          'createdBy', 'updatedBy', 'lastAuditId', 'createdAt', 'updatedAt'
+        ])
+        && data.businessId == businessId
+        && data.customerId == customerId
+        && data.subscriptionId == subscriptionId
+        && data.newspaperId == subscriptionId
+        && data.newspaperName is string
+        && data.newspaperName.size() >= 2
+        && data.newspaperName.size() <= 120
+        && data.currentVersionId is string
+        && data.currentVersionId.size() > 0
+        && data.currentPauseId is string
+        && data.status in ['active', 'paused', 'ended']
+        && validDate(data.startDate)
+        && validOptionalDate(data.endDate)
+        && (data.endDate == null || data.endDate >= data.startDate)
+        && validDate(data.currentEffectiveFrom)
+        && data.quantity is int
+        && data.quantity >= 1
+        && data.quantity <= 50
+        && validWeekdays(data.deliveryWeekdays)
+        && validCustomPrice(data)
+        && data.createdBy is string
+        && data.updatedBy is string
+        && data.lastAuditId is string
+        && data.lastAuditId.size() > 0;
+    }
+
+    function validVersionShape(
+      businessId,
+      customerId,
+      subscriptionId,
+      versionId,
+      data
+    ) {
+      return data.keys().hasOnly([
+          'businessId', 'customerId', 'subscriptionId', 'versionId',
+          'newspaperId', 'effectiveFrom', 'effectiveTo', 'quantity',
+          'deliveryWeekdays', 'customPricePaise', 'customPriceReason',
+          'predecessorVersionId', 'successorVersionId', 'status', 'createdBy',
+          'updatedBy', 'lastAuditId', 'createdAt', 'updatedAt'
+        ])
+        && data.businessId == businessId
+        && data.customerId == customerId
+        && data.subscriptionId == subscriptionId
+        && data.versionId == versionId
+        && data.newspaperId == subscriptionId
+        && validDate(data.effectiveFrom)
+        && validOptionalDate(data.effectiveTo)
+        && (data.effectiveTo == null || data.effectiveTo >= data.effectiveFrom)
+        && data.quantity is int
+        && data.quantity >= 1
+        && data.quantity <= 50
+        && validWeekdays(data.deliveryWeekdays)
+        && validCustomPrice(data)
+        && data.predecessorVersionId is string
+        && data.successorVersionId is string
+        && data.status in ['current', 'closed']
+        && data.createdBy is string
+        && data.updatedBy is string
+        && data.lastAuditId is string
+        && data.lastAuditId.size() > 0;
+    }
+
+    function validSubscriptionAuditAfter(
+      businessId,
+      customerId,
+      subscriptionId,
+      auditId,
+      action
+    ) {
+      let audit = getAfter(auditPath(businessId, auditId)).data;
+      return validPhase4AuditAfter(
+          businessId,
+          auditId,
+          'subscription',
+          customerId + ':' + subscriptionId,
+          action
+        )
+        && audit.customerId == customerId
+        && audit.subscriptionId == subscriptionId;
+    }
+
+    function versionMatchesSubscriptionAfter(
+      businessId,
+      customerId,
+      subscriptionId,
+      versionId
+    ) {
+      let series = getAfter(subscriptionPath(
+        businessId,
+        customerId,
+        subscriptionId
+      )).data;
+      let version = getAfter(subscriptionVersionPath(
+        businessId,
+        customerId,
+        subscriptionId,
+        versionId
+      )).data;
+      return existsAfter(subscriptionVersionPath(
+          businessId,
+          customerId,
+          subscriptionId,
+          versionId
+        ))
+        && version.status == 'current'
+        && version.effectiveTo == null
+        && version.quantity == series.quantity
+        && version.deliveryWeekdays == series.deliveryWeekdays
+        && version.customPricePaise == series.customPricePaise
+        && version.customPriceReason == series.customPriceReason
+        && version.effectiveFrom == series.currentEffectiveFrom
+        && version.lastAuditId == series.lastAuditId;
+    }
+
+    function validSubscriptionCreate(businessId, customerId, subscriptionId) {
+      let data = request.resource.data;
+      return canManageAssignedSubscription(businessId, customerId)
+        && validSubscriptionShape(
+          businessId,
+          customerId,
+          subscriptionId,
+          data
+        )
+        && data.status == 'active'
+        && data.currentPauseId == ''
+        && data.currentEffectiveFrom == data.startDate
+        && data.createdBy == request.auth.uid
+        && data.updatedBy == request.auth.uid
+        && data.createdAt == request.time
+        && data.updatedAt == request.time
+        && exists(newspaperPath(businessId, subscriptionId))
+        && get(newspaperPath(businessId, subscriptionId)).data.businessId
+          == businessId
+        && get(newspaperPath(businessId, subscriptionId)).data.status
+          == 'active'
+        && (
+          head(businessId) || data.customPricePaise == null
+        )
+        && versionMatchesSubscriptionAfter(
+          businessId,
+          customerId,
+          subscriptionId,
+          data.currentVersionId
+        )
+        && getAfter(subscriptionVersionPath(
+          businessId,
+          customerId,
+          subscriptionId,
+          data.currentVersionId
+        )).data.predecessorVersionId == ''
+        && validSubscriptionAuditAfter(
+          businessId,
+          customerId,
+          subscriptionId,
+          data.lastAuditId,
+          'subscriptionCreated'
+        );
+    }
+
+    function validTermsChange(businessId, customerId, subscriptionId) {
+      let nextId = request.resource.data.currentVersionId;
+      let oldId = resource.data.currentVersionId;
+      let next = getAfter(subscriptionVersionPath(
+        businessId,
+        customerId,
+        subscriptionId,
+        nextId
+      )).data;
+      let old = getAfter(subscriptionVersionPath(
+        businessId,
+        customerId,
+        subscriptionId,
+        oldId
+      )).data;
+      let restarting = resource.data.status == 'ended';
+      return canManageAssignedSubscription(businessId, customerId)
+        && resource.data.status != 'paused'
+        && nextId != oldId
+        && request.resource.data.status == 'active'
+        && request.resource.data.currentPauseId == ''
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'currentVersionId', 'status', 'startDate', 'endDate',
+          'currentEffectiveFrom', 'quantity', 'deliveryWeekdays',
+          'customPricePaise', 'customPriceReason', 'updatedBy', 'lastAuditId',
+          'updatedAt'
+        ])
+        && request.resource.data.currentEffectiveFrom >
+          resource.data.currentEffectiveFrom
+        && next.predecessorVersionId == oldId
+        && next.effectiveFrom == request.resource.data.currentEffectiveFrom
+        && (
+          (
+            restarting
+            && resource.data.endDate != null
+            && next.effectiveFrom > resource.data.endDate
+            && validSubscriptionAuditAfter(
+              businessId,
+              customerId,
+              subscriptionId,
+              request.resource.data.lastAuditId,
+              'subscriptionRestarted'
+            )
+          ) || (
+            !restarting
+            && old.status == 'closed'
+            && old.effectiveTo < next.effectiveFrom
+            && old.successorVersionId == nextId
+            && validSubscriptionAuditAfter(
+              businessId,
+              customerId,
+              subscriptionId,
+              request.resource.data.lastAuditId,
+              'subscriptionTermsChanged'
+            )
+          )
+        )
+        && versionMatchesSubscriptionAfter(
+          businessId,
+          customerId,
+          subscriptionId,
+          nextId
+        )
+        && (
+          head(businessId) || (
+            request.resource.data.customPricePaise == resource.data.customPricePaise
+            && request.resource.data.customPriceReason == resource.data.customPriceReason
+          )
+        );
+    }
+
+    function validPauseShape(
+      businessId,
+      customerId,
+      subscriptionId,
+      pauseId,
+      data
+    ) {
+      return data.keys().hasOnly([
+          'businessId', 'customerId', 'subscriptionId', 'pauseId', 'startDate',
+          'endDate', 'reason', 'status', 'createdBy', 'updatedBy',
+          'lastAuditId', 'createdAt', 'updatedAt'
+        ])
+        && data.businessId == businessId
+        && data.customerId == customerId
+        && data.subscriptionId == subscriptionId
+        && data.pauseId == pauseId
+        && validDate(data.startDate)
+        && validOptionalDate(data.endDate)
+        && (
+          (data.status == 'open' && data.endDate == null)
+          || (
+            data.status == 'closed'
+            && validDate(data.endDate)
+            && data.endDate >= data.startDate
+          )
+        )
+        && data.reason is string
+        && data.reason.size() >= 2
+        && data.reason.size() <= 200
+        && data.createdBy is string
+        && data.updatedBy is string
+        && data.lastAuditId is string
+        && data.lastAuditId.size() > 0;
+    }
+
+    function validOpenPauseTransition(businessId, customerId, subscriptionId) {
+      let pauseId = request.resource.data.currentPauseId;
+      let pause = getAfter(subscriptionPausePath(
+        businessId,
+        customerId,
+        subscriptionId,
+        pauseId
+      )).data;
+      return resource.data.status == 'active'
+        && request.resource.data.status == 'paused'
+        && resource.data.currentPauseId == ''
+        && pause.status == 'open'
+        && pause.lastAuditId == request.resource.data.lastAuditId
+        && validSubscriptionAuditAfter(
+          businessId,
+          customerId,
+          subscriptionId,
+          request.resource.data.lastAuditId,
+          'subscriptionPauseAdded'
+        );
+    }
+
+    function validResumeTransition(businessId, customerId, subscriptionId) {
+      let pauseId = resource.data.currentPauseId;
+      let pause = getAfter(subscriptionPausePath(
+        businessId,
+        customerId,
+        subscriptionId,
+        pauseId
+      )).data;
+      return resource.data.status == 'paused'
+        && request.resource.data.status == 'active'
+        && pause.status == 'closed'
+        && pause.endDate != null
+        && pause.lastAuditId == request.resource.data.lastAuditId
+        && validSubscriptionAuditAfter(
+          businessId,
+          customerId,
+          subscriptionId,
+          request.resource.data.lastAuditId,
+          'subscriptionResumed'
+        );
+    }
+
+    function validScheduledPauseLock(businessId, customerId, subscriptionId) {
+      let auditId = request.resource.data.lastAuditId;
+      let audit = getAfter(auditPath(businessId, auditId)).data;
+      let pause = getAfter(subscriptionPausePath(
+        businessId,
+        customerId,
+        subscriptionId,
+        audit.pauseId
+      )).data;
+      return request.resource.data.status == resource.data.status
+        && request.resource.data.currentPauseId == resource.data.currentPauseId
+        && audit.pauseId is string
+        && existsAfter(subscriptionPausePath(
+          businessId,
+          customerId,
+          subscriptionId,
+          audit.pauseId
+        ))
+        && pause.status == 'closed'
+        && pause.lastAuditId == auditId
+        && validSubscriptionAuditAfter(
+          businessId,
+          customerId,
+          subscriptionId,
+          auditId,
+          'subscriptionPauseAdded'
+        );
+    }
+
+    function validEndTransition(businessId, customerId, subscriptionId) {
+      let version = getAfter(subscriptionVersionPath(
+        businessId,
+        customerId,
+        subscriptionId,
+        resource.data.currentVersionId
+      )).data;
+      return resource.data.status in ['active', 'paused']
+        && request.resource.data.status == 'ended'
+        && validDate(request.resource.data.endDate)
+        && request.resource.data.endDate >= resource.data.startDate
+        && version.status == 'closed'
+        && version.effectiveTo == request.resource.data.endDate
+        && version.lastAuditId == request.resource.data.lastAuditId
+        && (
+          resource.data.status == 'active'
+          || getAfter(subscriptionPausePath(
+            businessId,
+            customerId,
+            subscriptionId,
+            resource.data.currentPauseId
+          )).data.status == 'closed'
+        )
+        && validSubscriptionAuditAfter(
+          businessId,
+          customerId,
+          subscriptionId,
+          request.resource.data.lastAuditId,
+          'subscriptionEnded'
+        );
+    }
+
+    function validSubscriptionUpdate(businessId, customerId, subscriptionId) {
+      return validSubscriptionShape(
+          businessId,
+          customerId,
+          subscriptionId,
+          request.resource.data
+        )
+        && request.resource.data.updatedBy == request.auth.uid
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.lastAuditId != resource.data.lastAuditId
+        && (
+          (
+            request.resource.data.status == 'ended'
+            && (
+              canManageAssignedSubscription(businessId, customerId)
+              || head(businessId)
+            )
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'status', 'endDate', 'currentPauseId', 'updatedBy',
+              'lastAuditId', 'updatedAt'
+            ])
+            && validEndTransition(businessId, customerId, subscriptionId)
+          ) || (
+            request.resource.data.currentVersionId
+              != resource.data.currentVersionId
+            && validTermsChange(businessId, customerId, subscriptionId)
+          ) || (
+            request.resource.data.currentVersionId
+              == resource.data.currentVersionId
+            &&
+            canManageAssignedSubscription(businessId, customerId)
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'status', 'currentPauseId', 'updatedBy', 'lastAuditId',
+              'updatedAt'
+            ])
+            && (
+              validOpenPauseTransition(businessId, customerId, subscriptionId)
+              || validResumeTransition(businessId, customerId, subscriptionId)
+              || validScheduledPauseLock(
+                businessId,
+                customerId,
+                subscriptionId
+              )
+            )
+          )
+        );
+    }
+
+    function phase4AuditAction(action) {
+      return action in [
+        'newspaperCreated', 'newspaperUpdated', 'newspaperArchived',
+        'newspaperReactivated', 'newspaperPriceRuleCreated',
+        'newspaperPriceRuleCorrected', 'subscriptionCreated',
+        'subscriptionTermsChanged', 'subscriptionRestarted',
+        'subscriptionPauseAdded', 'subscriptionResumed', 'subscriptionEnded'
+      ];
+    }
+
+    function phase4AuditReferencedAfter(businessId, auditId, data) {
+      return (
+          data.entityType == 'newspaper'
+          && getAfter(newspaperPath(businessId, data.entityId)).data.lastAuditId
+            == auditId
+        ) || (
+          data.entityType == 'subscription'
+          && data.customerId is string
+          && data.subscriptionId is string
+          && (
+            getAfter(subscriptionPath(
+              businessId,
+              data.customerId,
+              data.subscriptionId
+            )).data.lastAuditId == auditId
+            || (
+              data.pauseId is string
+              && getAfter(subscriptionPausePath(
+                businessId,
+                data.customerId,
+                data.subscriptionId,
+                data.pauseId
+              )).data.lastAuditId == auditId
+            )
+          )
+        );
+    }
+
     function acceptedInviteAfter(businessId, invitationId) {
       let invite = getAfter(
         /databases/$(database)/documents/businesses/$(businessId)/invitations/$(invitationId)
@@ -517,11 +1304,176 @@ service cloud.firestore {
 
         match /subscriptions/{subscriptionId} {
           allow read: if canReadCustomer(businessId, customerId);
-          allow create, update: if head(businessId)
-            && request.resource.data.businessId == businessId
-            && request.resource.data.customerId == customerId
-            && request.resource.data.updatedAt == request.time;
+          allow create: if validSubscriptionCreate(
+            businessId,
+            customerId,
+            subscriptionId
+          );
+          allow update: if validSubscriptionUpdate(
+            businessId,
+            customerId,
+            subscriptionId
+          );
           allow delete: if false;
+
+          match /versions/{versionId} {
+            allow read: if canReadCustomer(businessId, customerId);
+            allow create: if canManageAssignedSubscription(
+                businessId,
+                customerId
+              )
+              && validVersionShape(
+                businessId,
+                customerId,
+                subscriptionId,
+                versionId,
+                request.resource.data
+              )
+              && request.resource.data.status == 'current'
+              && request.resource.data.effectiveTo == null
+              && request.resource.data.successorVersionId == ''
+              && request.resource.data.createdBy == request.auth.uid
+              && request.resource.data.updatedBy == request.auth.uid
+              && request.resource.data.createdAt == request.time
+              && request.resource.data.updatedAt == request.time
+              && getAfter(subscriptionPath(
+                businessId,
+                customerId,
+                subscriptionId
+              )).data.currentVersionId == versionId
+              && getAfter(subscriptionPath(
+                businessId,
+                customerId,
+                subscriptionId
+              )).data.lastAuditId == request.resource.data.lastAuditId
+              && (
+                head(businessId)
+                || request.resource.data.predecessorVersionId == ''
+                  && request.resource.data.customPricePaise == null
+                || request.resource.data.predecessorVersionId != ''
+                  && request.resource.data.customPricePaise == get(
+                    subscriptionVersionPath(
+                      businessId,
+                      customerId,
+                      subscriptionId,
+                      request.resource.data.predecessorVersionId
+                    )
+                  ).data.customPricePaise
+                  && request.resource.data.customPriceReason == get(
+                    subscriptionVersionPath(
+                      businessId,
+                      customerId,
+                      subscriptionId,
+                      request.resource.data.predecessorVersionId
+                    )
+                  ).data.customPriceReason
+              );
+            allow update: if (
+                canManageAssignedSubscription(businessId, customerId)
+                || head(businessId)
+              )
+              && validVersionShape(
+                businessId,
+                customerId,
+                subscriptionId,
+                versionId,
+                request.resource.data
+              )
+              && resource.data.status == 'current'
+              && request.resource.data.status == 'closed'
+              && request.resource.data.effectiveTo != null
+              && request.resource.data.diff(resource.data).affectedKeys()
+                .hasOnly([
+                  'effectiveTo', 'successorVersionId', 'status', 'updatedBy',
+                  'lastAuditId', 'updatedAt'
+                ])
+              && request.resource.data.updatedBy == request.auth.uid
+              && request.resource.data.updatedAt == request.time
+              && getAfter(subscriptionPath(
+                businessId,
+                customerId,
+                subscriptionId
+              )).data.lastAuditId == request.resource.data.lastAuditId;
+            allow delete: if false;
+          }
+
+          match /pauses/{pauseId} {
+            allow read: if canReadCustomer(businessId, customerId);
+            allow create: if canManageAssignedSubscription(
+                businessId,
+                customerId
+              )
+              && validPauseShape(
+                businessId,
+                customerId,
+                subscriptionId,
+                pauseId,
+                request.resource.data
+              )
+              && request.resource.data.createdBy == request.auth.uid
+              && request.resource.data.updatedBy == request.auth.uid
+              && request.resource.data.createdAt == request.time
+              && request.resource.data.updatedAt == request.time
+              && validSubscriptionAuditAfter(
+                businessId,
+                customerId,
+                subscriptionId,
+                request.resource.data.lastAuditId,
+                'subscriptionPauseAdded'
+              )
+              && getAfter(subscriptionPath(
+                businessId,
+                customerId,
+                subscriptionId
+              )).data.lastAuditId == request.resource.data.lastAuditId
+              && (
+                request.resource.data.status == 'closed'
+                || (
+                  getAfter(subscriptionPath(
+                    businessId,
+                    customerId,
+                    subscriptionId
+                  )).data.status == 'paused'
+                  && getAfter(subscriptionPath(
+                    businessId,
+                    customerId,
+                    subscriptionId
+                  )).data.currentPauseId == pauseId
+                )
+              );
+            allow update: if (
+                canManageAssignedSubscription(businessId, customerId)
+                || head(businessId)
+              )
+              && validPauseShape(
+                businessId,
+                customerId,
+                subscriptionId,
+                pauseId,
+                request.resource.data
+              )
+              && resource.data.status == 'open'
+              && resource.data.endDate == null
+              && request.resource.data.status == 'closed'
+              && request.resource.data.endDate != null
+              && request.resource.data.diff(resource.data).affectedKeys()
+                .hasOnly([
+                  'endDate', 'status', 'updatedBy', 'lastAuditId', 'updatedAt'
+                ])
+              && request.resource.data.updatedBy == request.auth.uid
+              && request.resource.data.updatedAt == request.time
+              && getAfter(subscriptionPath(
+                businessId,
+                customerId,
+                subscriptionId
+              )).data.currentPauseId == ''
+              && getAfter(subscriptionPath(
+                businessId,
+                customerId,
+                subscriptionId
+              )).data.lastAuditId == request.resource.data.lastAuditId;
+            allow delete: if false;
+          }
         }
 
         match /deliveryExceptions/{exceptionId} {
@@ -582,17 +1534,49 @@ service cloud.firestore {
 
       match /newspapers/{newspaperId} {
         allow read: if activeMember(businessId);
-        allow create, update: if head(businessId)
-          && request.resource.data.businessId == businessId
-          && request.resource.data.updatedAt == request.time;
+        allow create: if head(businessId)
+          && validNewspaperShape(
+            businessId,
+            newspaperId,
+            request.resource.data
+          )
+          && request.resource.data.status == 'active'
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.updatedBy == request.auth.uid
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time
+          && validPhase4AuditAfter(
+            businessId,
+            request.resource.data.lastAuditId,
+            'newspaper',
+            newspaperId,
+            'newspaperCreated'
+          );
+        allow update: if head(businessId)
+          && validNewspaperShape(
+            businessId,
+            newspaperId,
+            request.resource.data
+          )
+          && (
+            validNewspaperProfileUpdate(businessId, newspaperId)
+            || validNewspaperStatusUpdate(businessId, newspaperId)
+            || validNewspaperPriceLockUpdate(businessId, newspaperId)
+          );
         allow delete: if false;
 
-        match /priceOverrides/{dateKey} {
+        match /priceRules/{ruleId} {
           allow read: if activeMember(businessId);
-          allow create, update: if head(businessId)
-            && request.resource.data.businessId == businessId
-            && request.resource.data.newspaperId == newspaperId
-            && request.resource.data.updatedAt == request.time;
+          allow create: if head(businessId)
+            && validPriceRuleCreate(businessId, newspaperId, ruleId);
+          allow update: if head(businessId)
+            && validPriceRuleShape(
+              businessId,
+              newspaperId,
+              ruleId,
+              request.resource.data
+            )
+            && validPriceRuleSupersede(businessId, newspaperId, ruleId);
           allow delete: if false;
         }
       }
@@ -612,7 +1596,18 @@ service cloud.firestore {
           && request.resource.data.actorId == request.auth.uid
           && request.resource.data.createdAt == request.time
           && (
-            head(businessId)
+            (
+              phase4AuditAction(request.resource.data.action)
+              && phase4AuditReferencedAfter(
+                businessId,
+                auditId,
+                request.resource.data
+              )
+            )
+            || (
+              head(businessId)
+              && !phase4AuditAction(request.resource.data.action)
+            )
             || (
               request.resource.data.entityType == 'customer'
               && request.resource.data.entityId is string

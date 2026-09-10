@@ -92,6 +92,179 @@ const customerAudit = ({
   createdAt: serverTimestamp(),
 });
 
+const completeNewspaper = ({
+  id = 'times',
+  businessId = 'business-a',
+  status = 'active',
+  defaultPricePaise = 650,
+  actorId = 'head-a',
+  lastAuditId = 'seed-newspaper-audit',
+} = {}) => ({
+  businessId,
+  newspaperCode: id,
+  name: 'Daily Times',
+  searchName: 'daily times',
+  edition: 'City',
+  language: 'English',
+  defaultPricePaise,
+  status,
+  createdBy: actorId,
+  updatedBy: actorId,
+  lastAuditId,
+  createdAt: new Date(),
+  updatedAt: new Date(),
+});
+
+const subscriptionSeries = ({
+  customerId = 'C-EMPLOYEE',
+  newspaperId = 'times',
+  versionId = 'version-1',
+  status = 'active',
+  currentPauseId = '',
+  startDate = '2026-09-01',
+  endDate = null,
+  effectiveFrom = startDate,
+  quantity = 1,
+  weekdays = [1, 2, 3, 4, 5, 6, 7],
+  customPricePaise = null,
+  customPriceReason = '',
+  actorId = 'head-a',
+  auditId = 'subscription-audit',
+} = {}) => ({
+  businessId: 'business-a',
+  customerId,
+  subscriptionId: newspaperId,
+  newspaperId,
+  newspaperName: 'Daily Times',
+  currentVersionId: versionId,
+  currentPauseId,
+  status,
+  startDate,
+  endDate,
+  currentEffectiveFrom: effectiveFrom,
+  quantity,
+  deliveryWeekdays: weekdays,
+  customPricePaise,
+  customPriceReason,
+  createdBy: actorId,
+  updatedBy: actorId,
+  lastAuditId: auditId,
+  createdAt: serverTimestamp(),
+  updatedAt: serverTimestamp(),
+});
+
+const subscriptionVersion = ({
+  customerId = 'C-EMPLOYEE',
+  newspaperId = 'times',
+  versionId = 'version-1',
+  effectiveFrom = '2026-09-01',
+  effectiveTo = null,
+  quantity = 1,
+  weekdays = [1, 2, 3, 4, 5, 6, 7],
+  customPricePaise = null,
+  customPriceReason = '',
+  predecessorVersionId = '',
+  successorVersionId = '',
+  status = 'current',
+  actorId = 'head-a',
+  auditId = 'subscription-audit',
+} = {}) => ({
+  businessId: 'business-a',
+  customerId,
+  subscriptionId: newspaperId,
+  versionId,
+  newspaperId,
+  effectiveFrom,
+  effectiveTo,
+  quantity,
+  deliveryWeekdays: weekdays,
+  customPricePaise,
+  customPriceReason,
+  predecessorVersionId,
+  successorVersionId,
+  status,
+  createdBy: actorId,
+  updatedBy: actorId,
+  lastAuditId: auditId,
+  createdAt: serverTimestamp(),
+  updatedAt: serverTimestamp(),
+});
+
+const subscriptionAudit = ({
+  customerId = 'C-EMPLOYEE',
+  newspaperId = 'times',
+  actorId = 'head-a',
+  action = 'subscriptionCreated',
+  auditId = 'subscription-audit',
+  extra = {},
+} = {}) => ({
+  businessId: 'business-a',
+  actorId,
+  action,
+  entityType: 'subscription',
+  entityId: `${customerId}:${newspaperId}`,
+  customerId,
+  subscriptionId: newspaperId,
+  auditId,
+  ...extra,
+  createdAt: serverTimestamp(),
+});
+
+const addSubscriptionCreate = (
+  batch,
+  db,
+  {
+    customerId = 'C-EMPLOYEE',
+    newspaperId = 'times',
+    versionId = 'version-1',
+    actorId = 'head-a',
+    auditId = 'subscription-audit',
+    customPricePaise = null,
+    customPriceReason = '',
+  } = {},
+) => {
+  batch.set(
+    doc(
+      db,
+      `businesses/business-a/customers/${customerId}/subscriptions/${newspaperId}`,
+    ),
+    subscriptionSeries({
+      customerId,
+      newspaperId,
+      versionId,
+      actorId,
+      auditId,
+      customPricePaise,
+      customPriceReason,
+    }),
+  );
+  batch.set(
+    doc(
+      db,
+      `businesses/business-a/customers/${customerId}/subscriptions/${newspaperId}/versions/${versionId}`,
+    ),
+    subscriptionVersion({
+      customerId,
+      newspaperId,
+      versionId,
+      actorId,
+      auditId,
+      customPricePaise,
+      customPriceReason,
+    }),
+  );
+  batch.set(
+    doc(db, `businesses/business-a/auditRecords/${auditId}`),
+    subscriptionAudit({
+      customerId,
+      newspaperId,
+      actorId,
+      auditId,
+      extra: { newspaperId, versionId },
+    }),
+  );
+};
+
 async function seed() {
   await environment.withSecurityRulesDisabled(async (context) => {
     const db = context.firestore();
@@ -129,7 +302,11 @@ async function seed() {
       displayName: 'Employee C',
       role: 'employee',
       status: 'active',
-      permissions: ['addCustomers', 'editAssignedCustomers'],
+      permissions: [
+        'addCustomers',
+        'editAssignedCustomers',
+        'manageAssignedSubscriptions',
+      ],
       areaIds: ['east'],
     });
     await setDoc(doc(db, 'businesses/business-b/members/employee-b'), {
@@ -174,8 +351,7 @@ async function seed() {
       assignedEmployeeIds: [],
     });
     await setDoc(doc(db, 'businesses/business-a/newspapers/times'), {
-      businessId: 'business-a',
-      name: 'Times',
+      ...completeNewspaper(),
     });
   });
 }
@@ -988,6 +1164,712 @@ describe('Phase 3 customer management', () => {
       limit(25),
     );
     await assertFails(getDocs(otherTenant));
+  });
+});
+
+describe('Phase 4 newspaper catalog and pricing', () => {
+  test('Head creates, edits, and archives a newspaper with paired immutable audits', async () => {
+    const db = auth('head-a', 'head-a@example.com');
+    const newspaperId = 'N-CITY';
+    const createAuditId = 'newspaper-create-audit';
+    const create = writeBatch(db);
+    create.set(
+      doc(db, `businesses/business-a/newspapers/${newspaperId}`),
+      {
+        ...completeNewspaper({
+          id: newspaperId,
+          lastAuditId: createAuditId,
+        }),
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      },
+    );
+    create.set(
+      doc(db, `businesses/business-a/auditRecords/${createAuditId}`),
+      {
+        businessId: 'business-a',
+        actorId: 'head-a',
+        action: 'newspaperCreated',
+        entityType: 'newspaper',
+        entityId: newspaperId,
+        defaultPricePaise: 650,
+        createdAt: serverTimestamp(),
+      },
+    );
+    await assertSucceeds(create.commit());
+
+    const profileAuditId = 'newspaper-profile-audit';
+    const profile = writeBatch(db);
+    profile.update(
+      doc(db, `businesses/business-a/newspapers/${newspaperId}`),
+      {
+        name: 'City Daily Updated',
+        searchName: 'city daily updated',
+        edition: 'Morning',
+        language: 'Hindi',
+        updatedBy: 'head-a',
+        lastAuditId: profileAuditId,
+        updatedAt: serverTimestamp(),
+      },
+    );
+    profile.set(
+      doc(db, `businesses/business-a/auditRecords/${profileAuditId}`),
+      {
+        businessId: 'business-a',
+        actorId: 'head-a',
+        action: 'newspaperUpdated',
+        entityType: 'newspaper',
+        entityId: newspaperId,
+        changedFields: ['edition', 'language', 'name', 'searchName'],
+        createdAt: serverTimestamp(),
+      },
+    );
+    await assertSucceeds(profile.commit());
+
+    const archiveAuditId = 'newspaper-archive-audit';
+    const archive = writeBatch(db);
+    archive.update(
+      doc(db, `businesses/business-a/newspapers/${newspaperId}`),
+      {
+        status: 'archived',
+        updatedBy: 'head-a',
+        lastAuditId: archiveAuditId,
+        updatedAt: serverTimestamp(),
+      },
+    );
+    archive.set(
+      doc(db, `businesses/business-a/auditRecords/${archiveAuditId}`),
+      {
+        businessId: 'business-a',
+        actorId: 'head-a',
+        action: 'newspaperArchived',
+        entityType: 'newspaper',
+        entityId: newspaperId,
+        createdAt: serverTimestamp(),
+      },
+    );
+    await assertSucceeds(archive.commit());
+
+    const reactivateAuditId = 'newspaper-reactivate-audit';
+    const reactivate = writeBatch(db);
+    reactivate.update(
+      doc(db, `businesses/business-a/newspapers/${newspaperId}`),
+      {
+        status: 'active',
+        updatedBy: 'head-a',
+        lastAuditId: reactivateAuditId,
+        updatedAt: serverTimestamp(),
+      },
+    );
+    reactivate.set(
+      doc(db, `businesses/business-a/auditRecords/${reactivateAuditId}`),
+      {
+        businessId: 'business-a',
+        actorId: 'head-a',
+        action: 'newspaperReactivated',
+        entityType: 'newspaper',
+        entityId: newspaperId,
+        createdAt: serverTimestamp(),
+      },
+    );
+    await assertSucceeds(reactivate.commit());
+
+    await assertFails(
+      deleteDoc(doc(db, `businesses/business-a/newspapers/${newspaperId}`)),
+    );
+    await assertFails(
+      updateDoc(
+        doc(db, `businesses/business-a/auditRecords/${profileAuditId}`),
+        { action: 'rewritten' },
+      ),
+    );
+  });
+
+  test('catalog remains tenant isolated and employees cannot mutate it', async () => {
+    const employeeDb = auth('employee-c', 'employee-c@example.com');
+    await assertSucceeds(
+      getDocs(
+        query(
+          collection(employeeDb, 'businesses/business-a/newspapers'),
+          where('businessId', '==', 'business-a'),
+          where('status', '==', 'active'),
+          orderBy('searchName'),
+          limit(25),
+        ),
+      ),
+    );
+    await assertFails(
+      updateDoc(
+        doc(employeeDb, 'businesses/business-a/newspapers/times'),
+        { defaultPricePaise: 1 },
+      ),
+    );
+    await assertFails(
+      getDoc(
+        doc(employeeDb, 'businesses/business-b/newspapers/foreign-paper'),
+      ),
+    );
+  });
+
+  test('Head appends and corrects price history without rewriting old prices', async () => {
+    const db = auth('head-a', 'head-a@example.com');
+    const ruleId = 'price-rule-1';
+    const createAuditId = 'price-create-audit';
+    const create = writeBatch(db);
+    create.set(
+      doc(
+        db,
+        `businesses/business-a/newspapers/times/priceRules/${ruleId}`,
+      ),
+      {
+        businessId: 'business-a',
+        newspaperId: 'times',
+        priceRuleId: ruleId,
+        kind: 'period',
+        startDate: '2026-10-01',
+        endDate: '2026-10-31',
+        pricePaise: 700,
+        status: 'active',
+        supersedesRuleId: '',
+        supersededByRuleId: '',
+        revision: 1,
+        reason: 'October cover price',
+        createdBy: 'head-a',
+        updatedBy: 'head-a',
+        lastAuditId: createAuditId,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      },
+    );
+    create.update(doc(db, 'businesses/business-a/newspapers/times'), {
+      updatedBy: 'head-a',
+      lastAuditId: createAuditId,
+      updatedAt: serverTimestamp(),
+    });
+    create.set(
+      doc(db, `businesses/business-a/auditRecords/${createAuditId}`),
+      {
+        businessId: 'business-a',
+        actorId: 'head-a',
+        action: 'newspaperPriceRuleCreated',
+        entityType: 'newspaper',
+        entityId: 'times',
+        priceRuleId: ruleId,
+        replacedPriceRuleId: '',
+        kind: 'period',
+        startDate: '2026-10-01',
+        endDate: '2026-10-31',
+        pricePaise: 700,
+        reason: 'October cover price',
+        createdAt: serverTimestamp(),
+      },
+    );
+    await assertSucceeds(create.commit());
+
+    const replacementId = 'price-rule-2';
+    const correctionAuditId = 'price-correction-audit';
+    const correction = writeBatch(db);
+    correction.update(
+      doc(
+        db,
+        `businesses/business-a/newspapers/times/priceRules/${ruleId}`,
+      ),
+      {
+        status: 'superseded',
+        supersededByRuleId: replacementId,
+        updatedBy: 'head-a',
+        lastAuditId: correctionAuditId,
+        updatedAt: serverTimestamp(),
+      },
+    );
+    correction.set(
+      doc(
+        db,
+        `businesses/business-a/newspapers/times/priceRules/${replacementId}`,
+      ),
+      {
+        businessId: 'business-a',
+        newspaperId: 'times',
+        priceRuleId: replacementId,
+        kind: 'period',
+        startDate: '2026-10-01',
+        endDate: '2026-10-31',
+        pricePaise: 750,
+        status: 'active',
+        supersedesRuleId: ruleId,
+        supersededByRuleId: '',
+        revision: 2,
+        reason: 'Corrected publisher notice',
+        createdBy: 'head-a',
+        updatedBy: 'head-a',
+        lastAuditId: correctionAuditId,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      },
+    );
+    correction.update(doc(db, 'businesses/business-a/newspapers/times'), {
+      updatedBy: 'head-a',
+      lastAuditId: correctionAuditId,
+      updatedAt: serverTimestamp(),
+    });
+    correction.set(
+      doc(db, `businesses/business-a/auditRecords/${correctionAuditId}`),
+      {
+        businessId: 'business-a',
+        actorId: 'head-a',
+        action: 'newspaperPriceRuleCorrected',
+        entityType: 'newspaper',
+        entityId: 'times',
+        priceRuleId: replacementId,
+        replacedPriceRuleId: ruleId,
+        kind: 'period',
+        startDate: '2026-10-01',
+        endDate: '2026-10-31',
+        pricePaise: 750,
+        reason: 'Corrected publisher notice',
+        createdAt: serverTimestamp(),
+      },
+    );
+    await assertSucceeds(correction.commit());
+
+    await assertFails(
+      updateDoc(
+        doc(
+          db,
+          `businesses/business-a/newspapers/times/priceRules/${ruleId}`,
+        ),
+        { pricePaise: 1 },
+      ),
+    );
+    await assertFails(
+      deleteDoc(
+        doc(
+          db,
+          `businesses/business-a/newspapers/times/priceRules/${ruleId}`,
+        ),
+      ),
+    );
+  });
+});
+
+describe('Phase 4 customer subscriptions', () => {
+  test('Head creates a versioned subscription with an authorized custom price', async () => {
+    const db = auth('head-a', 'head-a@example.com');
+    const batch = writeBatch(db);
+    addSubscriptionCreate(batch, db, {
+      customerId: 'C-MANAGED',
+      actorId: 'head-a',
+      auditId: 'head-subscription-create',
+      customPricePaise: 500,
+      customPriceReason: 'Approved loyalty rate',
+    });
+    await assertSucceeds(batch.commit());
+
+    const stored = await getDoc(
+      doc(
+        db,
+        'businesses/business-a/customers/C-MANAGED/subscriptions/times',
+      ),
+    );
+    assert.equal(stored.data().customPricePaise, 500);
+    await assertFails(deleteDoc(stored.ref));
+  });
+
+  test('authorized employee manages only their assigned customer and area without setting price', async () => {
+    const db = auth('employee-c', 'employee-c@example.com');
+    const allowed = writeBatch(db);
+    addSubscriptionCreate(allowed, db, {
+      actorId: 'employee-c',
+      auditId: 'employee-subscription-create',
+    });
+    await assertSucceeds(allowed.commit());
+
+    await environment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(
+        doc(
+          context.firestore(),
+          'businesses/business-a/newspapers/another-paper',
+        ),
+        completeNewspaper({ id: 'another-paper' }),
+      );
+    });
+
+    const customPrice = writeBatch(db);
+    addSubscriptionCreate(customPrice, db, {
+      customerId: 'C-EMPLOYEE',
+      newspaperId: 'another-paper',
+      actorId: 'employee-c',
+      auditId: 'employee-custom-price',
+      customPricePaise: 100,
+      customPriceReason: 'Forged discount',
+    });
+    await assertFails(customPrice.commit());
+
+    const otherCustomer = writeBatch(db);
+    addSubscriptionCreate(otherCustomer, db, {
+      customerId: 'C-MANAGED',
+      actorId: 'employee-c',
+      auditId: 'employee-other-customer',
+    });
+    await assertFails(otherCustomer.commit());
+
+    await environment.withSecurityRulesDisabled(async (context) => {
+      await updateDoc(
+        doc(
+          context.firestore(),
+          'businesses/business-a/members/employee-c',
+        ),
+        { areaIds: [] },
+      );
+      await setDoc(
+        doc(
+          context.firestore(),
+          'businesses/business-a/newspapers/second-paper',
+        ),
+        completeNewspaper({ id: 'second-paper' }),
+      );
+    });
+    const revokedArea = writeBatch(db);
+    addSubscriptionCreate(revokedArea, db, {
+      newspaperId: 'second-paper',
+      actorId: 'employee-c',
+      auditId: 'employee-revoked-area',
+    });
+    await assertFails(revokedArea.commit());
+  });
+
+  test('employee term changes preserve versions and cannot escalate custom pricing', async () => {
+    const db = auth('employee-c', 'employee-c@example.com');
+    const create = writeBatch(db);
+    addSubscriptionCreate(create, db, {
+      actorId: 'employee-c',
+      auditId: 'terms-create-audit',
+    });
+    await assertSucceeds(create.commit());
+
+    const subscriptionRef = doc(
+      db,
+      'businesses/business-a/customers/C-EMPLOYEE/subscriptions/times',
+    );
+    const oldVersionRef = doc(
+      db,
+      'businesses/business-a/customers/C-EMPLOYEE/subscriptions/times/versions/version-1',
+    );
+    const nextVersionRef = doc(
+      db,
+      'businesses/business-a/customers/C-EMPLOYEE/subscriptions/times/versions/version-2',
+    );
+    const auditId = 'terms-change-audit';
+    const change = writeBatch(db);
+    change.update(oldVersionRef, {
+      effectiveTo: '2026-09-14',
+      successorVersionId: 'version-2',
+      status: 'closed',
+      updatedBy: 'employee-c',
+      lastAuditId: auditId,
+      updatedAt: serverTimestamp(),
+    });
+    change.set(
+      nextVersionRef,
+      subscriptionVersion({
+        versionId: 'version-2',
+        effectiveFrom: '2026-09-15',
+        quantity: 2,
+        weekdays: [1, 2, 3, 4, 5, 6],
+        predecessorVersionId: 'version-1',
+        actorId: 'employee-c',
+        auditId,
+      }),
+    );
+    change.update(subscriptionRef, {
+      currentVersionId: 'version-2',
+      endDate: null,
+      currentEffectiveFrom: '2026-09-15',
+      quantity: 2,
+      deliveryWeekdays: [1, 2, 3, 4, 5, 6],
+      customPricePaise: null,
+      customPriceReason: '',
+      updatedBy: 'employee-c',
+      lastAuditId: auditId,
+      updatedAt: serverTimestamp(),
+    });
+    change.set(
+      doc(db, `businesses/business-a/auditRecords/${auditId}`),
+      subscriptionAudit({
+        actorId: 'employee-c',
+        action: 'subscriptionTermsChanged',
+        auditId,
+        extra: {
+          previousVersionId: 'version-1',
+          versionId: 'version-2',
+          effectiveFrom: '2026-09-15',
+          changedFields: ['quantity', 'deliveryWeekdays'],
+        },
+      }),
+    );
+    await assertSucceeds(change.commit());
+    await assertFails(updateDoc(oldVersionRef, { quantity: 9 }));
+
+    const forgedAuditId = 'forged-price-change';
+    const forged = writeBatch(db);
+    forged.update(nextVersionRef, {
+      effectiveTo: '2026-09-19',
+      successorVersionId: 'version-3',
+      status: 'closed',
+      updatedBy: 'employee-c',
+      lastAuditId: forgedAuditId,
+      updatedAt: serverTimestamp(),
+    });
+    forged.set(
+      doc(
+        db,
+        'businesses/business-a/customers/C-EMPLOYEE/subscriptions/times/versions/version-3',
+      ),
+      subscriptionVersion({
+        versionId: 'version-3',
+        effectiveFrom: '2026-09-20',
+        quantity: 2,
+        weekdays: [1, 2, 3, 4, 5, 6],
+        customPricePaise: 100,
+        customPriceReason: 'Forged discount',
+        predecessorVersionId: 'version-2',
+        actorId: 'employee-c',
+        auditId: forgedAuditId,
+      }),
+    );
+    forged.update(subscriptionRef, {
+      currentVersionId: 'version-3',
+      currentEffectiveFrom: '2026-09-20',
+      customPricePaise: 100,
+      customPriceReason: 'Forged discount',
+      updatedBy: 'employee-c',
+      lastAuditId: forgedAuditId,
+      updatedAt: serverTimestamp(),
+    });
+    forged.set(
+      doc(db, `businesses/business-a/auditRecords/${forgedAuditId}`),
+      subscriptionAudit({
+        actorId: 'employee-c',
+        action: 'subscriptionTermsChanged',
+        auditId: forgedAuditId,
+        extra: {
+          previousVersionId: 'version-2',
+          versionId: 'version-3',
+          effectiveFrom: '2026-09-20',
+        },
+      }),
+    );
+    await assertFails(forged.commit());
+  });
+
+  test('pause, resume, and end transitions retain append-only operational history', async () => {
+    const db = auth('employee-c', 'employee-c@example.com');
+    const create = writeBatch(db);
+    addSubscriptionCreate(create, db, {
+      actorId: 'employee-c',
+      auditId: 'lifecycle-create-audit',
+    });
+    await assertSucceeds(create.commit());
+
+    const subscriptionRef = doc(
+      db,
+      'businesses/business-a/customers/C-EMPLOYEE/subscriptions/times',
+    );
+    const pauseRef = doc(
+      db,
+      'businesses/business-a/customers/C-EMPLOYEE/subscriptions/times/pauses/pause-1',
+    );
+    const scheduledPauseId = 'scheduled-pause-audit';
+    const scheduledPause = writeBatch(db);
+    scheduledPause.set(
+      doc(
+        db,
+        'businesses/business-a/customers/C-EMPLOYEE/subscriptions/times/pauses/scheduled-pause',
+      ),
+      {
+        businessId: 'business-a',
+        customerId: 'C-EMPLOYEE',
+        subscriptionId: 'times',
+        pauseId: 'scheduled-pause',
+        startDate: '2026-09-10',
+        endDate: '2026-09-12',
+        reason: 'Scheduled travel',
+        status: 'closed',
+        createdBy: 'employee-c',
+        updatedBy: 'employee-c',
+        lastAuditId: scheduledPauseId,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      },
+    );
+    scheduledPause.update(subscriptionRef, {
+      updatedBy: 'employee-c',
+      lastAuditId: scheduledPauseId,
+      updatedAt: serverTimestamp(),
+    });
+    scheduledPause.set(
+      doc(db, `businesses/business-a/auditRecords/${scheduledPauseId}`),
+      subscriptionAudit({
+        actorId: 'employee-c',
+        action: 'subscriptionPauseAdded',
+        auditId: scheduledPauseId,
+        extra: {
+          pauseId: 'scheduled-pause',
+          startDate: '2026-09-10',
+          endDate: '2026-09-12',
+        },
+      }),
+    );
+    await assertSucceeds(scheduledPause.commit());
+
+    const pauseAuditId = 'pause-open-audit';
+    const pause = writeBatch(db);
+    pause.set(pauseRef, {
+      businessId: 'business-a',
+      customerId: 'C-EMPLOYEE',
+      subscriptionId: 'times',
+      pauseId: 'pause-1',
+      startDate: '2026-09-20',
+      endDate: null,
+      reason: 'Customer travelling',
+      status: 'open',
+      createdBy: 'employee-c',
+      updatedBy: 'employee-c',
+      lastAuditId: pauseAuditId,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    pause.update(subscriptionRef, {
+      status: 'paused',
+      currentPauseId: 'pause-1',
+      updatedBy: 'employee-c',
+      lastAuditId: pauseAuditId,
+      updatedAt: serverTimestamp(),
+    });
+    pause.set(
+      doc(db, `businesses/business-a/auditRecords/${pauseAuditId}`),
+      subscriptionAudit({
+        actorId: 'employee-c',
+        action: 'subscriptionPauseAdded',
+        auditId: pauseAuditId,
+        extra: {
+          pauseId: 'pause-1',
+          startDate: '2026-09-20',
+          endDate: null,
+        },
+      }),
+    );
+    await assertSucceeds(pause.commit());
+
+    const resumeAuditId = 'pause-resume-audit';
+    const resume = writeBatch(db);
+    resume.update(pauseRef, {
+      endDate: '2026-09-24',
+      status: 'closed',
+      updatedBy: 'employee-c',
+      lastAuditId: resumeAuditId,
+      updatedAt: serverTimestamp(),
+    });
+    resume.update(subscriptionRef, {
+      status: 'active',
+      currentPauseId: '',
+      updatedBy: 'employee-c',
+      lastAuditId: resumeAuditId,
+      updatedAt: serverTimestamp(),
+    });
+    resume.set(
+      doc(db, `businesses/business-a/auditRecords/${resumeAuditId}`),
+      subscriptionAudit({
+        actorId: 'employee-c',
+        action: 'subscriptionResumed',
+        auditId: resumeAuditId,
+        extra: { pauseId: 'pause-1', resumeDate: '2026-09-25' },
+      }),
+    );
+    await assertSucceeds(resume.commit());
+
+    const endAuditId = 'subscription-end-audit';
+    const end = writeBatch(db);
+    end.update(
+      doc(
+        db,
+        'businesses/business-a/customers/C-EMPLOYEE/subscriptions/times/versions/version-1',
+      ),
+      {
+        effectiveTo: '2026-09-30',
+        successorVersionId: '',
+        status: 'closed',
+        updatedBy: 'employee-c',
+        lastAuditId: endAuditId,
+        updatedAt: serverTimestamp(),
+      },
+    );
+    end.update(subscriptionRef, {
+      status: 'ended',
+      endDate: '2026-09-30',
+      currentPauseId: '',
+      updatedBy: 'employee-c',
+      lastAuditId: endAuditId,
+      updatedAt: serverTimestamp(),
+    });
+    end.set(
+      doc(db, `businesses/business-a/auditRecords/${endAuditId}`),
+      subscriptionAudit({
+        actorId: 'employee-c',
+        action: 'subscriptionEnded',
+        auditId: endAuditId,
+        extra: { endDate: '2026-09-30', versionId: 'version-1' },
+      }),
+    );
+    await assertSucceeds(end.commit());
+    await assertFails(deleteDoc(pauseRef));
+    await assertFails(
+      updateDoc(
+        doc(db, `businesses/business-a/auditRecords/${pauseAuditId}`),
+        { action: 'rewritten' },
+      ),
+    );
+  });
+
+  test('subscription reads retain customer assignment and tenant isolation', async () => {
+    await environment.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await setDoc(
+        doc(
+          db,
+          'businesses/business-a/customers/C-EMPLOYEE/subscriptions/times',
+        ),
+        {
+          ...subscriptionSeries({ actorId: 'head-a' }),
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      );
+    });
+    await assertSucceeds(
+      getDoc(
+        doc(
+          auth('employee-c', 'employee-c@example.com'),
+          'businesses/business-a/customers/C-EMPLOYEE/subscriptions/times',
+        ),
+      ),
+    );
+    await assertFails(
+      getDoc(
+        doc(
+          auth('employee-a', 'employee-a@example.com'),
+          'businesses/business-a/customers/C-EMPLOYEE/subscriptions/times',
+        ),
+      ),
+    );
+    await assertFails(
+      getDoc(
+        doc(
+          auth('employee-b', 'employee-b@example.com'),
+          'businesses/business-a/customers/C-EMPLOYEE/subscriptions/times',
+        ),
+      ),
+    );
   });
 });
 

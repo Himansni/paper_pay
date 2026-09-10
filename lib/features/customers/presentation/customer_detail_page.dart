@@ -12,6 +12,7 @@ import 'package:paper_route/features/customers/presentation/customer_assignment_
 import 'package:paper_route/features/customers/presentation/customer_providers.dart';
 import 'package:paper_route/features/employees/domain/employee_member.dart';
 import 'package:paper_route/features/employees/presentation/employee_providers.dart';
+import 'package:paper_route/features/subscriptions/presentation/subscription_detail_page.dart';
 
 class CustomerDetailPage extends ConsumerWidget {
   const CustomerDetailPage({
@@ -256,10 +257,6 @@ class _CustomerDetailViewState extends ConsumerState<_CustomerDetailView> {
                 _DetailRow('Employee', employeeName),
                 _DetailRow('Placement', customer.deliveryPlacement.label),
                 _DetailRow('Billing preference', customer.billingCycle.label),
-                const _DetailRow(
-                  'Subscriptions',
-                  'Not configured — available in Phase 4',
-                ),
               ],
               action:
                   user.isHead && !customer.isArchived
@@ -274,6 +271,8 @@ class _CustomerDetailViewState extends ConsumerState<_CustomerDetailView> {
                       )
                       : null,
             ),
+            const SizedBox(height: 14),
+            CustomerSubscriptionsSection(user: user, customer: customer),
             if (customer.locationConsent && customer.coordinates != null) ...[
               const SizedBox(height: 14),
               _DetailCard(

@@ -11,6 +11,12 @@ import 'package:paper_route/features/customers/presentation/customer_form_page.d
 import 'package:paper_route/features/customers/presentation/customers_page.dart';
 import 'package:paper_route/features/dashboard/presentation/dashboard_page.dart';
 import 'package:paper_route/features/employees/presentation/employees_page.dart';
+import 'package:paper_route/features/newspapers/presentation/newspaper_detail_page.dart';
+import 'package:paper_route/features/newspapers/presentation/newspaper_form_page.dart';
+import 'package:paper_route/features/newspapers/presentation/newspaper_pricing_page.dart';
+import 'package:paper_route/features/newspapers/presentation/newspapers_page.dart';
+import 'package:paper_route/features/subscriptions/presentation/subscription_detail_page.dart';
+import 'package:paper_route/features/subscriptions/presentation/subscription_form_page.dart';
 
 enum AuthenticatedDestination {
   dashboard,
@@ -21,6 +27,14 @@ enum AuthenticatedDestination {
   customerCreate,
   customerDetail,
   customerEdit,
+  newspapers,
+  newspaperCreate,
+  newspaperDetail,
+  newspaperEdit,
+  newspaperPricing,
+  subscriptionCreate,
+  subscriptionDetail,
+  subscriptionChange,
 }
 
 /// Single source of truth for auth and role routing. UI routes never trust a
@@ -29,11 +43,13 @@ class AuthGate extends ConsumerWidget {
   const AuthGate({
     this.destination = AuthenticatedDestination.dashboard,
     this.resourceId,
+    this.secondaryResourceId,
     super.key,
   });
 
   final AuthenticatedDestination destination;
   final String? resourceId;
+  final String? secondaryResourceId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -61,7 +77,9 @@ class AuthGate extends ConsumerWidget {
         final headOnly = switch (destination) {
           AuthenticatedDestination.businessSettings ||
           AuthenticatedDestination.employees ||
-          AuthenticatedDestination.areas => true,
+          AuthenticatedDestination.areas ||
+          AuthenticatedDestination.newspaperCreate ||
+          AuthenticatedDestination.newspaperEdit => true,
           _ => false,
         };
         if (headOnly && !user.isHead) return DashboardPage(user: user);
@@ -84,6 +102,36 @@ class AuthGate extends ConsumerWidget {
             user: user,
             customerId: resourceId ?? '',
           ),
+          AuthenticatedDestination.newspapers => NewspapersPage(user: user),
+          AuthenticatedDestination.newspaperCreate => NewspaperFormRoutePage(
+            user: user,
+          ),
+          AuthenticatedDestination.newspaperDetail => NewspaperDetailPage(
+            user: user,
+            newspaperId: resourceId ?? '',
+          ),
+          AuthenticatedDestination.newspaperEdit => NewspaperFormRoutePage(
+            user: user,
+            newspaperId: resourceId ?? '',
+          ),
+          AuthenticatedDestination.newspaperPricing => NewspaperPricingPage(
+            user: user,
+            newspaperId: resourceId ?? '',
+          ),
+          AuthenticatedDestination.subscriptionCreate =>
+            SubscriptionFormRoutePage(user: user, customerId: resourceId ?? ''),
+          AuthenticatedDestination.subscriptionDetail =>
+            SubscriptionDetailRoutePage(
+              user: user,
+              customerId: resourceId ?? '',
+              subscriptionId: secondaryResourceId ?? '',
+            ),
+          AuthenticatedDestination.subscriptionChange =>
+            SubscriptionFormRoutePage(
+              user: user,
+              customerId: resourceId ?? '',
+              subscriptionId: secondaryResourceId ?? '',
+            ),
         };
       },
     );

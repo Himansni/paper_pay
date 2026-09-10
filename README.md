@@ -4,7 +4,7 @@ PaperRoute is an Android-first Flutter application for Indian newspaper agents. 
 
 ## Current status
 
-Phases 0 through 3 are complete in the development project. Phase 3 customer management is implemented, its reviewed Firestore Rules and indexes are deployed to `paperroutedev`, and an approved synthetic Head smoke test has verified the connected live workflows:
+Phases 0 through 4 are complete in the development project. The reviewed Phase 4 rules and indexes are deployed to `paperroutedev`, match the repository, and an approved synthetic Head smoke test verified the connected catalog, pricing, and subscription lifecycle against live development data.
 
 - Flutter project for Android, iOS, and web
 - Firebase project `paperroutedev` connected for Android and Web
@@ -23,11 +23,15 @@ Phases 0 through 3 are complete in the development project. Phase 3 customer man
 - optional GPS coordinates only when customer consent is recorded
 - Head-authorized opening balances stored as integer paise and immutable after creation
 - append-only audit records paired with every customer creation, profile change, lifecycle change, assignment, and transfer
+- paginated newspaper catalog with name/code search, profile editing, and archive/reactivate lifecycle
+- exact-date and effective-period price history with deterministic precedence and audited corrections
+- multiple versioned subscriptions per customer with quantities, weekday schedules, pauses, resume, end, and restart
+- assignment-, area-, and permission-scoped employee subscription management without pricing authority
 - deterministic monthly billing domain engine
 - append-only payment/reversal ledger calculations
 - Dart unit/widget tests and Firebase Emulator Security Rules tests
 
-Newspaper catalog, full subscription management, billing finalization, collections UI, dashboard metrics, reports, and exports are not yet implemented. Customer records are archived rather than physically deleted. The dashboard exposes only connected workflows and identifies later modules honestly instead of displaying fabricated data.
+Persisted bill generation/finalization, collections UI, dashboard metrics, reports, and exports are not yet implemented. Customer and newspaper records are archived rather than physically deleted, and subscription history is retained. The dashboard exposes only connected workflows and identifies later modules honestly instead of displaying fabricated data.
 
 Progress is tracked in [IMPLEMENTATION_CHECKLIST.md](IMPLEMENTATION_CHECKLIST.md).
 
@@ -52,6 +56,8 @@ lib/
     employees/            invitations and member access management
     areas/                delivery areas and employee coverage
     customers/            paginated customer management and assignment
+    newspapers/           paginated catalog and effective-date prices
+    subscriptions/        versioned customer subscription lifecycle
     billing/domain/       pure monthly billing calculation
     collections/domain/   pure payment ledger calculation
     dashboard/            role-aware authenticated landing page
@@ -60,7 +66,7 @@ test/
   features/               Dart business-rule tests
   firestore/              emulator Security Rules tests
 docs/                     architecture, schema, and setup guides
-integration_test/         emulator-backed Head and employee customer lifecycle
+integration_test/         emulator-backed customer and Phase 4 repository workflows
 tool/                     local-demo emulator seed utilities
 ```
 
@@ -96,7 +102,7 @@ env JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" \
   npm run test:rules
 ```
 
-The last local verification completed on 9 September 2026 with no analyzer issues, 42 passing Dart/widget tests, 26 passing Firestore Rules tests, and one passing emulator-backed Chrome integration test. The Rules suite covers unauthenticated denial, tenant isolation, assigned-customer access, role escalation denial, pricing denial, append-only payments and audits, verified invitation acceptance, permitted Head business/member/area writes, inactive-account isolation, customer schema integrity, employee areas and permissions, financial-field immutability, collision overwrite denial, archive/reactivate behavior, transfer restrictions, and tenant-constrained paginated search.
+The last local verification completed on 11 September 2026 with clean formatting, no analyzer issues, 67 passing Dart/widget tests, 34 passing Firestore Rules tests, and a passing emulator-backed Chrome Phase 4 integration test. The Rules suite covers unauthenticated denial, tenant isolation, assigned-customer access, role escalation denial, append-only payments and audits, verified invitation acceptance, permitted Head business/member/area writes, inactive-account isolation, customer schema integrity, employee areas and permissions, financial-field immutability, collision overwrite denial, archive/reactivate behavior, catalog and pricing authority, immutable price corrections, versioned subscription terms, pauses, lifecycle transitions, and tenant-constrained queries.
 
 The Phase 3 integration test signs in as a synthetic verified Head, creates a complete customer with an opening balance, assigns the customer, edits the profile, archives and reactivates it, and verifies the audit history. It then signs in as the assigned synthetic employee, verifies assignment-scoped visibility and the hidden Head financial view, and saves an authorized location-note edit through the real repository and local Security Rules. All data is recreated in the local `demo-paper-route` emulators; no live Firebase customer records are created.
 
@@ -111,6 +117,17 @@ flutter run -d chrome \
 
 The seed script is hard-coded to `127.0.0.1` and Firebase demo project `demo-paper-route`; it clears only those ephemeral emulator records.
 
+The Phase 4 connected test uses the same local-only safeguards and exercises the real Firebase repositories through Auth and Firestore Rules:
+
+```sh
+npm run seed:phase4-emulator
+flutter run -d chrome \
+  --target integration_test/phase4_catalog_subscription_smoke_test.dart \
+  --dart-define=USE_FIREBASE_EMULATORS=true
+```
+
+It creates synthetic catalog entries, verifies cursor pagination and search, appends default/period/exact pricing and a correction, manages multiple subscriptions, validates term versions and pause history, archives/reactivates a newspaper, and proves employee assignment, area, permission, and pricing restrictions. It does not connect to or modify `paperroutedev`.
+
 ## Security model
 
 - All tenant data lives under `businesses/{businessId}`.
@@ -124,6 +141,9 @@ The seed script is hard-coded to `127.0.0.1` and Firebase demo project `demo-pap
 - Employee customer creation is limited to the employee's own UID, an area in their authoritative membership, and a zero opening balance.
 - Employee profile edits require the explicit permission, an active assigned customer, immutable tenant/assignment/lifecycle/financial fields, and a paired audit record.
 - Customer status changes, assignment transfers, and opening balances remain Head-only; customer documents cannot be physically deleted.
+- Catalog and shared pricing writes are Head-only; employees can read active-tenant catalog data but cannot configure prices.
+- Employee subscription writes require an active assigned customer, an authorized area, and `manageAssignedSubscriptions`; custom customer pricing remains Head-only.
+- Newspaper price corrections and subscription term changes append replacement/version documents and paired audits instead of rewriting history.
 - Bills, confirmed payments, reversals, delivery exceptions, and audit records are append-only.
 - Payment document IDs are idempotency keys; a repeated create cannot duplicate a payment.
 - The client-side `AccessPolicy` improves UX, but Firestore Rules are always authoritative.
@@ -136,10 +156,11 @@ Money is represented as integer paise, never binary floating-point values. Billi
 
 1. customer date-specific exception
 2. subscription fixed price
-3. newspaper date override
-4. newspaper default price
+3. newspaper exact-date rule
+4. newspaper effective-period rule
+5. newspaper default price
 
-The engine honors subscription start/end dates, inclusive pauses, no-delivery exceptions, quantity, prior balance, and signed adjustments. Duplicate customer/subscription/date charge keys stop calculation. Finalized bill line snapshots must be stored so future catalog changes cannot rewrite history.
+Exact-date rules take precedence over periods. Active periods for the same newspaper cannot overlap, and ambiguous input is rejected instead of resolved by write order. Catalog corrections supersede the old rule with a new audited revision. The engine honors subscription start/end dates, delivery weekdays, inclusive pauses, no-delivery exceptions, quantity, prior balance, and signed adjustments. Duplicate customer/subscription/date charge keys stop calculation. Future finalized bill line snapshots must remain immutable so later catalog corrections cannot rewrite billed history.
 
 ## Payment and QR limitation
 
@@ -164,7 +185,7 @@ Cost controls planned for later phases:
 
 ## Deployment
 
-The deny-by-default Firestore rules and four composite indexes are deployed to the development project `paperroutedev`. After explicit owner approval on 8 September 2026, the Phase 2 inactive-member self-read rule was deployed with `--only firestore:rules`; indexes and all other Firebase services were unchanged. The active Rules API source matches `firestore.rules` exactly at SHA-256 `9856e3fb24d29b1d95328bf3cd2a3dbfbf82cf0ed1675957c4669b8977f2e712`. No production project or application binary has been deployed.
+The reviewed Phase 4 deny-by-default Firestore rules and all 15 composite indexes are deployed to the development project `paperroutedev`. The active Rules API source matches `firestore.rules` exactly at SHA-256 `ca6726d58cd3f1e86d2e3ae02ff3fe5bcd5daeaa8532969fbc167cca18fb17c2`, and all index definitions match `firestore.indexes.json` with state `READY`. No production project or application binary has been deployed.
 
 For any future production deployment, rerun the emulator tests and obtain explicit owner approval first:
 
@@ -177,10 +198,8 @@ Before release, use separate development and production Firebase projects, revie
 
 ## Known limitations
 
-- Full customer creation/editing remains Phase 3; the Phase 2 assignment screen intentionally operates only on existing records.
-- The assignment screen currently reads at most 100 customers and needs pagination before the 1,000-customer performance milestone.
 - Hard deletion of areas is intentionally not exposed; an area is archived by setting it inactive so historical references remain intact.
-- Billing and ledger engines are tested but are not yet connected to Firestore screens.
+- Billing and ledger engines are tested but are not yet connected to persisted bill-finalization screens.
 - Dashboard totals and report exports are not implemented.
 - UPI QR presentation and manual confirmation UI are Phase 6.
 - Fully offline financial writes are intentionally unsupported.
@@ -189,4 +208,4 @@ Before release, use separate development and production Firebase projects, revie
 
 ## Roadmap
 
-The remaining phases are listed in [IMPLEMENTATION_CHECKLIST.md](IMPLEMENTATION_CHECKLIST.md): full customer operations, newspapers/subscriptions, persisted billing, collections/UPI, dashboards/reports, then production hardening.
+The remaining phases are listed in [IMPLEMENTATION_CHECKLIST.md](IMPLEMENTATION_CHECKLIST.md): persisted billing, collections/UPI, dashboards/reports, and production hardening.

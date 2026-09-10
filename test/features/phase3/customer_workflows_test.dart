@@ -397,7 +397,11 @@ void main() {
       expect(find.text('Second floor'), findsOneWidget);
       expect(find.text('LANDMARK: Clock Tower'), findsOneWidget);
       expect(find.text('Blue gate beside the pharmacy'), findsOneWidget);
-      await tester.drag(find.byType(ListView), const Offset(0, -1400));
+      await tester.scrollUntilVisible(
+        find.text('Assignment transferred'),
+        500,
+        scrollable: find.byType(Scrollable).first,
+      );
       await tester.pumpAndSettle();
       expect(find.text('Assignment transferred'), findsOneWidget);
 

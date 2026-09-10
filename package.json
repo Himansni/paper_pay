@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "seed:phase3-emulator": "node tool/seed_phase3_emulator.mjs",
+    "seed:phase4-emulator": "node tool/seed_phase4_emulator.mjs",
     "test:rules": "firebase emulators:exec --project demo-paper-route --only firestore \"node --test test/firestore/*.test.mjs\""
   },
   "devDependencies": {

@@ -46,6 +46,14 @@ class FirebaseSubscriptionRepository implements SubscriptionRepository {
       .collection('newspapers')
       .doc(newspaperId);
 
+  DocumentReference<Map<String, dynamic>> _serviceBillingSource(
+    String businessId,
+    String customerId,
+  ) => _customer(
+    businessId,
+    customerId,
+  ).collection('billingSources').doc('service');
+
   CollectionReference<Map<String, dynamic>> _audits(String businessId) =>
       _firestore
           .collection('businesses')
@@ -174,6 +182,7 @@ class FirebaseSubscriptionRepository implements SubscriptionRepository {
     final versionId = 'V-${_uuid.v4().replaceAll('-', '').toUpperCase()}';
     final versionRef = subscriptionRef.collection('versions').doc(versionId);
     final auditRef = _audits(businessId).doc();
+    final billingSourceRef = _serviceBillingSource(businessId, customerId);
 
     try {
       await _firestore.runTransaction((transaction) async {
@@ -184,6 +193,7 @@ class FirebaseSubscriptionRepository implements SubscriptionRepository {
           _newspaper(businessId, value.newspaperId),
         );
         final existing = await transaction.get(subscriptionRef);
+        final billingSource = await transaction.get(billingSourceRef);
         _validateManageableCustomer(
           actor,
           customerSnapshot,
@@ -204,6 +214,9 @@ class FirebaseSubscriptionRepository implements SubscriptionRepository {
 
         final now = FieldValue.serverTimestamp();
         final newspaperName = newspaperData['name'] as String? ?? '';
+        final billingSourceData = billingSource.data();
+        final billingSourceRevision =
+            (billingSourceData?['revision'] as int? ?? 0) + 1;
         transaction.set(subscriptionRef, {
           'businessId': businessId,
           'customerId': customerId,
@@ -255,6 +268,17 @@ class FirebaseSubscriptionRepository implements SubscriptionRepository {
             extra: {'newspaperId': value.newspaperId, 'versionId': versionId},
           ),
         );
+        transaction.set(billingSourceRef, {
+          'businessId': businessId,
+          'customerId': customerId,
+          'sourceId': 'service',
+          'revision': billingSourceRevision,
+          'lastMutationType': 'subscriptionCreated',
+          'lastMutationId': subscriptionId,
+          'updatedBy': actor.uid,
+          'createdAt': billingSourceData?['createdAt'] ?? now,
+          'updatedAt': now,
+        });
       });
       return subscriptionId;
     } on AppException {

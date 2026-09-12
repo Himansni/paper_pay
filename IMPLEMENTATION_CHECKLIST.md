@@ -1,6 +1,6 @@
 # PaperRoute implementation checklist
 
-Updated: 11 September 2026
+Updated: 12 September 2026
 
 ## Phase 0 — Environment and architecture
 
@@ -75,10 +75,14 @@ Updated: 11 September 2026
 - [x] Start/end, pause, no-delivery, quantity, and price precedence tests
 - [x] Duplicate charge protection
 - [x] Prior balance and signed adjustment calculations
-- [ ] Firestore repositories and deterministic monthly bill IDs
-- [ ] Immutable finalized bill snapshots and line items
-- [ ] Bill review/finalization UI
-- [ ] Firestore transaction integration tests
+- [x] Firestore repositories and deterministic monthly bill IDs
+- [x] Immutable finalized bill snapshots and paginated line items
+- [x] Bill workspace, read-only preview, finalization, adjustment, and detail UI
+- [x] Head/employee tenant and financial-mutation Security Rules coverage
+- [x] Firestore transaction idempotency, concurrency, source-revision, and collection-membership conflict tests
+- [x] Emulator-backed real repository billing lifecycle test
+- [x] Read-only live compatibility inventory and owner-approved Rules deployment
+- [x] Owner-approved synthetic live billing smoke test
 
 ## Phase 6 — Collections and QR/UPI
 

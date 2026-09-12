@@ -13,8 +13,10 @@ businesses/{businessId}
       versions/{versionId}
       pauses/{pauseId}
     deliveryExceptions/{exceptionId}
+    billingSources/service
     bills/{monthKey}
       lineItems/{chargeKey}
+    billingControls/{monthKey}
     adjustments/{adjustmentId}
     payments/{paymentId}
     paymentReversals/{reversalId}
@@ -72,11 +74,17 @@ A newspaper uses a stable random `N-...` document/code and stores `businessId`, 
 
 Each terms change or restart writes a new `versions/{versionId}` and closes the prior current version with predecessor/successor links and effective bounds. `pauses/{pauseId}` stores finite scheduled service exceptions or the one current open pause; resuming closes that pause. Series, versions, pauses, and matching `auditRecords` are retained rather than deleted. Employees require an active assigned customer, coverage of the customer's current area, and `manageAssignedSubscriptions`; only Heads may set custom prices or administer shared catalog pricing.
 
+`billingSources/service` is a narrow transaction lock for collection membership. Its monotonic `revision` advances only in the same authorized atomic write that creates a subscription series or append-only no-delivery exception. A billing preview snapshots either that revision or the document's absence; finalization rechecks it so a newly added service source cannot be omitted silently. Existing subscription term/pause changes remain protected by each series' `lastAuditId`, and newspaper pricing changes by each newspaper's `lastAuditId`.
+
 ## Bills and ledger
 
-The bill ID is the deterministic month key under a customer, preventing more than one finalized bill per customer/month. It stores current charges, prior balance snapshot, adjustments, total due, status, engine version, finalized-by metadata, and timestamps.
+The bill ID is the deterministic `YYYY-MM` month key under a customer, preventing more than one finalized bill per customer/month. A finalized header stores immutable customer identity/address snapshots, the opening balance snapshot, prior-balance source (`previousBillId` and `previousOutstandingPaise`), current charges, signed adjustments, total due, compact per-newspaper summaries, line count, calculation version, finalizer/audit IDs, and server timestamps.
 
-Line item IDs use the deterministic charge key `customerId:subscriptionId:YYYY-MM-DD`. Each stores service date, newspaper/subscription snapshot, unit price, quantity, and total. These values never recalculate after finalization.
+Line item IDs use the deterministic charge key `customerId:subscriptionId:YYYY-MM-DD`. Each stores service date, subscription/version/newspaper snapshots, unit price, quantity, arithmetic total, price-source kind and source record/revision, finalization audit ID, and timestamp. Lines are paginated and never recalculate after finalization. One atomic bill is limited to 475 lines so the header, control, audit, and all lines remain below Firestore's 500-write transaction ceiling.
+
+`billingControls/{YYYY-MM}` serializes Head adjustments against finalization with a monotonically increasing `adjustmentRevision`. Its final state points to the deterministic bill and cannot be reopened. `adjustments/{adjustmentId}` stores a non-zero signed paise amount, reason, target month, optional earlier finalized bill reference, creator/audit IDs, and timestamp. Adjustments are append-only; a finalized month rejects new adjustments. A later open month can carry an explicitly audited correction referencing an earlier immutable bill.
+
+The earliest finalized bill uses the customer's immutable opening balance as `priorBalancePaise`. Every later bill carries the latest earlier finalized bill's total due and stores that bill ID; opening balance is not added twice. Phase 5 deliberately does not subtract payments. Phase 6 must derive previous outstanding from confirmed server-acknowledged collections and append-only reversals while excluding requested/pending payments.
 
 Payment IDs are generated once at collection start and reused as idempotency keys. Confirmed payment records store bill/customer/business, amount, method, manual-confirmation label, optional UPI reference, collector UID, and server timestamp. A QR request may be stored separately, but it is never counted as received money.
 
@@ -99,5 +107,7 @@ Corrections are new `paymentReversals` or `adjustments`; existing financial docu
 - active exact-date and period conflict/resolution queries by business + newspaper + kind + status + date bounds
 - collection-group payments by business + employee + descending time
 - collection-group payments by business + descending time
+
+Phase 5 adds no composite index: selected-month workspaces reuse cursor-paginated customer indexes, bill/line/adjustment reads are scoped to one customer path, and pricing resolution reuses the deployed Phase 4 exact/period indexes.
 
 All 15 indexes, including the four Phase 4 newspaper/price indexes, are deployed and `READY` in `paperroutedev`. Add indexes only for implemented queries; unused composite indexes increase storage and write fan-out.

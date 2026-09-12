@@ -5,6 +5,9 @@ import 'package:paper_route/features/auth/presentation/auth_providers.dart';
 import 'package:paper_route/features/auth/presentation/email_verification_page.dart';
 import 'package:paper_route/features/auth/presentation/login_page.dart';
 import 'package:paper_route/features/areas/presentation/areas_page.dart';
+import 'package:paper_route/features/billing/presentation/bill_detail_page.dart';
+import 'package:paper_route/features/billing/presentation/bill_preview_page.dart';
+import 'package:paper_route/features/billing/presentation/billing_workspace_page.dart';
 import 'package:paper_route/features/business/presentation/business_settings_page.dart';
 import 'package:paper_route/features/customers/presentation/customer_detail_page.dart';
 import 'package:paper_route/features/customers/presentation/customer_form_page.dart';
@@ -24,6 +27,9 @@ enum AuthenticatedDestination {
   employees,
   areas,
   customers,
+  billing,
+  billPreview,
+  billDetail,
   customerCreate,
   customerDetail,
   customerEdit,
@@ -80,6 +86,7 @@ class AuthGate extends ConsumerWidget {
           AuthenticatedDestination.areas ||
           AuthenticatedDestination.newspaperCreate ||
           AuthenticatedDestination.newspaperEdit => true,
+          AuthenticatedDestination.billPreview => true,
           _ => false,
         };
         if (headOnly && !user.isHead) return DashboardPage(user: user);
@@ -91,6 +98,17 @@ class AuthGate extends ConsumerWidget {
           AuthenticatedDestination.employees => EmployeesPage(user: user),
           AuthenticatedDestination.areas => AreasPage(user: user),
           AuthenticatedDestination.customers => CustomersPage(user: user),
+          AuthenticatedDestination.billing => BillingWorkspacePage(user: user),
+          AuthenticatedDestination.billPreview => BillPreviewPage(
+            user: user,
+            customerId: resourceId ?? '',
+            billingMonth: secondaryResourceId ?? '',
+          ),
+          AuthenticatedDestination.billDetail => BillDetailPage(
+            user: user,
+            customerId: resourceId ?? '',
+            billingMonth: secondaryResourceId ?? '',
+          ),
           AuthenticatedDestination.customerCreate => CustomerFormRoutePage(
             user: user,
           ),

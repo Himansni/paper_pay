@@ -16,7 +16,7 @@ class DashboardPage extends ConsumerWidget {
     final firstName = nameParts.first.isEmpty ? 'there' : nameParts.first;
     final plannedSections =
         user.isHead
-            ? const ['Billing', 'Collections', 'Reports']
+            ? const ['Collections', 'Reports']
             : const ['Collections', 'Profile'];
 
     return Scaffold(
@@ -156,6 +156,13 @@ class DashboardPage extends ConsumerWidget {
                         subtitle: 'Catalog, effective prices, and history',
                         onTap: () => context.go('/newspapers'),
                       ),
+                      _WorkspaceActionCard(
+                        width: width,
+                        icon: Icons.receipt_long_outlined,
+                        title: 'Monthly billing',
+                        subtitle: 'Preview, finalize, and review monthly bills',
+                        onTap: () => context.go('/billing'),
+                      ),
                     ],
                   );
                 },
@@ -178,6 +185,14 @@ class DashboardPage extends ConsumerWidget {
                     title: 'Newspaper catalog',
                     subtitle: 'Active publications and dated pricing',
                     onTap: () => context.go('/newspapers'),
+                  ),
+                  const SizedBox(height: 12),
+                  _WorkspaceActionCard(
+                    width: double.infinity,
+                    icon: Icons.receipt_long_outlined,
+                    title: 'My customer bills',
+                    subtitle: 'Read finalized bills for assigned customers',
+                    onTap: () => context.go('/billing'),
                   ),
                   const SizedBox(height: 12),
                   Wrap(
@@ -211,7 +226,7 @@ class DashboardPage extends ConsumerWidget {
                     const SizedBox(height: 8),
                     Text(
                       user.isHead
-                          ? 'Employee access, delivery areas, paginated customers, catalog pricing, and subscriptions use live Firestore data. Bill finalization remains intentionally unavailable.'
+                          ? 'Employee access, delivery areas, customers, catalog pricing, subscriptions, and deterministic monthly billing use connected Firestore workflows.'
                           : 'Your active membership, assigned areas, customer access, and subscription permissions are enforced by Firestore Security Rules.',
                       style: const TextStyle(
                         color: Color(0xFF627D98),

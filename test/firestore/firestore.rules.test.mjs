@@ -16,6 +16,7 @@ import {
   limit,
   orderBy,
   query,
+  runTransaction,
   setLogLevel,
   serverTimestamp,
   setDoc,
@@ -210,6 +211,50 @@ const subscriptionAudit = ({
   createdAt: serverTimestamp(),
 });
 
+const serviceBillingSource = ({
+  customerId = 'C-EMPLOYEE',
+  actorId = 'head-a',
+  mutationType = 'subscriptionCreated',
+  mutationId = 'times',
+  revision = 1,
+} = {}) => ({
+  businessId: 'business-a',
+  customerId,
+  sourceId: 'service',
+  revision,
+  lastMutationType: mutationType,
+  lastMutationId: mutationId,
+  updatedBy: actorId,
+  createdAt: serverTimestamp(),
+  updatedAt: serverTimestamp(),
+});
+
+const addServiceBillingSource = (
+  batch,
+  db,
+  {
+    customerId = 'C-EMPLOYEE',
+    actorId = 'head-a',
+    mutationType = 'subscriptionCreated',
+    mutationId = 'times',
+    revision = 1,
+  } = {},
+) => {
+  batch.set(
+    doc(
+      db,
+      `businesses/business-a/customers/${customerId}/billingSources/service`,
+    ),
+    serviceBillingSource({
+      customerId,
+      actorId,
+      mutationType,
+      mutationId,
+      revision,
+    }),
+  );
+};
+
 const addSubscriptionCreate = (
   batch,
   db,
@@ -263,6 +308,236 @@ const addSubscriptionCreate = (
       extra: { newspaperId, versionId },
     }),
   );
+  addServiceBillingSource(batch, db, {
+    customerId,
+    actorId,
+    mutationType: 'subscriptionCreated',
+    mutationId: newspaperId,
+  });
+};
+
+const completeBill = ({
+  customerId = 'C-MANAGED',
+  month = '2026-09',
+  actorId = 'head-a',
+  auditId = 'bill-audit',
+  currentChargesPaise = 650,
+  priorBalancePaise = 0,
+  adjustmentsPaise = 0,
+  totalDuePaise = currentChargesPaise + priorBalancePaise + adjustmentsPaise,
+  lineItemCount = 1,
+} = {}) => ({
+  businessId: 'business-a',
+  customerId,
+  customerCode: customerId,
+  customerName: 'Managed Customer',
+  customerSearchName: 'managed customer',
+  customerAddress: '1 Main Road, Paper Town, Near Clock Tower',
+  billingMonth: month,
+  status: 'finalized',
+  openingBalancePaise: 0,
+  previousBillId: '',
+  previousOutstandingPaise: 0,
+  priorBalancePaise,
+  currentChargesPaise,
+  adjustmentsPaise,
+  totalDuePaise,
+  lineItemCount,
+  newspaperSummaries: [
+    {
+      newspaperId: 'times',
+      newspaperName: 'Daily Times',
+      deliveryCount: lineItemCount,
+      subtotalPaise: currentChargesPaise,
+    },
+  ],
+  calculationVersion: 'paper-route-monthly-v1',
+  finalizedBy: actorId,
+  createdBy: actorId,
+  lastAuditId: auditId,
+  finalizedAt: serverTimestamp(),
+  createdAt: serverTimestamp(),
+});
+
+const addBillFinalization = (
+  batch,
+  db,
+  {
+    customerId = 'C-MANAGED',
+    month = '2026-09',
+    actorId = 'head-a',
+    auditId = 'bill-audit',
+    totalDuePaise = 650,
+    malformedLine = false,
+  } = {},
+) => {
+  const chargeKey = 'C-MANAGED:times:2026-09-01';
+  const currentChargesPaise = 650;
+  const priorBalancePaise = 0;
+  const adjustmentsPaise = 0;
+  batch.set(
+    doc(db, `businesses/business-a/customers/${customerId}/bills/${month}`),
+    completeBill({
+      customerId,
+      month,
+      actorId,
+      auditId,
+      currentChargesPaise,
+      priorBalancePaise,
+      adjustmentsPaise,
+      totalDuePaise,
+    }),
+  );
+  batch.set(
+    doc(
+      db,
+      `businesses/business-a/customers/${customerId}/bills/${month}/lineItems/${chargeKey}`,
+    ),
+    {
+      businessId: 'business-a',
+      customerId,
+      billId: month,
+      billingMonth: month,
+      chargeKey,
+      serviceDate: '2026-09-01',
+      subscriptionId: 'times',
+      versionId: 'version-1',
+      newspaperId: 'times',
+      newspaperName: 'Daily Times',
+      unitPricePaise: 650,
+      quantity: 1,
+      totalPaise: malformedLine ? 1 : 650,
+      priceSource: 'defaultPrice',
+      priceSourceId: 'times',
+      priceRuleRevision: 0,
+      lastAuditId: auditId,
+      createdAt: serverTimestamp(),
+    },
+  );
+  batch.set(
+    doc(
+      db,
+      `businesses/business-a/customers/${customerId}/billingControls/${month}`,
+    ),
+    {
+      businessId: 'business-a',
+      customerId,
+      billingMonth: month,
+      status: 'finalized',
+      adjustmentRevision: 0,
+      finalizedBillId: month,
+      updatedBy: actorId,
+      lastAuditId: auditId,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    },
+  );
+  batch.set(doc(db, `businesses/business-a/auditRecords/${auditId}`), {
+    businessId: 'business-a',
+    actorId,
+    action: 'billFinalized',
+    entityType: 'bill',
+    entityId: `${customerId}:${month}`,
+    customerId,
+    billingMonth: month,
+    lineItemCount: 1,
+    currentChargesPaise,
+    priorBalancePaise,
+    adjustmentsPaise,
+    totalDuePaise,
+    controlRevision: 0,
+    createdAt: serverTimestamp(),
+  });
+};
+
+const addBillingAdjustment = (
+  batch,
+  db,
+  {
+    customerId = 'C-MANAGED',
+    month = '2026-10',
+    adjustmentId = 'adjustment-1',
+    auditId = 'adjustment-audit',
+    actorId = 'head-a',
+    amountPaise = -500,
+  } = {},
+) => {
+  batch.set(
+    doc(
+      db,
+      `businesses/business-a/customers/${customerId}/adjustments/${adjustmentId}`,
+    ),
+    {
+      businessId: 'business-a',
+      customerId,
+      adjustmentId,
+      billingMonth: month,
+      amountPaise,
+      reason: 'Synthetic audited correction',
+      referenceBillMonth: '',
+      createdBy: actorId,
+      lastAuditId: auditId,
+      createdAt: serverTimestamp(),
+    },
+  );
+  batch.set(
+    doc(
+      db,
+      `businesses/business-a/customers/${customerId}/billingControls/${month}`,
+    ),
+    {
+      businessId: 'business-a',
+      customerId,
+      billingMonth: month,
+      status: 'open',
+      adjustmentRevision: 1,
+      finalizedBillId: '',
+      updatedBy: actorId,
+      lastAuditId: auditId,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    },
+  );
+  batch.set(doc(db, `businesses/business-a/auditRecords/${auditId}`), {
+    businessId: 'business-a',
+    actorId,
+    action: 'billingAdjustmentCreated',
+    entityType: 'billingAdjustment',
+    entityId: adjustmentId,
+    customerId,
+    billingMonth: month,
+    amountPaise,
+    referenceBillMonth: '',
+    controlRevision: 1,
+    createdAt: serverTimestamp(),
+  });
+};
+
+const finalizeMonthTransaction = async (
+  db,
+  { month = '2026-09', auditId = 'transaction-audit' } = {},
+) => {
+  const customerId = 'C-MANAGED';
+  const billRef = doc(
+    db,
+    `businesses/business-a/customers/${customerId}/bills/${month}`,
+  );
+  try {
+    return await runTransaction(db, async (transaction) => {
+      const existing = await transaction.get(billRef);
+      if (existing.exists()) return false;
+      const batchLike = {
+        set: (reference, value) => transaction.set(reference, value),
+      };
+      addBillFinalization(batchLike, db, { month, auditId });
+      return true;
+    });
+  } catch (error) {
+    if (error.code === 'permission-denied' && (await getDoc(billRef)).exists()) {
+      return false;
+    }
+    throw error;
+  }
 };
 
 async function seed() {
@@ -306,6 +581,7 @@ async function seed() {
         'addCustomers',
         'editAssignedCustomers',
         'manageAssignedSubscriptions',
+        'recordDeliveryExceptions',
       ],
       areaIds: ['east'],
     });
@@ -1870,6 +2146,398 @@ describe('Phase 4 customer subscriptions', () => {
         ),
       ),
     );
+  });
+});
+
+describe('Phase 5 monthly billing', () => {
+  test('authorized assigned employee appends a shaped no-delivery exception only', async () => {
+    await environment.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await setDoc(
+        doc(
+          db,
+          'businesses/business-a/customers/C-EMPLOYEE/subscriptions/times',
+        ),
+        {
+          ...subscriptionSeries({ actorId: 'head-a' }),
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      );
+    });
+    const assigned = auth('employee-c', 'employee-c@example.com');
+    const exception = doc(
+      assigned,
+      'businesses/business-a/customers/C-EMPLOYEE/deliveryExceptions/no-delivery-1',
+    );
+    const create = writeBatch(assigned);
+    create.set(exception, {
+      businessId: 'business-a',
+      customerId: 'C-EMPLOYEE',
+      exceptionId: 'no-delivery-1',
+      subscriptionId: 'times',
+      type: 'noDelivery',
+      serviceDate: '2026-09-15',
+      reason: 'Customer requested no delivery',
+      createdBy: 'employee-c',
+      createdAt: serverTimestamp(),
+    });
+    addServiceBillingSource(create, assigned, {
+      customerId: 'C-EMPLOYEE',
+      actorId: 'employee-c',
+      mutationType: 'deliveryExceptionCreated',
+      mutationId: 'no-delivery-1',
+    });
+    await assertSucceeds(create.commit());
+    await assertFails(updateDoc(exception, { serviceDate: '2026-09-16' }));
+    await assertFails(deleteDoc(exception));
+    await assertFails(
+      setDoc(
+        doc(
+          auth('employee-a', 'employee-a@example.com'),
+          'businesses/business-a/customers/C-EMPLOYEE/deliveryExceptions/forged',
+        ),
+        {
+          businessId: 'business-a',
+          customerId: 'C-EMPLOYEE',
+          exceptionId: 'forged',
+          subscriptionId: 'times',
+          type: 'noDelivery',
+          serviceDate: '2026-09-16',
+          reason: 'Unauthorized customer change',
+          createdBy: 'employee-a',
+          createdAt: serverTimestamp(),
+        },
+      ),
+    );
+    await assertFails(
+      setDoc(
+        doc(
+          assigned,
+          'businesses/business-a/customers/C-EMPLOYEE/billingSources/service',
+        ),
+        serviceBillingSource({
+          customerId: 'C-EMPLOYEE',
+          actorId: 'employee-c',
+          mutationType: 'deliveryExceptionCreated',
+          mutationId: 'unpaired-exception',
+          revision: 2,
+        }),
+      ),
+    );
+  });
+
+  test('concurrent retries create exactly one bill, line set, and audit', async () => {
+    const db = auth('head-a', 'head-a@example.com');
+    const results = await Promise.all([
+      finalizeMonthTransaction(db, { auditId: 'concurrent-audit-1' }),
+      finalizeMonthTransaction(db, { auditId: 'concurrent-audit-2' }),
+    ]);
+    assert.deepEqual(results.toSorted(), [false, true]);
+    const bills = await getDocs(
+      collection(db, 'businesses/business-a/customers/C-MANAGED/bills'),
+    );
+    const lines = await getDocs(
+      collection(
+        db,
+        'businesses/business-a/customers/C-MANAGED/bills/2026-09/lineItems',
+      ),
+    );
+    const audits = await getDocs(
+      collection(db, 'businesses/business-a/auditRecords'),
+    );
+    assert.equal(bills.size, 1);
+    assert.equal(lines.size, 1);
+    assert.equal(
+      audits.docs.filter((item) => item.data().action === 'billFinalized')
+        .length,
+      1,
+    );
+  });
+
+  test('a transaction aborts when a prepared authoritative source changes', async () => {
+    const db = auth('head-a', 'head-a@example.com');
+    const customerRef = doc(
+      db,
+      'businesses/business-a/customers/C-MANAGED',
+    );
+    let releaseFirstRead;
+    let announceFirstRead;
+    const firstRead = new Promise((resolve) => {
+      announceFirstRead = resolve;
+    });
+    const release = new Promise((resolve) => {
+      releaseFirstRead = resolve;
+    });
+    let firstAttempt = true;
+    const transaction = runTransaction(db, async (write) => {
+      const source = await write.get(customerRef);
+      if (source.data().lastAuditId !== 'seed-audit') {
+        throw new Error('billing-source-changed');
+      }
+      const billRef = doc(
+        db,
+        'businesses/business-a/customers/C-MANAGED/bills/2026-09',
+      );
+      const existing = await write.get(billRef);
+      if (existing.exists()) return false;
+      if (firstAttempt) {
+        firstAttempt = false;
+        announceFirstRead();
+        await release;
+      }
+      const batchLike = {
+        set: (reference, value) => write.set(reference, value),
+      };
+      addBillFinalization(batchLike, db, {
+        auditId: 'source-lock-audit',
+      });
+      return true;
+    });
+    await firstRead;
+    await environment.withSecurityRulesDisabled(async (context) => {
+      await updateDoc(
+        doc(
+          context.firestore(),
+          'businesses/business-a/customers/C-MANAGED',
+        ),
+        { lastAuditId: 'changed-concurrently' },
+      );
+    });
+    releaseFirstRead();
+    await assert.rejects(transaction, /billing-source-changed/);
+    await assertSucceeds(
+      getDoc(
+        doc(
+          db,
+          'businesses/business-a/customers/C-MANAGED/bills/2026-09',
+        ),
+      ),
+    ).then((snapshot) => assert.equal(snapshot.exists(), false));
+  });
+
+  test('a transaction aborts when a new service source appears after preview', async () => {
+    const db = auth('head-a', 'head-a@example.com');
+    const sourceRef = doc(
+      db,
+      'businesses/business-a/customers/C-MANAGED/billingSources/service',
+    );
+    let releaseFirstRead;
+    let announceFirstRead;
+    const firstRead = new Promise((resolve) => {
+      announceFirstRead = resolve;
+    });
+    const release = new Promise((resolve) => {
+      releaseFirstRead = resolve;
+    });
+    let firstAttempt = true;
+    const transaction = runTransaction(db, async (write) => {
+      const source = await write.get(sourceRef);
+      if (source.exists()) throw new Error('billing-source-changed');
+      const billRef = doc(
+        db,
+        'businesses/business-a/customers/C-MANAGED/bills/2026-09',
+      );
+      const existing = await write.get(billRef);
+      if (existing.exists()) return false;
+      if (firstAttempt) {
+        firstAttempt = false;
+        announceFirstRead();
+        await release;
+      }
+      const batchLike = {
+        set: (reference, value) => write.set(reference, value),
+      };
+      addBillFinalization(batchLike, db, {
+        auditId: 'new-source-lock-audit',
+      });
+      return true;
+    });
+    await firstRead;
+    await environment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(
+        doc(
+          context.firestore(),
+          'businesses/business-a/customers/C-MANAGED/billingSources/service',
+        ),
+        {
+          ...serviceBillingSource({ customerId: 'C-MANAGED' }),
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      );
+    });
+    releaseFirstRead();
+    await assert.rejects(transaction, /billing-source-changed/);
+    await assertSucceeds(
+      getDoc(
+        doc(
+          db,
+          'businesses/business-a/customers/C-MANAGED/bills/2026-09',
+        ),
+      ),
+    ).then((snapshot) => assert.equal(snapshot.exists(), false));
+  });
+
+  test('Head atomically finalizes the deterministic month bill and immutable lines', async () => {
+    const db = auth('head-a', 'head-a@example.com');
+    const batch = writeBatch(db);
+    addBillFinalization(batch, db);
+    await assertSucceeds(batch.commit());
+
+    const billPath =
+      'businesses/business-a/customers/C-MANAGED/bills/2026-09';
+    const linePath = `${billPath}/lineItems/C-MANAGED:times:2026-09-01`;
+    await assertFails(updateDoc(doc(db, billPath), { totalDuePaise: 1 }));
+    await assertFails(deleteDoc(doc(db, billPath)));
+    await assertFails(updateDoc(doc(db, linePath), { totalPaise: 1 }));
+    await assertFails(deleteDoc(doc(db, linePath)));
+
+    const retry = writeBatch(db);
+    addBillFinalization(retry, db, { auditId: 'duplicate-audit' });
+    await assertFails(retry.commit());
+  });
+
+  test('rejects forged totals, malformed daily arithmetic, and unpaired writes', async () => {
+    const db = auth('head-a', 'head-a@example.com');
+    const forged = writeBatch(db);
+    addBillFinalization(forged, db, { totalDuePaise: 1 });
+    await assertFails(forged.commit());
+
+    const malformed = writeBatch(db);
+    addBillFinalization(malformed, db, {
+      auditId: 'malformed-line-audit',
+      malformedLine: true,
+    });
+    await assertFails(malformed.commit());
+
+    await assertFails(
+      setDoc(
+        doc(
+          db,
+          'businesses/business-a/customers/C-MANAGED/bills/2026-09',
+        ),
+        completeBill(),
+      ),
+    );
+  });
+
+  test('employees cannot finalize or adjust but assigned employee reads finalized bills', async () => {
+    await environment.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await setDoc(
+        doc(db, 'businesses/business-a/customers/C-MANAGED/bills/2026-09'),
+        {
+          ...completeBill(),
+          finalizedAt: new Date(),
+          createdAt: new Date(),
+        },
+      );
+      await setDoc(
+        doc(
+          db,
+          'businesses/business-a/customers/C-MANAGED/bills/2026-09/lineItems/C-MANAGED:times:2026-09-01',
+        ),
+        {
+          businessId: 'business-a',
+          customerId: 'C-MANAGED',
+          billId: '2026-09',
+          billingMonth: '2026-09',
+          chargeKey: 'C-MANAGED:times:2026-09-01',
+          serviceDate: '2026-09-01',
+          subscriptionId: 'times',
+          versionId: 'version-1',
+          newspaperId: 'times',
+          newspaperName: 'Daily Times',
+          unitPricePaise: 650,
+          quantity: 1,
+          totalPaise: 650,
+          priceSource: 'defaultPrice',
+          priceSourceId: 'times',
+          priceRuleRevision: 0,
+          lastAuditId: 'bill-audit',
+          createdAt: new Date(),
+        },
+      );
+    });
+    const assigned = auth('employee-a', 'employee-a@example.com');
+    await assertSucceeds(
+      getDoc(
+        doc(
+          assigned,
+          'businesses/business-a/customers/C-MANAGED/bills/2026-09',
+        ),
+      ),
+    );
+    await assertSucceeds(
+      getDoc(
+        doc(
+          assigned,
+          'businesses/business-a/customers/C-MANAGED/bills/2026-09/lineItems/C-MANAGED:times:2026-09-01',
+        ),
+      ),
+    );
+
+    const employeeBatch = writeBatch(assigned);
+    addBillFinalization(employeeBatch, assigned, {
+      month: '2026-10',
+      auditId: 'employee-bill-audit',
+      actorId: 'employee-a',
+    });
+    await assertFails(employeeBatch.commit());
+    const adjustmentBatch = writeBatch(assigned);
+    addBillingAdjustment(adjustmentBatch, assigned, {
+      actorId: 'employee-a',
+    });
+    await assertFails(adjustmentBatch.commit());
+
+    const unassigned = auth('employee-c', 'employee-c@example.com');
+    await assertFails(
+      getDoc(
+        doc(
+          unassigned,
+          'businesses/business-a/customers/C-MANAGED/bills/2026-09',
+        ),
+      ),
+    );
+  });
+
+  test('Head appends signed adjustments with a serialized control and immutable audit', async () => {
+    const db = auth('head-a', 'head-a@example.com');
+    const batch = writeBatch(db);
+    addBillingAdjustment(batch, db);
+    await assertSucceeds(batch.commit());
+    const adjustment = doc(
+      db,
+      'businesses/business-a/customers/C-MANAGED/adjustments/adjustment-1',
+    );
+    await assertFails(updateDoc(adjustment, { amountPaise: -1000 }));
+    await assertFails(deleteDoc(adjustment));
+    await assertFails(
+      updateDoc(
+        doc(db, 'businesses/business-a/auditRecords/adjustment-audit'),
+        { amountPaise: -1000 },
+      ),
+    );
+  });
+
+  test('tenant Heads cannot read or write another business billing data', async () => {
+    const foreign = auth('head-b', 'head-b@example.com');
+    await assertFails(
+      getDoc(
+        doc(
+          foreign,
+          'businesses/business-a/customers/C-MANAGED/bills/2026-09',
+        ),
+      ),
+    );
+    const batch = writeBatch(foreign);
+    addBillFinalization(batch, foreign, {
+      month: '2026-10',
+      auditId: 'foreign-audit',
+      actorId: 'head-b',
+    });
+    await assertFails(batch.commit());
   });
 });
 

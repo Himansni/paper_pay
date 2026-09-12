@@ -53,9 +53,13 @@ Heads control catalog, shared prices, and every customer subscription in their t
 
 ## Billing boundary
 
-`MonthlyBillingEngine` is a pure function over calendar dates and integer paise. It produces daily charge snapshots with deterministic keys. Persistence will finalize one customer/month bill in a transaction using a deterministic document ID such as `2026-05` under that customer. Repeating finalization must find the existing bill instead of creating a second one.
+`MonthlyBillingEngine` preserves the original pure calculation API. The Phase 5 `MonthlyBillPlanner` adds immutable subscription-version and pricing-source references while remaining a pure function over calendar-only dates and integer paise. It produces one daily snapshot per customer/subscription/service date with a deterministic key such as `C-1:paper-1:2026-05-03`. Missing newspapers/prices, ambiguous active prices, overlapping term versions, and more than 475 lines block finalization explicitly.
 
-Finalized bills are append-only. Corrections are separate adjustment documents. Payments and payment reversals are append-only ledger entries. Cached totals never replace the ledger as financial truth.
+`FirebaseBillingRepository` reads only one customer and month on demand. It resolves immutable term versions, pauses, no-delivery exceptions, exact/period/default prices, customer-specific version prices, prior bills, and signed adjustments. Preview performs no writes. Finalization rechecks customer, subscription, newspaper, per-customer service-source revision, and adjustment-control locks inside a transaction, then creates the deterministic `bills/{YYYY-MM}` header, immutable `lineItems`, a finalized month control, and one append-only audit. Subscription creation and no-delivery exception creation advance `billingSources/service` atomically, so a new collection member appearing after preview is detected even though Firestore transactions cannot query-lock a collection. A repeated or simultaneous request returns the existing deterministic bill and cannot append a duplicate audit.
+
+The bill header stores compact customer and newspaper subtotal snapshots; individual daily lines live in a paginated subcollection to avoid unbounded header growth. Bills and lines cannot be updated or deleted. Head-only signed adjustments are append-only and advance the month control transactionally. A correction to a finalized month is recorded against a later open month with an optional reference to the earlier bill rather than rewriting history.
+
+The first bill uses the customer's immutable `openingBalancePaise` as its prior-balance source. A later bill uses the most recent earlier finalized bill's `totalDuePaise`; it does not add the opening balance again. Until Phase 6, no payment subtraction is performed. Phase 6 must replace that carried outstanding input with the earlier bill total less only server-acknowledged confirmed payments plus append-only reversals/corrections; a pending QR or UPI request must never reduce it.
 
 ## Online/offline boundary
 

@@ -4,7 +4,7 @@ PaperRoute is an Android-first Flutter application for Indian newspaper agents. 
 
 ## Current status
 
-Phases 0 through 4 are complete in the development project. The reviewed Phase 4 rules and indexes are deployed to `paperroutedev`, match the repository, and an approved synthetic Head smoke test verified the connected catalog, pricing, and subscription lifecycle against live development data.
+Phases 0 through 5 are complete in the development project. Monthly billing is locally tested, protected by the deployed Phase 5 Firestore Rules, and verified through an owner-approved synthetic live billing lifecycle in `paperroutedev`.
 
 - Flutter project for Android, iOS, and web
 - Firebase project `paperroutedev` connected for Android and Web
@@ -27,11 +27,11 @@ Phases 0 through 4 are complete in the development project. The reviewed Phase 4
 - exact-date and effective-period price history with deterministic precedence and audited corrections
 - multiple versioned subscriptions per customer with quantities, weekday schedules, pauses, resume, end, and restart
 - assignment-, area-, and permission-scoped employee subscription management without pricing authority
-- deterministic monthly billing domain engine
+- deterministic version-aware monthly previews, immutable finalization, signed adjustments, bill status, and paginated daily bill detail
 - append-only payment/reversal ledger calculations
 - Dart unit/widget tests and Firebase Emulator Security Rules tests
 
-Persisted bill generation/finalization, collections UI, dashboard metrics, reports, and exports are not yet implemented. Customer and newspaper records are archived rather than physically deleted, and subscription history is retained. The dashboard exposes only connected workflows and identifies later modules honestly instead of displaying fabricated data.
+Collections/payment UI, dashboard metrics, reports, and exports are not yet implemented. Customer and newspaper records are archived rather than physically deleted, and subscription and bill history is retained. The dashboard exposes only connected workflows and identifies later modules honestly instead of displaying fabricated data.
 
 Progress is tracked in [IMPLEMENTATION_CHECKLIST.md](IMPLEMENTATION_CHECKLIST.md).
 
@@ -58,7 +58,7 @@ lib/
     customers/            paginated customer management and assignment
     newspapers/           paginated catalog and effective-date prices
     subscriptions/        versioned customer subscription lifecycle
-    billing/domain/       pure monthly billing calculation
+    billing/              monthly planning, Firestore finalization, and UI
     collections/domain/   pure payment ledger calculation
     dashboard/            role-aware authenticated landing page
 test/
@@ -66,7 +66,7 @@ test/
   features/               Dart business-rule tests
   firestore/              emulator Security Rules tests
 docs/                     architecture, schema, and setup guides
-integration_test/         emulator-backed customer and Phase 4 repository workflows
+integration_test/         emulator-backed customer, catalog, and billing workflows
 tool/                     local-demo emulator seed utilities
 ```
 
@@ -102,7 +102,7 @@ env JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" \
   npm run test:rules
 ```
 
-The last local verification completed on 11 September 2026 with clean formatting, no analyzer issues, 67 passing Dart/widget tests, 34 passing Firestore Rules tests, and a passing emulator-backed Chrome Phase 4 integration test. The Rules suite covers unauthenticated denial, tenant isolation, assigned-customer access, role escalation denial, append-only payments and audits, verified invitation acceptance, permitted Head business/member/area writes, inactive-account isolation, customer schema integrity, employee areas and permissions, financial-field immutability, collision overwrite denial, archive/reactivate behavior, catalog and pricing authority, immutable price corrections, versioned subscription terms, pauses, lifecycle transitions, and tenant-constrained queries.
+The last local verification completed on 12 September 2026 with clean formatting, no analyzer issues, 85 passing Dart/widget tests, 43 passing Firestore Rules/transaction tests, and a passing emulator-backed Chrome Phase 5 repository/screen integration test. The expanded Rules suite covers deterministic bill IDs, strict financial shapes and arithmetic, immutable bill/line/adjustment history, paired audits, Head-only financial mutations, assigned-employee reads, tenant isolation, concurrent finalization, idempotent recovery, delivery exceptions, and both document and collection-membership source-conflict detection in addition to every earlier phase.
 
 The Phase 3 integration test signs in as a synthetic verified Head, creates a complete customer with an opening balance, assigns the customer, edits the profile, archives and reactivates it, and verifies the audit history. It then signs in as the assigned synthetic employee, verifies assignment-scoped visibility and the hidden Head financial view, and saves an authorized location-note edit through the real repository and local Security Rules. All data is recreated in the local `demo-paper-route` emulators; no live Firebase customer records are created.
 
@@ -127,6 +127,17 @@ flutter run -d chrome \
 ```
 
 It creates synthetic catalog entries, verifies cursor pagination and search, appends default/period/exact pricing and a correction, manages multiple subscriptions, validates term versions and pause history, archives/reactivates a newspaper, and proves employee assignment, area, permission, and pricing restrictions. It does not connect to or modify `paperroutedev`.
+
+The Phase 5 connected test builds on the same local-only seed and exercises real monthly billing repositories and local Rules:
+
+```sh
+npm run seed:phase5-emulator
+flutter run -d chrome \
+  --target integration_test/phase5_monthly_billing_smoke_test.dart \
+  --dart-define=USE_FIREBASE_EMULATORS=true
+```
+
+It verifies catalog price precedence, a customer-specific price, a scheduled pause, one no-delivery exception, service-source revision advances, a signed adjustment, read-only preview, simultaneous idempotent finalization, immutable daily snapshots, pagination, prior-bill carry-forward, and employee denial. It never connects to `paperroutedev`.
 
 ## Security model
 
@@ -154,13 +165,12 @@ Never put Firebase Admin SDK credentials or service-account keys in this reposit
 
 Money is represented as integer paise, never binary floating-point values. Billing uses calendar-only dates and snapshots one line per customer/subscription/service date. Price precedence is:
 
-1. customer date-specific exception
-2. subscription fixed price
-3. newspaper exact-date rule
-4. newspaper effective-period rule
-5. newspaper default price
+1. customer-specific subscription-version price
+2. newspaper exact-date rule
+3. newspaper effective-period rule
+4. newspaper default price
 
-Exact-date rules take precedence over periods. Active periods for the same newspaper cannot overlap, and ambiguous input is rejected instead of resolved by write order. Catalog corrections supersede the old rule with a new audited revision. The engine honors subscription start/end dates, delivery weekdays, inclusive pauses, no-delivery exceptions, quantity, prior balance, and signed adjustments. Duplicate customer/subscription/date charge keys stop calculation. Future finalized bill line snapshots must remain immutable so later catalog corrections cannot rewrite billed history.
+Exact-date rules take precedence over periods. Active periods for the same newspaper cannot overlap, and ambiguous or missing inputs block finalization instead of using write order or an implicit zero. Catalog corrections supersede the old rule with a new audited revision. The planner honors version effective dates, delivery weekdays, inclusive pauses, no-delivery exceptions, quantity, prior balance, and signed adjustments. Duplicate customer/subscription/date charge keys stop calculation. Finalized bill and line snapshots are immutable, so later catalog or subscription changes cannot rewrite billed history.
 
 ## Payment and QR limitation
 
@@ -185,7 +195,7 @@ Cost controls planned for later phases:
 
 ## Deployment
 
-The reviewed Phase 4 deny-by-default Firestore rules and all 15 composite indexes are deployed to the development project `paperroutedev`. The active Rules API source matches `firestore.rules` exactly at SHA-256 `ca6726d58cd3f1e86d2e3ae02ff3fe5bcd5daeaa8532969fbc167cca18fb17c2`, and all index definitions match `firestore.indexes.json` with state `READY`. No production project or application binary has been deployed.
+The reviewed Phase 5 deny-by-default Firestore Rules and all 15 Phase 4 composite indexes are deployed to the development project `paperroutedev`. The active Rules API source matches `firestore.rules` exactly at SHA-256 `9f788dab0b5d576cf79918d12149e5b4d57df0d1196a234bef9bc5f845f280f2`; Phase 5 required no index change, and the existing index definitions remain `READY`. No production project or application binary has been deployed.
 
 For any future production deployment, rerun the emulator tests and obtain explicit owner approval first:
 
@@ -199,7 +209,8 @@ Before release, use separate development and production Firebase projects, revie
 ## Known limitations
 
 - Hard deletion of areas is intentionally not exposed; an area is archived by setting it inactive so historical references remain intact.
-- Billing and ledger engines are tested but are not yet connected to persisted bill-finalization screens.
+- Phase 5 carries the previous finalized total due without subtracting payments; confirmed-payment settlement begins in Phase 6.
+- Atomic finalization is intentionally capped at 475 daily lines per customer/month.
 - Dashboard totals and report exports are not implemented.
 - UPI QR presentation and manual confirmation UI are Phase 6.
 - Fully offline financial writes are intentionally unsupported.
@@ -208,4 +219,4 @@ Before release, use separate development and production Firebase projects, revie
 
 ## Roadmap
 
-The remaining phases are listed in [IMPLEMENTATION_CHECKLIST.md](IMPLEMENTATION_CHECKLIST.md): persisted billing, collections/UPI, dashboards/reports, and production hardening.
+The remaining phases are listed in [IMPLEMENTATION_CHECKLIST.md](IMPLEMENTATION_CHECKLIST.md): collections/UPI, dashboards/reports, and production hardening.

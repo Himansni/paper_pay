@@ -346,10 +346,459 @@ service cloud.firestore {
       return /databases/$(database)/documents/businesses/$(businessId)/customers/$(customerId)/subscriptions/$(subscriptionId)/pauses/$(pauseId);
     }
 
+    function deliveryExceptionPath(businessId, customerId, exceptionId) {
+      return /databases/$(database)/documents/businesses/$(businessId)/customers/$(customerId)/deliveryExceptions/$(exceptionId);
+    }
+
+    function serviceBillingSourcePath(businessId, customerId) {
+      return /databases/$(database)/documents/businesses/$(businessId)/customers/$(customerId)/billingSources/service;
+    }
+
+    function billPath(businessId, customerId, billingMonth) {
+      return /databases/$(database)/documents/businesses/$(businessId)/customers/$(customerId)/bills/$(billingMonth);
+    }
+
+    function billingControlPath(businessId, customerId, billingMonth) {
+      return /databases/$(database)/documents/businesses/$(businessId)/customers/$(customerId)/billingControls/$(billingMonth);
+    }
+
+    function adjustmentPath(businessId, customerId, adjustmentId) {
+      return /databases/$(database)/documents/businesses/$(businessId)/customers/$(customerId)/adjustments/$(adjustmentId);
+    }
+
     function validDate(value) {
       return value is string
         && value.size() == 10
         && value.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+    }
+
+    function validMonth(value) {
+      return value is string
+        && value.size() == 7
+        && value.matches('^[0-9]{4}-[0-9]{2}$');
+    }
+
+    function validSignedMoney(value) {
+      return value is int
+        && value >= -9000000000000
+        && value <= 9000000000000;
+    }
+
+    function validAdjustmentAmount(value) {
+      return value is int && value >= -100000000 && value <= 100000000;
+    }
+
+    function validBillAuditAfter(
+      businessId,
+      customerId,
+      billingMonth,
+      auditId,
+      data
+    ) {
+      let audit = getAfter(auditPath(businessId, auditId)).data;
+      return existsAfter(auditPath(businessId, auditId))
+        && audit.businessId == businessId
+        && audit.actorId == request.auth.uid
+        && audit.action == 'billFinalized'
+        && audit.entityType == 'bill'
+        && audit.entityId == customerId + ':' + billingMonth
+        && audit.customerId == customerId
+        && audit.billingMonth == billingMonth
+        && audit.lineItemCount == data.lineItemCount
+        && audit.currentChargesPaise == data.currentChargesPaise
+        && audit.priorBalancePaise == data.priorBalancePaise
+        && audit.adjustmentsPaise == data.adjustmentsPaise
+        && audit.totalDuePaise == data.totalDuePaise
+        && audit.createdAt == request.time;
+    }
+
+    function validBillPriorBalance(businessId, customerId, data) {
+      let customer = get(customerPath(businessId, customerId)).data;
+      return (
+          data.previousBillId == ''
+          && data.previousOutstandingPaise == 0
+          && data.priorBalancePaise == customer.openingBalancePaise
+        ) || (
+          validMonth(data.previousBillId)
+          && data.previousBillId < data.billingMonth
+          && exists(billPath(businessId, customerId, data.previousBillId))
+          && get(billPath(
+            businessId,
+            customerId,
+            data.previousBillId
+          )).data.status == 'finalized'
+          && data.previousOutstandingPaise == get(billPath(
+            businessId,
+            customerId,
+            data.previousBillId
+          )).data.totalDuePaise
+          && data.priorBalancePaise == data.previousOutstandingPaise
+        );
+    }
+
+    function validBillShape(businessId, customerId, billingMonth, data) {
+      return data.keys().hasOnly([
+          'businessId', 'customerId', 'customerCode', 'customerName',
+          'customerSearchName', 'customerAddress', 'billingMonth', 'status',
+          'openingBalancePaise', 'previousBillId',
+          'previousOutstandingPaise', 'priorBalancePaise',
+          'currentChargesPaise', 'adjustmentsPaise', 'totalDuePaise',
+          'lineItemCount', 'newspaperSummaries', 'calculationVersion',
+          'finalizedBy', 'createdBy', 'lastAuditId', 'finalizedAt',
+          'createdAt'
+        ])
+        && data.businessId == businessId
+        && data.customerId == customerId
+        && data.customerCode == customerId
+        && data.customerName is string
+        && data.customerName.size() >= 2
+        && data.customerName.size() <= 100
+        && data.customerSearchName is string
+        && data.customerSearchName.size() >= 2
+        && data.customerAddress is string
+        && data.customerAddress.size() <= 700
+        && data.billingMonth == billingMonth
+        && validMonth(data.billingMonth)
+        && data.status == 'finalized'
+        && data.openingBalancePaise == get(
+          customerPath(businessId, customerId)
+        ).data.openingBalancePaise
+        && validSignedMoney(data.previousOutstandingPaise)
+        && validSignedMoney(data.priorBalancePaise)
+        && data.currentChargesPaise is int
+        && data.currentChargesPaise >= 0
+        && validSignedMoney(data.adjustmentsPaise)
+        && validSignedMoney(data.totalDuePaise)
+        && data.totalDuePaise == data.priorBalancePaise
+          + data.currentChargesPaise + data.adjustmentsPaise
+        && data.lineItemCount is int
+        && data.lineItemCount >= 0
+        && data.lineItemCount <= 475
+        && data.newspaperSummaries is list
+        && data.newspaperSummaries.size() <= 475
+        && data.calculationVersion == 'paper-route-monthly-v1'
+        && data.finalizedBy == request.auth.uid
+        && data.createdBy == request.auth.uid
+        && data.lastAuditId is string
+        && data.lastAuditId.size() > 0
+        && data.finalizedAt == request.time
+        && data.createdAt == request.time
+        && validBillPriorBalance(businessId, customerId, data)
+        && validBillAuditAfter(
+          businessId,
+          customerId,
+          billingMonth,
+          data.lastAuditId,
+          data
+        );
+    }
+
+    function validBillLineShape(
+      businessId,
+      customerId,
+      billingMonth,
+      lineItemId,
+      data
+    ) {
+      let bill = getAfter(billPath(businessId, customerId, billingMonth)).data;
+      let audit = getAfter(auditPath(businessId, data.lastAuditId)).data;
+      return data.keys().hasOnly([
+          'businessId', 'customerId', 'billId', 'billingMonth', 'chargeKey',
+          'serviceDate', 'subscriptionId', 'versionId', 'newspaperId',
+          'newspaperName', 'unitPricePaise', 'quantity', 'totalPaise',
+          'priceSource', 'priceSourceId', 'priceRuleRevision', 'lastAuditId',
+          'createdAt'
+        ])
+        && data.businessId == businessId
+        && data.customerId == customerId
+        && data.billId == billingMonth
+        && data.billingMonth == billingMonth
+        && data.chargeKey == lineItemId
+        && validDate(data.serviceDate)
+        && data.serviceDate >= billingMonth + '-01'
+        && data.serviceDate <= billingMonth + '-31'
+        && data.subscriptionId is string
+        && data.subscriptionId.size() > 0
+        && data.versionId is string
+        && data.versionId.size() > 0
+        && data.newspaperId is string
+        && data.newspaperId.size() > 0
+        && data.newspaperName is string
+        && data.newspaperName.size() >= 2
+        && validPrice(data.unitPricePaise)
+        && data.quantity is int
+        && data.quantity >= 1
+        && data.quantity <= 50
+        && data.totalPaise == data.unitPricePaise * data.quantity
+        && data.priceSource in [
+          'customerSpecific', 'exactDate', 'effectivePeriod', 'defaultPrice'
+        ]
+        && data.priceSourceId is string
+        && data.priceSourceId.size() > 0
+        && data.priceRuleRevision is int
+        && data.priceRuleRevision >= 0
+        && data.lastAuditId == bill.lastAuditId
+        && bill.status == 'finalized'
+        && audit.action == 'billFinalized'
+        && audit.customerId == customerId
+        && audit.billingMonth == billingMonth
+        && audit.createdAt == request.time
+        && data.createdAt == request.time;
+    }
+
+    function validBillingControlShape(
+      businessId,
+      customerId,
+      billingMonth,
+      data
+    ) {
+      return data.keys().hasOnly([
+          'businessId', 'customerId', 'billingMonth', 'status',
+          'adjustmentRevision', 'finalizedBillId', 'updatedBy', 'lastAuditId',
+          'createdAt', 'updatedAt'
+        ])
+        && data.businessId == businessId
+        && data.customerId == customerId
+        && data.billingMonth == billingMonth
+        && validMonth(data.billingMonth)
+        && data.status in ['open', 'finalized']
+        && data.adjustmentRevision is int
+        && data.adjustmentRevision >= 0
+        && data.finalizedBillId is string
+        && data.updatedBy == request.auth.uid
+        && data.lastAuditId is string
+        && data.lastAuditId.size() > 0
+        && data.updatedAt == request.time;
+    }
+
+    function validAdjustmentShape(
+      businessId,
+      customerId,
+      adjustmentId,
+      data
+    ) {
+      return data.keys().hasOnly([
+          'businessId', 'customerId', 'adjustmentId', 'billingMonth',
+          'amountPaise', 'reason', 'referenceBillMonth', 'createdBy',
+          'lastAuditId', 'createdAt'
+        ])
+        && data.businessId == businessId
+        && data.customerId == customerId
+        && data.adjustmentId == adjustmentId
+        && validMonth(data.billingMonth)
+        && validAdjustmentAmount(data.amountPaise)
+        && data.amountPaise != 0
+        && data.reason is string
+        && data.reason.size() >= 3
+        && data.reason.size() <= 300
+        && data.referenceBillMonth is string
+        && (
+          data.referenceBillMonth == '' || (
+            validMonth(data.referenceBillMonth)
+            && data.referenceBillMonth < data.billingMonth
+            && exists(billPath(
+              businessId,
+              customerId,
+              data.referenceBillMonth
+            ))
+          )
+        )
+        && data.createdBy == request.auth.uid
+        && data.lastAuditId is string
+        && data.lastAuditId.size() > 0
+        && data.createdAt == request.time;
+    }
+
+    function validAdjustmentAuditAfter(
+      businessId,
+      customerId,
+      adjustmentId,
+      data
+    ) {
+      let audit = getAfter(auditPath(businessId, data.lastAuditId)).data;
+      let control = getAfter(billingControlPath(
+        businessId,
+        customerId,
+        data.billingMonth
+      )).data;
+      return audit.businessId == businessId
+        && audit.actorId == request.auth.uid
+        && audit.action == 'billingAdjustmentCreated'
+        && audit.entityType == 'billingAdjustment'
+        && audit.entityId == adjustmentId
+        && audit.customerId == customerId
+        && audit.billingMonth == data.billingMonth
+        && audit.amountPaise == data.amountPaise
+        && audit.referenceBillMonth == data.referenceBillMonth
+        && audit.controlRevision == control.adjustmentRevision
+        && audit.createdAt == request.time
+        && control.status == 'open'
+        && control.lastAuditId == data.lastAuditId;
+    }
+
+    function phase5AuditAction(action) {
+      return action in ['billFinalized', 'billingAdjustmentCreated'];
+    }
+
+    function phase5AuditReferencedAfter(businessId, auditId, data) {
+      return (
+          data.action == 'billFinalized'
+          && data.customerId is string
+          && validMonth(data.billingMonth)
+          && getAfter(billPath(
+            businessId,
+            data.customerId,
+            data.billingMonth
+          )).data.lastAuditId == auditId
+          && getAfter(billingControlPath(
+            businessId,
+            data.customerId,
+            data.billingMonth
+          )).data.lastAuditId == auditId
+        ) || (
+          data.action == 'billingAdjustmentCreated'
+          && data.customerId is string
+          && data.entityId is string
+          && getAfter(adjustmentPath(
+            businessId,
+            data.customerId,
+            data.entityId
+          )).data.lastAuditId == auditId
+          && getAfter(billingControlPath(
+            businessId,
+            data.customerId,
+            data.billingMonth
+          )).data.lastAuditId == auditId
+        );
+    }
+
+    function validDeliveryExceptionShape(
+      businessId,
+      customerId,
+      exceptionId,
+      data
+    ) {
+      return data.keys().hasOnly([
+          'businessId', 'customerId', 'exceptionId', 'subscriptionId',
+          'type', 'serviceDate', 'reason', 'createdBy', 'createdAt'
+        ])
+        && data.businessId == businessId
+        && data.customerId == customerId
+        && data.exceptionId == exceptionId
+        && data.subscriptionId is string
+        && data.subscriptionId.size() > 0
+        && exists(subscriptionPath(
+          businessId,
+          customerId,
+          data.subscriptionId
+        ))
+        && data.type == 'noDelivery'
+        && validDate(data.serviceDate)
+        && data.reason is string
+        && data.reason.size() >= 3
+        && data.reason.size() <= 300
+        && data.createdBy == request.auth.uid
+        && data.createdAt == request.time;
+    }
+
+    function validServiceBillingSourceAdvance(
+      businessId,
+      customerId,
+      mutationType,
+      mutationId
+    ) {
+      let path = serviceBillingSourcePath(businessId, customerId);
+      let next = getAfter(path).data;
+      return existsAfter(path)
+        && next.keys().hasOnly([
+          'businessId', 'customerId', 'sourceId', 'revision',
+          'lastMutationType', 'lastMutationId', 'updatedBy', 'createdAt',
+          'updatedAt'
+        ])
+        && next.businessId == businessId
+        && next.customerId == customerId
+        && next.sourceId == 'service'
+        && next.revision is int
+        && next.revision >= 1
+        && next.lastMutationType == mutationType
+        && next.lastMutationId == mutationId
+        && next.updatedBy == request.auth.uid
+        && next.updatedAt == request.time
+        && (
+          (
+            !exists(path)
+            && next.revision == 1
+            && next.createdAt == request.time
+          ) || (
+            exists(path)
+            && get(path).data.businessId == businessId
+            && get(path).data.customerId == customerId
+            && get(path).data.sourceId == 'service'
+            && get(path).data.revision is int
+            && next.revision == get(path).data.revision + 1
+            && next.createdAt == get(path).data.createdAt
+          )
+        );
+    }
+
+    function serviceBillingSourceReferencesMutationAfter(
+      businessId,
+      customerId,
+      data
+    ) {
+      return (
+          data.lastMutationType == 'subscriptionCreated'
+          && data.lastMutationId is string
+          && !exists(subscriptionPath(
+            businessId,
+            customerId,
+            data.lastMutationId
+          ))
+          && existsAfter(subscriptionPath(
+            businessId,
+            customerId,
+            data.lastMutationId
+          ))
+          && getAfter(subscriptionPath(
+            businessId,
+            customerId,
+            data.lastMutationId
+          )).data.createdAt == request.time
+        ) || (
+          data.lastMutationType == 'deliveryExceptionCreated'
+          && data.lastMutationId is string
+          && !exists(deliveryExceptionPath(
+            businessId,
+            customerId,
+            data.lastMutationId
+          ))
+          && existsAfter(deliveryExceptionPath(
+            businessId,
+            customerId,
+            data.lastMutationId
+          ))
+          && getAfter(deliveryExceptionPath(
+            businessId,
+            customerId,
+            data.lastMutationId
+          )).data.createdAt == request.time
+        );
+    }
+
+    function serviceBillingSourceMatchesAfter(
+      businessId,
+      customerId,
+      mutationType,
+      mutationId
+    ) {
+      let next = getAfter(serviceBillingSourcePath(
+        businessId,
+        customerId
+      )).data;
+      return next.lastMutationType == mutationType
+        && next.lastMutationId == mutationId
+        && next.updatedBy == request.auth.uid
+        && next.updatedAt == request.time;
     }
 
     function validOptionalDate(value) {
@@ -803,6 +1252,12 @@ service cloud.firestore {
           subscriptionId,
           data.lastAuditId,
           'subscriptionCreated'
+        )
+        && serviceBillingSourceMatchesAfter(
+          businessId,
+          customerId,
+          'subscriptionCreated',
+          subscriptionId
         );
     }
 
@@ -1483,21 +1938,163 @@ service cloud.firestore {
               head(businessId)
               || permission(businessId, 'recordDeliveryExceptions')
             )
-            && request.resource.data.businessId == businessId
-            && request.resource.data.customerId == customerId
-            && request.resource.data.createdBy == request.auth.uid
-            && request.resource.data.createdAt == request.time;
+            && validDeliveryExceptionShape(
+              businessId,
+              customerId,
+              exceptionId,
+              request.resource.data
+            )
+            && serviceBillingSourceMatchesAfter(
+              businessId,
+              customerId,
+              'deliveryExceptionCreated',
+              exceptionId
+            );
           allow update, delete: if false;
+        }
+
+        match /billingSources/{sourceId} {
+          allow read: if sourceId == 'service'
+            && canReadCustomer(businessId, customerId);
+          allow create, update: if sourceId == 'service'
+            && activeMember(businessId)
+            && validServiceBillingSourceAdvance(
+              businessId,
+              customerId,
+              request.resource.data.lastMutationType,
+              request.resource.data.lastMutationId
+            )
+            && serviceBillingSourceReferencesMutationAfter(
+              businessId,
+              customerId,
+              request.resource.data
+            );
+          allow delete: if false;
         }
 
         match /bills/{billId} {
           allow read: if canReadCustomer(businessId, customerId);
           allow create: if head(businessId)
-            && request.resource.data.businessId == businessId
-            && request.resource.data.customerId == customerId
-            && request.resource.data.status == 'finalized'
-            && request.resource.data.createdBy == request.auth.uid
-            && request.resource.data.createdAt == request.time;
+            && get(customerPath(businessId, customerId)).data.status == 'active'
+            && validBillShape(
+              businessId,
+              customerId,
+              billId,
+              request.resource.data
+            )
+            && getAfter(billingControlPath(
+              businessId,
+              customerId,
+              billId
+            )).data.status == 'finalized'
+            && getAfter(billingControlPath(
+              businessId,
+              customerId,
+              billId
+            )).data.finalizedBillId == billId
+            && getAfter(billingControlPath(
+              businessId,
+              customerId,
+              billId
+            )).data.lastAuditId == request.resource.data.lastAuditId;
+          allow update, delete: if false;
+
+          match /lineItems/{lineItemId} {
+            allow read: if canReadCustomer(businessId, customerId);
+            allow create: if head(businessId)
+              && validBillLineShape(
+                businessId,
+                customerId,
+                billId,
+                lineItemId,
+                request.resource.data
+              );
+            allow update, delete: if false;
+          }
+        }
+
+        match /billingControls/{billingMonth} {
+          allow read: if head(businessId);
+          allow create: if head(businessId)
+            && validBillingControlShape(
+              businessId,
+              customerId,
+              billingMonth,
+              request.resource.data
+            )
+            && request.resource.data.createdAt == request.time
+            && (
+              (
+                request.resource.data.status == 'finalized'
+                && request.resource.data.finalizedBillId == billingMonth
+                && getAfter(billPath(
+                  businessId,
+                  customerId,
+                  billingMonth
+                )).data.lastAuditId == request.resource.data.lastAuditId
+              ) || (
+                request.resource.data.status == 'open'
+                && request.resource.data.finalizedBillId == ''
+                && getAfter(auditPath(
+                  businessId,
+                  request.resource.data.lastAuditId
+                )).data.action == 'billingAdjustmentCreated'
+              )
+            );
+          allow update: if head(businessId)
+            && validBillingControlShape(
+              businessId,
+              customerId,
+              billingMonth,
+              request.resource.data
+            )
+            && request.resource.data.createdAt == resource.data.createdAt
+            && resource.data.status == 'open'
+            && (
+              (
+                request.resource.data.status == 'finalized'
+                && request.resource.data.adjustmentRevision
+                  == resource.data.adjustmentRevision
+                && request.resource.data.finalizedBillId == billingMonth
+                && getAfter(billPath(
+                  businessId,
+                  customerId,
+                  billingMonth
+                )).data.lastAuditId == request.resource.data.lastAuditId
+              ) || (
+                request.resource.data.status == 'open'
+                && request.resource.data.adjustmentRevision
+                  == resource.data.adjustmentRevision + 1
+                && request.resource.data.finalizedBillId == ''
+                && getAfter(auditPath(
+                  businessId,
+                  request.resource.data.lastAuditId
+                )).data.action == 'billingAdjustmentCreated'
+              )
+            );
+          allow delete: if false;
+        }
+
+        match /adjustments/{adjustmentId} {
+          allow read: if head(businessId);
+          allow create: if head(businessId)
+            && validAdjustmentShape(
+              businessId,
+              customerId,
+              adjustmentId,
+              request.resource.data
+            )
+            && !exists(billPath(
+              businessId,
+              customerId,
+              request.resource.data.billingMonth
+            ))
+            && validAdjustmentAuditAfter(
+              businessId,
+              customerId,
+              adjustmentId,
+              request.resource.data
+            );
           allow update, delete: if false;
         }
 
@@ -1605,8 +2202,18 @@ service cloud.firestore {
               )
             )
             || (
+              phase5AuditAction(request.resource.data.action)
+              && head(businessId)
+              && phase5AuditReferencedAfter(
+                businessId,
+                auditId,
+                request.resource.data
+              )
+            )
+            || (
               head(businessId)
               && !phase4AuditAction(request.resource.data.action)
+              && !phase5AuditAction(request.resource.data.action)
             )
             || (
               request.resource.data.entityType == 'customer'

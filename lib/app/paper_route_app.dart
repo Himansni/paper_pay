@@ -81,6 +81,40 @@ class _PaperRouteAppState extends State<PaperRouteApp> {
                     : SetupRequiredPage(message: widget.startup.message),
       ),
       GoRoute(
+        path: '/billing',
+        builder:
+            (context, state) =>
+                widget.startup.isReady
+                    ? const AuthGate(
+                      destination: AuthenticatedDestination.billing,
+                    )
+                    : SetupRequiredPage(message: widget.startup.message),
+      ),
+      GoRoute(
+        path: '/billing/:customerId/:billingMonth/preview',
+        builder:
+            (context, state) =>
+                widget.startup.isReady
+                    ? AuthGate(
+                      destination: AuthenticatedDestination.billPreview,
+                      resourceId: state.pathParameters['customerId'],
+                      secondaryResourceId: state.pathParameters['billingMonth'],
+                    )
+                    : SetupRequiredPage(message: widget.startup.message),
+      ),
+      GoRoute(
+        path: '/billing/:customerId/:billingMonth',
+        builder:
+            (context, state) =>
+                widget.startup.isReady
+                    ? AuthGate(
+                      destination: AuthenticatedDestination.billDetail,
+                      resourceId: state.pathParameters['customerId'],
+                      secondaryResourceId: state.pathParameters['billingMonth'],
+                    )
+                    : SetupRequiredPage(message: widget.startup.message),
+      ),
+      GoRoute(
         path: '/customers/new',
         builder:
             (context, state) =>

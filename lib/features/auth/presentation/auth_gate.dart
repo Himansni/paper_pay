@@ -9,6 +9,10 @@ import 'package:paper_route/features/billing/presentation/bill_detail_page.dart'
 import 'package:paper_route/features/billing/presentation/bill_preview_page.dart';
 import 'package:paper_route/features/billing/presentation/billing_workspace_page.dart';
 import 'package:paper_route/features/business/presentation/business_settings_page.dart';
+import 'package:paper_route/features/collections/presentation/collect_payment_page.dart';
+import 'package:paper_route/features/collections/presentation/collections_workspace_page.dart';
+import 'package:paper_route/features/collections/presentation/payment_receipt_page.dart';
+import 'package:paper_route/features/collections/presentation/upi_settings_page.dart';
 import 'package:paper_route/features/customers/presentation/customer_detail_page.dart';
 import 'package:paper_route/features/customers/presentation/customer_form_page.dart';
 import 'package:paper_route/features/customers/presentation/customers_page.dart';
@@ -30,6 +34,10 @@ enum AuthenticatedDestination {
   billing,
   billPreview,
   billDetail,
+  collections,
+  collectPayment,
+  paymentReceipt,
+  upiSettings,
   customerCreate,
   customerDetail,
   customerEdit,
@@ -87,6 +95,7 @@ class AuthGate extends ConsumerWidget {
           AuthenticatedDestination.newspaperCreate ||
           AuthenticatedDestination.newspaperEdit => true,
           AuthenticatedDestination.billPreview => true,
+          AuthenticatedDestination.upiSettings => true,
           _ => false,
         };
         if (headOnly && !user.isHead) return DashboardPage(user: user);
@@ -109,6 +118,20 @@ class AuthGate extends ConsumerWidget {
             customerId: resourceId ?? '',
             billingMonth: secondaryResourceId ?? '',
           ),
+          AuthenticatedDestination.collections => CollectionsWorkspacePage(
+            user: user,
+            customerId: resourceId,
+          ),
+          AuthenticatedDestination.collectPayment => CollectPaymentPage(
+            user: user,
+            customerId: resourceId ?? '',
+          ),
+          AuthenticatedDestination.paymentReceipt => PaymentReceiptPage(
+            user: user,
+            customerId: resourceId ?? '',
+            paymentId: secondaryResourceId ?? '',
+          ),
+          AuthenticatedDestination.upiSettings => UpiSettingsPage(user: user),
           AuthenticatedDestination.customerCreate => CustomerFormRoutePage(
             user: user,
           ),

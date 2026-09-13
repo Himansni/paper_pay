@@ -139,8 +139,8 @@
       "queryScope": "COLLECTION_GROUP",
       "fields": [
         { "fieldPath": "businessId", "order": "ASCENDING" },
-        { "fieldPath": "createdBy", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
+        { "fieldPath": "collectorUid", "order": "ASCENDING" },
+        { "fieldPath": "confirmedAt", "order": "DESCENDING" }
       ]
     },
     {
@@ -148,7 +148,7 @@
       "queryScope": "COLLECTION_GROUP",
       "fields": [
         { "fieldPath": "businessId", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
+        { "fieldPath": "confirmedAt", "order": "DESCENDING" }
       ]
     }
   ],

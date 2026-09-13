@@ -64,6 +64,19 @@ class BusinessSettingsPage extends ConsumerWidget {
                                 ),
                   ),
             ),
+            const SizedBox(height: 16),
+            Card(
+              child: ListTile(
+                key: const ValueKey('open-upi-settings'),
+                onTap: () => context.push('/business-settings/upi'),
+                leading: const Icon(Icons.qr_code_2_outlined),
+                title: const Text('UPI collection settings'),
+                subtitle: const Text(
+                  'Configure the UPI ID and payee name used to build payment requests.',
+                ),
+                trailing: const Icon(Icons.chevron_right),
+              ),
+            ),
           ],
         ),
       ),

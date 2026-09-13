@@ -55,6 +55,23 @@ class FirebaseBillingRepository implements BillingRepository {
     customerId,
   ).collection('billingSources').doc('service');
 
+  DocumentReference<Map<String, dynamic>> _collectionState(
+    String businessId,
+    String customerId,
+  ) => _customer(
+    businessId,
+    customerId,
+  ).collection('collectionState').doc('current');
+
+  DocumentReference<Map<String, dynamic>> _billBalance(
+    String businessId,
+    String customerId,
+    String billingMonth,
+  ) => _customer(
+    businessId,
+    customerId,
+  ).collection('billBalances').doc(billingMonth);
+
   CollectionReference<Map<String, dynamic>> _audits(String businessId) =>
       _firestore
           .collection('businesses')
@@ -168,6 +185,8 @@ class FirebaseBillingRepository implements BillingRepository {
     final monthKey = billingMonthKey(month);
     final billRef = _bill(businessId, customerId, monthKey);
     final controlRef = _control(businessId, customerId, monthKey);
+    final collectionStateRef = _collectionState(businessId, customerId);
+    final billBalanceRef = _billBalance(businessId, customerId, monthKey);
     final auditRef = _audits(businessId).doc();
 
     try {
@@ -194,6 +213,17 @@ class FirebaseBillingRepository implements BillingRepository {
               code: 'billing-source-changed',
             );
           }
+        }
+        final currentCollectionState = await transaction.get(
+          collectionStateRef,
+        );
+        if (currentCollectionState.exists != prepared.collectionStateExists ||
+            (currentCollectionState.data()?['revision'] as int? ?? 0) !=
+                prepared.collectionStateRevision) {
+          throw const AppException(
+            'The customer outstanding balance changed. Review a new preview.',
+            code: 'billing-source-changed',
+          );
         }
 
         final now = FieldValue.serverTimestamp();
@@ -263,6 +293,54 @@ class FirebaseBillingRepository implements BillingRepository {
           transaction.update(controlRef, control);
         } else {
           transaction.set(controlRef, {...control, 'createdAt': now});
+        }
+        final componentAmountPaise =
+            prepared.collectionStateExists
+                ? preview.currentChargesPaise + preview.adjustmentsPaise
+                : preview.totalDuePaise;
+        final componentOutstandingPaise =
+            componentAmountPaise > 0 ? componentAmountPaise : 0;
+        transaction.set(billBalanceRef, {
+          'businessId': businessId,
+          'customerId': customerId,
+          'billId': monthKey,
+          'billingMonth': monthKey,
+          'sourceAmountPaise': componentAmountPaise,
+          'allocatedPaise': 0,
+          'reversedPaise': 0,
+          'outstandingPaise': componentOutstandingPaise,
+          'status':
+              componentAmountPaise > 0
+                  ? 'outstanding'
+                  : componentAmountPaise < 0
+                  ? 'credit'
+                  : 'settled',
+          'revision': 0,
+          'lastMutationType': 'billFinalized',
+          'lastMutationId': monthKey,
+          'createdAt': now,
+          'updatedAt': now,
+        });
+        final nextCollectionState = {
+          'businessId': businessId,
+          'customerId': customerId,
+          'stateId': 'current',
+          'outstandingPaise': preview.totalDuePaise,
+          'confirmedPaise': prepared.collectionConfirmedPaise,
+          'reversedPaise': prepared.collectionReversedPaise,
+          'revision': prepared.collectionStateRevision + 1,
+          'lastMutationType': 'billFinalized',
+          'lastMutationId': monthKey,
+          'updatedBy': actor.uid,
+          'updatedAt': now,
+        };
+        if (currentCollectionState.exists) {
+          transaction.update(collectionStateRef, nextCollectionState);
+        } else {
+          transaction.set(collectionStateRef, {
+            ...nextCollectionState,
+            'createdAt': now,
+          });
         }
         transaction.set(auditRef, {
           'businessId': businessId,
@@ -541,6 +619,10 @@ class FirebaseBillingRepository implements BillingRepository {
           ),
           locks: const [],
           adjustmentRevision: 0,
+          collectionStateExists: false,
+          collectionStateRevision: 0,
+          collectionConfirmedPaise: 0,
+          collectionReversedPaise: 0,
         );
       }
 
@@ -573,6 +655,8 @@ class FirebaseBillingRepository implements BillingRepository {
       final controlFuture = _control(businessId, customerId, monthKey).get();
       final serviceBillingSourceFuture =
           _serviceBillingSource(businessId, customerId).get();
+      final collectionStateFuture =
+          _collectionState(businessId, customerId).get();
       final previousSnapshot = await previousFuture;
       final laterSnapshot = await laterFuture;
       final subscriptions = await subscriptionsFuture;
@@ -580,6 +664,8 @@ class FirebaseBillingRepository implements BillingRepository {
       final adjustmentDocuments = await adjustmentsFuture;
       final controlSnapshot = await controlFuture;
       final serviceBillingSourceSnapshot = await serviceBillingSourceFuture;
+      final collectionStateSnapshot = await collectionStateFuture;
+      final collectionStateData = collectionStateSnapshot.data();
 
       final terms = <BillingTermSnapshot>[];
       final pauses = <BillingPauseSnapshot>[];
@@ -591,6 +677,12 @@ class FirebaseBillingRepository implements BillingRepository {
           'revision',
           serviceBillingSourceSnapshot.data()?['revision'],
           exists: serviceBillingSourceSnapshot.exists,
+        ),
+        _SourceLock.optional(
+          collectionStateSnapshot.reference,
+          'revision',
+          collectionStateData?['revision'],
+          exists: collectionStateSnapshot.exists,
         ),
       ];
       for (final subscription in subscriptions.docs) {
@@ -839,6 +931,56 @@ class FirebaseBillingRepository implements BillingRepository {
           previousBill = _billFromSnapshot(previousDocument);
         }
       }
+      if (collectionStateData != null &&
+          (collectionStateData['businessId'] != businessId ||
+              collectionStateData['customerId'] != customerId ||
+              collectionStateData['stateId'] != 'current' ||
+              collectionStateData['outstandingPaise'] is! int ||
+              collectionStateData['confirmedPaise'] is! int ||
+              collectionStateData['reversedPaise'] is! int ||
+              collectionStateData['revision'] is! int ||
+              (collectionStateData['confirmedPaise'] is int &&
+                  (collectionStateData['confirmedPaise'] as int) < 0) ||
+              (collectionStateData['reversedPaise'] is int &&
+                  (collectionStateData['reversedPaise'] as int) < 0) ||
+              (collectionStateData['confirmedPaise'] is int &&
+                  collectionStateData['reversedPaise'] is int &&
+                  (collectionStateData['reversedPaise'] as int) >
+                      (collectionStateData['confirmedPaise'] as int)) ||
+              (collectionStateData['revision'] is int &&
+                  (collectionStateData['revision'] as int) < 1))) {
+        issues.add(
+          const BillPreviewIssue(
+            code: 'invalid-collection-state',
+            message:
+                'The customer collection balance is invalid and must be reviewed.',
+          ),
+        );
+      }
+      if (collectionStateData != null && previousBill == null) {
+        issues.add(
+          const BillPreviewIssue(
+            code: 'invalid-collection-state',
+            message:
+                'A collection balance exists without an earlier finalized bill.',
+          ),
+        );
+      }
+      if (previousBill != null && collectionStateData == null) {
+        issues.add(
+          const BillPreviewIssue(
+            code: 'collection-projection-required',
+            message:
+                'This legacy finalized balance needs a reviewed collection projection migration before another bill or payment can be recorded.',
+          ),
+        );
+      }
+      final previousOutstanding =
+          previousBill == null
+              ? 0
+              : collectionStateData?['outstandingPaise'] is int
+              ? collectionStateData!['outstandingPaise'] as int
+              : previousBill.totalDuePaise;
       return _PreparedBillingPreview(
         preview: MonthlyBillPreview(
           businessId: businessId,
@@ -850,13 +992,26 @@ class FirebaseBillingRepository implements BillingRepository {
           lineItems: lines,
           openingBalancePaise: customer.openingBalancePaise,
           previousBillId: previousBill?.id ?? '',
-          previousOutstandingPaise: previousBill?.totalDuePaise ?? 0,
+          previousOutstandingPaise: previousOutstanding,
           adjustments: adjustments,
           issues: issues,
           alreadyFinalizedBill: null,
         ),
         locks: locks,
         adjustmentRevision: adjustmentRevision,
+        collectionStateExists: collectionStateSnapshot.exists,
+        collectionStateRevision:
+            collectionStateData?['revision'] is int
+                ? collectionStateData!['revision'] as int
+                : 0,
+        collectionConfirmedPaise:
+            collectionStateData?['confirmedPaise'] is int
+                ? collectionStateData!['confirmedPaise'] as int
+                : 0,
+        collectionReversedPaise:
+            collectionStateData?['reversedPaise'] is int
+                ? collectionStateData!['reversedPaise'] as int
+                : 0,
       );
     } on AppException {
       rethrow;
@@ -954,9 +1109,17 @@ class _PreparedBillingPreview {
     required this.preview,
     required this.locks,
     required this.adjustmentRevision,
+    required this.collectionStateExists,
+    required this.collectionStateRevision,
+    required this.collectionConfirmedPaise,
+    required this.collectionReversedPaise,
   });
 
   final MonthlyBillPreview preview;
   final List<_SourceLock> locks;
   final int adjustmentRevision;
+  final bool collectionStateExists;
+  final int collectionStateRevision;
+  final int collectionConfirmedPaise;
+  final int collectionReversedPaise;
 }

@@ -18,7 +18,10 @@ businesses/{businessId}
       lineItems/{chargeKey}
     billingControls/{monthKey}
     adjustments/{adjustmentId}
+    collectionState/current
+    billBalances/{monthKey}
     payments/{paymentId}
+    paymentStates/{paymentId}
     paymentReversals/{reversalId}
   newspapers/{newspaperId}
     priceRules/{priceRuleId}
@@ -76,7 +79,7 @@ Each terms change or restart writes a new `versions/{versionId}` and closes the 
 
 `billingSources/service` is a narrow transaction lock for collection membership. Its monotonic `revision` advances only in the same authorized atomic write that creates a subscription series or append-only no-delivery exception. A billing preview snapshots either that revision or the document's absence; finalization rechecks it so a newly added service source cannot be omitted silently. Existing subscription term/pause changes remain protected by each series' `lastAuditId`, and newspaper pricing changes by each newspaper's `lastAuditId`.
 
-## Bills and ledger
+## Bills and collection ledger
 
 The bill ID is the deterministic `YYYY-MM` month key under a customer, preventing more than one finalized bill per customer/month. A finalized header stores immutable customer identity/address snapshots, the opening balance snapshot, prior-balance source (`previousBillId` and `previousOutstandingPaise`), current charges, signed adjustments, total due, compact per-newspaper summaries, line count, calculation version, finalizer/audit IDs, and server timestamps.
 
@@ -84,11 +87,15 @@ Line item IDs use the deterministic charge key `customerId:subscriptionId:YYYY-M
 
 `billingControls/{YYYY-MM}` serializes Head adjustments against finalization with a monotonically increasing `adjustmentRevision`. Its final state points to the deterministic bill and cannot be reopened. `adjustments/{adjustmentId}` stores a non-zero signed paise amount, reason, target month, optional earlier finalized bill reference, creator/audit IDs, and timestamp. Adjustments are append-only; a finalized month rejects new adjustments. A later open month can carry an explicitly audited correction referencing an earlier immutable bill.
 
-The earliest finalized bill uses the customer's immutable opening balance as `priorBalancePaise`. Every later bill carries the latest earlier finalized bill's total due and stores that bill ID; opening balance is not added twice. Phase 5 deliberately does not subtract payments. Phase 6 must derive previous outstanding from confirmed server-acknowledged collections and append-only reversals while excluding requested/pending payments.
+The earliest finalized bill uses the customer's immutable opening balance as `priorBalancePaise`. Finalization also creates `collectionState/current` and `billBalances/{YYYY-MM}` in the same transaction. The collection state is the transactionally maintained signed account outstanding; each bill-balance projection stores only that bill's incremental debt, allocations, reversals, remaining positive component, revision, and last mutation. A later bill snapshots the collection state's actual remaining outstanding as `previousOutstandingPaise`, then adds only the new month's charges and signed adjustments. Opening balance, an earlier cumulative bill total, payments, and reversals are therefore never applied twice.
 
-Payment IDs are generated once at collection start and reused as idempotency keys. Confirmed payment records store bill/customer/business, amount, method, manual-confirmation label, optional UPI reference, collector UID, and server timestamp. A QR request may be stored separately, but it is never counted as received money.
+Payment IDs are generated once when the collector opens the flow and reused as idempotency keys. A confirmed `payments/{paymentId}` document stores immutable business/customer snapshots, integer-paise amount, method, external reference or notes, collector UID, allocation list, paired audit ID, and server confirmation timestamp. Cash, UPI, bank transfer, and controlled other methods all use the same transaction. A payment may not exceed the positive account outstanding. Allocation defaults to the oldest positive bill component, or gives one explicitly selected bill priority before continuing oldest-first. One transaction can cover at most two bill components so the complete allocation validation stays within Firestore Rules evaluation limits; a longer arrears span is collected through separate idempotent payments.
 
-Corrections are new `paymentReversals` or `adjustments`; existing financial documents cannot be updated or deleted by the client.
+`paymentStates/{paymentId}` is a transaction-only derived projection containing refundable amount, status, revision, and per-allocation reversal totals. It may be created only with its immutable payment and may advance only with a valid Head reversal. The original payment never changes. Each `paymentReversals/{reversalId}` is a separate immutable, reasoned, audited entry that restores the newest refundable allocation first and cannot make cumulative reversals exceed the confirmed payment.
+
+Displaying an amount-specific UPI QR, opening a UPI app, or using the static business QR creates no financial document and changes no balance. Only an authorized collector's explicit receipt confirmation, followed by a server readback of the complete transaction, creates the ledger entry. `configuration/upi` contains only the UPI ID, display name, optional reference prefix, enabled state, audit link, and timestamps; active employees may read it for collection, while only a Head may create or update it.
+
+Legacy finalized bills created before these projections remain readable, but payment confirmation and the next bill are blocked with `collection-projection-required`. They need a separately reviewed trusted backfill before collections begin. Corrections to bills remain new adjustments; corrections to payments remain new reversals. Finalized bills, line items, payments, reversals, and audits cannot be updated or deleted by clients.
 
 ## Summaries
 
@@ -105,9 +112,9 @@ Corrections are new `paymentReversals` or `adjustments`; existing financial docu
 - newspaper pages by business + status + normalized name
 - price history by business + newspaper + descending start date
 - active exact-date and period conflict/resolution queries by business + newspaper + kind + status + date bounds
-- collection-group payments by business + employee + descending time
+- collection-group payments by business + collector + descending confirmation time
 - collection-group payments by business + descending time
 
-Phase 5 adds no composite index: selected-month workspaces reuse cursor-paginated customer indexes, bill/line/adjustment reads are scoped to one customer path, and pricing resolution reuses the deployed Phase 4 exact/period indexes.
+Phase 6 replaces the two unused provisional payment-history definitions with the connected query fields `collectorUid` and `confirmedAt`. Customer-specific history stays under one customer path; tenant-wide Head and collector-specific employee history use the two collection-group indexes above and cursor pagination.
 
-All 15 indexes, including the four Phase 4 newspaper/price indexes, are deployed and `READY` in `paperroutedev`. Add indexes only for implemented queries; unused composite indexes increase storage and write fan-out.
+All 15 indexes are deployed and `READY` in `paperroutedev`, including the two Phase 6 payment-history replacements using `collectorUid` and `confirmedAt`. Add indexes only for implemented queries; unused composite indexes increase storage and write fan-out.

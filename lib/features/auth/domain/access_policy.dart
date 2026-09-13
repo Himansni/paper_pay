@@ -104,12 +104,16 @@ class AccessPolicy {
     required AppUser member,
     required String customerBusinessId,
     required String assignedEmployeeId,
+    required String customerAreaId,
+    required bool isCustomerArchived,
   }) =>
+      !isCustomerArchived &&
       canReadCustomer(
         member: member,
         customerBusinessId: customerBusinessId,
         assignedEmployeeId: assignedEmployeeId,
       ) &&
       (member.isHead ||
-          member.permissions.contains(PermissionKey.recordPayments));
+          (member.areaIds.contains(customerAreaId) &&
+              member.permissions.contains(PermissionKey.recordPayments)));
 }

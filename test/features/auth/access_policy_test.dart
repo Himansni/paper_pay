@@ -8,6 +8,7 @@ void main() {
   AppUser employee({
     String businessId = 'business-a',
     Set<String> permissions = const {},
+    Set<String> areaIds = const {},
   }) => AppUser(
     uid: 'employee-1',
     email: 'employee@example.com',
@@ -17,6 +18,7 @@ void main() {
     role: UserRole.employee,
     status: AccountStatus.active,
     permissions: permissions,
+    areaIds: areaIds,
   );
 
   const head = AppUser(
@@ -83,6 +85,21 @@ void main() {
         member: employee(permissions: const {PermissionKey.recordPayments}),
         customerBusinessId: 'business-a',
         assignedEmployeeId: 'employee-1',
+        customerAreaId: 'area-a',
+        isCustomerArchived: false,
+      ),
+      isFalse,
+    );
+    expect(
+      policy.canRecordPayment(
+        member: employee(
+          permissions: const {PermissionKey.recordPayments},
+          areaIds: const {'area-a'},
+        ),
+        customerBusinessId: 'business-a',
+        assignedEmployeeId: 'employee-1',
+        customerAreaId: 'area-a',
+        isCustomerArchived: false,
       ),
       isTrue,
     );

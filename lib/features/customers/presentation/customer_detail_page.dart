@@ -8,6 +8,7 @@ import 'package:paper_route/features/areas/presentation/area_providers.dart';
 import 'package:paper_route/features/auth/domain/access_policy.dart';
 import 'package:paper_route/features/auth/domain/app_user.dart';
 import 'package:paper_route/features/customers/domain/customer.dart';
+import 'package:paper_route/features/collections/presentation/customer_collection_summary.dart';
 import 'package:paper_route/features/customers/presentation/customer_assignment_dialog.dart';
 import 'package:paper_route/features/customers/presentation/customer_providers.dart';
 import 'package:paper_route/features/employees/domain/employee_member.dart';
@@ -273,6 +274,8 @@ class _CustomerDetailViewState extends ConsumerState<_CustomerDetailView> {
             ),
             const SizedBox(height: 14),
             CustomerSubscriptionsSection(user: user, customer: customer),
+            const SizedBox(height: 14),
+            CustomerCollectionSummary(user: user, customer: customer),
             if (customer.locationConsent && customer.coordinates != null) ...[
               const SizedBox(height: 14),
               _DetailCard(

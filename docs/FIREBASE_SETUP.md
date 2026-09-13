@@ -1,6 +1,6 @@
 # Firebase setup and first-Head bootstrap
 
-Android and Web are connected to the Spark project **PaperRouteDev** (`paperroutedev`). FlutterFire generated the platform configuration on 7 September 2026. The reviewed Phase 4 Firestore rules and all 15 composite indexes are deployed there. No paid service or billing account was enabled.
+Android and Web are connected to the Spark project **PaperRouteDev** (`paperroutedev`). FlutterFire generated the platform configuration on 7 September 2026. The reviewed Phase 6 Firestore Rules and all 15 composite indexes are deployed; both replacement payment-history indexes are `READY`. No paid service or billing account was enabled.
 
 The project creation, Email/Password provider, Firestore database, CLI login, FlutterFire configuration, first-Head bootstrap, and verified login are complete. Keep these steps as a recovery/reference guide.
 
@@ -147,6 +147,22 @@ After separate explicit approval, the verified Head created one development-only
 The read-only preview produced exactly 26 Alpha lines worth ₹213.00 and five Beta lines worth ₹67.50. Current charges were ₹280.50; the ₹12.34 opening balance and one audited −₹1.00 adjustment produced a ₹291.84 total due and 31 daily snapshots. The Head finalized deterministic bill `2026-11`; its detail retained the same header, per-newspaper counts and totals, adjustment, and immutable daily lines. Re-entering the preview route resolved to that existing bill without another write, while the emulator-backed concurrent-finalization test independently confirmed exactly one bill, line set, and finalization audit under simultaneous repository retries.
 
 Cleanup ended both subscriptions on 30 November 2026, archived the customer and both newspapers, and made the synthetic area inactive. All subscription versions, pause, price rules, finalized financial snapshots, and audit records remain preserved. No payment, collection, UPI, employee, Phase 6, or unrelated live record was created. Final verification passed clean formatting, `flutter analyze`, all 85 Flutter tests, all 43 Firestore Rules/transaction tests, JSON/JavaScript validation, and the emulator-backed Chrome Phase 5 repository/screen integration test.
+
+### Phase 6 implementation and deployment
+
+Collections are implemented locally for cash, UPI, bank transfer, and controlled other methods. Confirmed payments and reversals are immutable append-only financial records; transaction-coupled `collectionState`, `billBalances`, and private `paymentStates` projections provide efficient current balances without reading all history. Payments support partial, repeated, oldest-bill-first, optional selected-bill, and two-bill allocation. Full and partial reversals are Head-only. The original payment and every finalized bill remain unchanged.
+
+The connected UPI workflow stores only business UPI display configuration. Amount-specific and static UPI QR codes are payment requests, not proof: they create no ledger write and do not reduce outstanding. The collector must manually confirm observed receipt, and the UI displays success only after server readback of the complete transaction. Ambiguous retry recovery is bounded to read-only verification of the same immutable idempotency key.
+
+The complete local Phase 6 suite covers domain arithmetic, all payment methods, UPI URI generation, QR non-confirmation, partial/multiple payments, selected and oldest-first allocation, concurrent duplicate confirmation, Head/employee access, pagination, immutable payments, partial/full reversal, overpayment/over-reversal denial, audit pairing, multi-month carry-forward, and opening-balance safety. The connected repository/screen workflow uses only the Auth and Firestore emulators with synthetic data.
+
+The existing finalized bill `C-8744D64529294296A5FC0F8884740506/2026-11` received its separately reviewed trusted `billBalances/2026-11` and `collectionState/current` compatibility projections plus a deterministic migration audit. Its immutable bill, 31 lines, source audit, and ₹291.84 outstanding total were not changed.
+
+The owner-approved deployment replaced only the two payment-history indexes, waited for both to become `READY`, and then released only the reviewed Phase 6 Firestore Rules. The deployed 15-index set matches `firestore.indexes.json`, and the active Rules match the local file byte-for-byte.
+
+The live Head smoke test verified ₹291.84 outstanding, collection history, UPI settings, and an amount-specific ₹5.00 QR marked as a request rather than a receipt. Because no real money was received, the final receipt confirmation was deliberately cancelled. Cleanup restored empty disabled UPI defaults and re-archived the synthetic customer. Live Firestore retains zero payments, zero private payment states, and zero reversals; confirmed and reversed totals remain zero. Exactly four append-only audits record the temporary customer reactivation/archive and UPI enable/disable changes.
+
+Confirmed-payment, duplicate-ID, allocation, and reversal behavior was verified only in `demo-paper-route`. The exact emulator regression starts at ₹291.84, creates immutable ₹10 cash and ₹5 UPI payments, rejects the duplicate cash ID, records ₹4, ₹6, and ₹5 reversals, and finishes at ₹15 confirmed, ₹15 reversed, and ₹291.84 outstanding with two payments, two private payment states, and three reversals. A live confirmed receipt remains intentionally unverified until actual receipt or a separately designed explicit test-only transaction mechanism is available.
 
 ## 6. Bootstrap the first Head securely — complete
 

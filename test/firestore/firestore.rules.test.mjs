@@ -9,6 +9,7 @@ import {
 import {
   arrayUnion,
   collection,
+  collectionGroup,
   deleteDoc,
   doc,
   getDoc,
@@ -432,6 +433,53 @@ const addBillFinalization = (
       updatedAt: serverTimestamp(),
     },
   );
+  batch.set(
+    doc(
+      db,
+      `businesses/business-a/customers/${customerId}/billBalances/${month}`,
+    ),
+    {
+      businessId: 'business-a',
+      customerId,
+      billId: month,
+      billingMonth: month,
+      sourceAmountPaise: totalDuePaise,
+      allocatedPaise: 0,
+      reversedPaise: 0,
+      outstandingPaise: Math.max(0, totalDuePaise),
+      status:
+        totalDuePaise > 0
+          ? 'outstanding'
+          : totalDuePaise < 0
+            ? 'credit'
+            : 'settled',
+      revision: 0,
+      lastMutationType: 'billFinalized',
+      lastMutationId: month,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    },
+  );
+  batch.set(
+    doc(
+      db,
+      `businesses/business-a/customers/${customerId}/collectionState/current`,
+    ),
+    {
+      businessId: 'business-a',
+      customerId,
+      stateId: 'current',
+      outstandingPaise: totalDuePaise,
+      confirmedPaise: 0,
+      reversedPaise: 0,
+      revision: 1,
+      lastMutationType: 'billFinalized',
+      lastMutationId: month,
+      updatedBy: actorId,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    },
+  );
   batch.set(doc(db, `businesses/business-a/auditRecords/${auditId}`), {
     businessId: 'business-a',
     actorId,
@@ -538,6 +586,360 @@ const finalizeMonthTransaction = async (
     }
     throw error;
   }
+};
+
+const seedCollectionProjection = async ({
+  customerId = 'C-MANAGED',
+  assignedEmployeeId = 'employee-a',
+  areaId = 'east',
+  status = 'active',
+  bills = [{ month: '2026-09', outstandingPaise: 60000 }],
+} = {}) => {
+  await environment.withSecurityRulesDisabled(async (context) => {
+    const db = context.firestore();
+    await setDoc(
+      doc(db, `businesses/business-a/customers/${customerId}`),
+      completeCustomer({
+        id: customerId,
+        assignedEmployeeId,
+        areaId,
+        status,
+      }),
+    );
+    let outstandingPaise = 0;
+    for (const bill of bills) {
+      outstandingPaise += bill.outstandingPaise;
+      await setDoc(
+        doc(
+          db,
+          `businesses/business-a/customers/${customerId}/bills/${bill.month}`,
+        ),
+        {
+          ...completeBill({
+            customerId,
+            month: bill.month,
+            currentChargesPaise: bill.outstandingPaise,
+            totalDuePaise: bill.outstandingPaise,
+          }),
+          finalizedAt: new Date(),
+          createdAt: new Date(),
+        },
+      );
+      await setDoc(
+        doc(
+          db,
+          `businesses/business-a/customers/${customerId}/billBalances/${bill.month}`,
+        ),
+        {
+          businessId: 'business-a',
+          customerId,
+          billId: bill.month,
+          billingMonth: bill.month,
+          sourceAmountPaise: bill.outstandingPaise,
+          allocatedPaise: 0,
+          reversedPaise: 0,
+          outstandingPaise: bill.outstandingPaise,
+          status: 'outstanding',
+          revision: 0,
+          lastMutationType: 'billFinalized',
+          lastMutationId: bill.month,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      );
+    }
+    await setDoc(
+      doc(
+        db,
+        `businesses/business-a/customers/${customerId}/collectionState/current`,
+      ),
+      {
+        businessId: 'business-a',
+        customerId,
+        stateId: 'current',
+        outstandingPaise,
+        confirmedPaise: 0,
+        reversedPaise: 0,
+        revision: 1,
+        lastMutationType: 'billFinalized',
+        lastMutationId: bills.at(-1).month,
+        updatedBy: 'head-a',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    );
+  });
+};
+
+const confirmPaymentTransaction = async (
+  db,
+  {
+    customerId = 'C-MANAGED',
+    paymentId = 'payment-0001',
+    actorId = 'head-a',
+    amountPaise = 25000,
+    method = 'cash',
+    externalReference = '',
+    notes = '',
+    allocations = [
+      { billId: '2026-09', billingMonth: '2026-09', amountPaise: 25000 },
+    ],
+  } = {},
+) => {
+  const customerPath = `businesses/business-a/customers/${customerId}`;
+  const paymentRef = doc(db, `${customerPath}/payments/${paymentId}`);
+  const paymentStateRef = doc(
+    db,
+    `${customerPath}/paymentStates/${paymentId}`,
+  );
+  const accountRef = doc(db, `${customerPath}/collectionState/current`);
+  const auditId = `${paymentId}-audit`;
+  const auditRef = doc(db, `businesses/business-a/auditRecords/${auditId}`);
+  return runTransaction(db, async (transaction) => {
+    const customer = await transaction.get(doc(db, customerPath));
+    const account = await transaction.get(accountRef);
+    const balances = new Map();
+    for (const allocation of allocations) {
+      const balanceRef = doc(
+        db,
+        `${customerPath}/billBalances/${allocation.billId}`,
+      );
+      balances.set(allocation.billId, {
+        reference: balanceRef,
+        snapshot: await transaction.get(balanceRef),
+      });
+    }
+    const now = serverTimestamp();
+    transaction.set(paymentRef, {
+      businessId: 'business-a',
+      customerId,
+      customerCode: customer.data()?.customerCode ?? customerId,
+      customerName: customer.data()?.name ?? 'Managed Customer',
+      paymentId,
+      idempotencyKey: paymentId,
+      amountPaise,
+      method,
+      status: 'confirmed',
+      externalReference,
+      notes,
+      collectorUid: actorId,
+      allocations,
+      allocationCount: allocations.length,
+      allocatedPaise: amountPaise,
+      lastAuditId: auditId,
+      confirmedAt: now,
+      createdAt: now,
+    });
+    transaction.set(paymentStateRef, {
+      businessId: 'business-a',
+      customerId,
+      paymentId,
+      amountPaise,
+      reversedPaise: 0,
+      refundablePaise: amountPaise,
+      status: 'confirmed',
+      allocationStates: allocations.map((allocation) => ({
+        ...allocation,
+        reversedPaise: 0,
+      })),
+      revision: 0,
+      lastReversalId: '',
+      createdAt: now,
+      updatedAt: now,
+    });
+    transaction.update(accountRef, {
+      outstandingPaise: account.data().outstandingPaise - amountPaise,
+      confirmedPaise: account.data().confirmedPaise + amountPaise,
+      reversedPaise: account.data().reversedPaise,
+      revision: account.data().revision + 1,
+      lastMutationType: 'paymentConfirmed',
+      lastMutationId: paymentId,
+      updatedBy: actorId,
+      updatedAt: now,
+    });
+    for (const allocation of allocations) {
+      const balance = balances.get(allocation.billId);
+      const data = balance.snapshot.data();
+      const outstanding = data.outstandingPaise - allocation.amountPaise;
+      transaction.update(balance.reference, {
+        allocatedPaise: data.allocatedPaise + allocation.amountPaise,
+        outstandingPaise: outstanding,
+        status: outstanding === 0 ? 'settled' : 'outstanding',
+        revision: data.revision + 1,
+        lastMutationType: 'paymentConfirmed',
+        lastMutationId: paymentId,
+        updatedAt: now,
+      });
+    }
+    transaction.set(auditRef, {
+      businessId: 'business-a',
+      actorId,
+      action: 'paymentConfirmed',
+      entityType: 'payment',
+      entityId: paymentId,
+      customerId,
+      paymentId,
+      amountPaise,
+      method,
+      allocationCount: allocations.length,
+      createdAt: now,
+    });
+  });
+};
+
+const reversePaymentTransaction = async (
+  db,
+  {
+    customerId = 'C-MANAGED',
+    paymentId = 'payment-0001',
+    reversalId = 'reversal-0001',
+    actorId = 'head-a',
+    amountPaise = 5000,
+    reason = 'Synthetic correction',
+    allocations = [
+      { billId: '2026-09', billingMonth: '2026-09', amountPaise: 5000 },
+    ],
+  } = {},
+) => {
+  const customerPath = `businesses/business-a/customers/${customerId}`;
+  const paymentRef = doc(db, `${customerPath}/payments/${paymentId}`);
+  const stateRef = doc(db, `${customerPath}/paymentStates/${paymentId}`);
+  const accountRef = doc(db, `${customerPath}/collectionState/current`);
+  const reversalRef = doc(
+    db,
+    `${customerPath}/paymentReversals/${reversalId}`,
+  );
+  const auditId = `${reversalId}-audit`;
+  return runTransaction(db, async (transaction) => {
+    const payment = await transaction.get(paymentRef);
+    const state = await transaction.get(stateRef);
+    const account = await transaction.get(accountRef);
+    const balances = new Map();
+    for (const allocation of allocations) {
+      const balanceRef = doc(
+        db,
+        `${customerPath}/billBalances/${allocation.billId}`,
+      );
+      balances.set(allocation.billId, {
+        reference: balanceRef,
+        snapshot: await transaction.get(balanceRef),
+      });
+    }
+    const restoredByBill = Object.fromEntries(
+      allocations.map((allocation) => [
+        allocation.billId,
+        allocation.amountPaise,
+      ]),
+    );
+    const now = serverTimestamp();
+    transaction.set(reversalRef, {
+      businessId: 'business-a',
+      customerId,
+      reversalId,
+      paymentId,
+      idempotencyKey: reversalId,
+      amountPaise,
+      reason,
+      reversedBy: actorId,
+      allocations,
+      allocationCount: allocations.length,
+      restoredPaise: amountPaise,
+      lastAuditId: auditId,
+      reversedAt: now,
+      createdAt: now,
+    });
+    const priorState = state.data();
+    const nextReversed = priorState.reversedPaise + amountPaise;
+    const refundablePaise = priorState.amountPaise - nextReversed;
+    transaction.update(stateRef, {
+      reversedPaise: nextReversed,
+      refundablePaise,
+      status: refundablePaise === 0 ? 'reversed' : 'partiallyReversed',
+      allocationStates: priorState.allocationStates.map((allocation) => ({
+        ...allocation,
+        reversedPaise:
+          allocation.reversedPaise + (restoredByBill[allocation.billId] ?? 0),
+      })),
+      revision: priorState.revision + 1,
+      lastReversalId: reversalId,
+      updatedAt: now,
+    });
+    transaction.update(accountRef, {
+      outstandingPaise: account.data().outstandingPaise + amountPaise,
+      reversedPaise: account.data().reversedPaise + amountPaise,
+      revision: account.data().revision + 1,
+      lastMutationType: 'paymentReversed',
+      lastMutationId: reversalId,
+      updatedBy: actorId,
+      updatedAt: now,
+    });
+    for (const allocation of allocations) {
+      const balance = balances.get(allocation.billId);
+      const data = balance.snapshot.data();
+      transaction.update(balance.reference, {
+        reversedPaise: data.reversedPaise + allocation.amountPaise,
+        outstandingPaise: data.outstandingPaise + allocation.amountPaise,
+        status: 'outstanding',
+        revision: data.revision + 1,
+        lastMutationType: 'paymentReversed',
+        lastMutationId: reversalId,
+        updatedAt: now,
+      });
+    }
+    transaction.set(
+      doc(db, `businesses/business-a/auditRecords/${auditId}`),
+      {
+        businessId: 'business-a',
+        actorId,
+        action: 'paymentReversed',
+        entityType: 'paymentReversal',
+        entityId: reversalId,
+        customerId,
+        paymentId,
+        amountPaise,
+        reason,
+        allocationCount: allocations.length,
+        createdAt: now,
+      },
+    );
+    return payment.data();
+  });
+};
+
+const writeUpiSettings = async (
+  db,
+  {
+    actorId = 'head-a',
+    auditId = 'upi-audit-1',
+    upiId = 'paper.route@bank',
+    payeeName = 'Paper Route Test',
+    referencePrefix = 'PAPERROUTE',
+    enabled = true,
+  } = {},
+) => {
+  const batch = writeBatch(db);
+  const now = serverTimestamp();
+  batch.set(doc(db, 'businesses/business-a/configuration/upi'), {
+    businessId: 'business-a',
+    upiId,
+    payeeName,
+    referencePrefix,
+    enabled,
+    updatedBy: actorId,
+    lastAuditId: auditId,
+    createdAt: now,
+    updatedAt: now,
+  });
+  batch.set(doc(db, `businesses/business-a/auditRecords/${auditId}`), {
+    businessId: 'business-a',
+    actorId,
+    action: 'upiSettingsUpdated',
+    entityType: 'configuration',
+    entityId: 'upi',
+    enabled,
+    createdAt: now,
+  });
+  return batch.commit();
 };
 
 async function seed() {
@@ -698,13 +1100,13 @@ describe('privilege and financial integrity', () => {
     );
   });
 
-  test('assigned employee can append but never edit a confirmed payment', async () => {
+  test('legacy unpaired payment writes are denied', async () => {
     const db = auth('employee-a', 'employee-a@example.com');
     const payment = doc(
       db,
       'businesses/business-a/customers/assigned/payments/payment-1',
     );
-    await assertSucceeds(
+    await assertFails(
       setDoc(payment, {
         businessId: 'business-a',
         customerId: 'assigned',
@@ -717,7 +1119,6 @@ describe('privilege and financial integrity', () => {
         createdAt: serverTimestamp(),
       }),
     );
-    await assertFails(updateDoc(payment, { amountPaise: 60000 }));
   });
 });
 
@@ -2538,6 +2939,537 @@ describe('Phase 5 monthly billing', () => {
       actorId: 'head-b',
     });
     await assertFails(batch.commit());
+  });
+});
+
+describe('Phase 6 collections, reversals, and UPI security', () => {
+  test('approved synthetic ledger sequence returns the exact balance without duplicates', async () => {
+    const customerId = 'C-PHASE6-SMOKE';
+    const customerPath = `businesses/business-a/customers/${customerId}`;
+    await seedCollectionProjection({
+      customerId,
+      bills: [{ month: '2026-11', outstandingPaise: 29184 }],
+    });
+    const db = auth('head-a', 'head-a@example.com');
+
+    await assertSucceeds(
+      confirmPaymentTransaction(db, {
+        customerId,
+        paymentId: 'phase6-smoke-cash-001',
+        amountPaise: 1000,
+        allocations: [
+          { billId: '2026-11', billingMonth: '2026-11', amountPaise: 1000 },
+        ],
+      }),
+    );
+    await assertFails(
+      confirmPaymentTransaction(db, {
+        customerId,
+        paymentId: 'phase6-smoke-cash-001',
+        amountPaise: 1000,
+        allocations: [
+          { billId: '2026-11', billingMonth: '2026-11', amountPaise: 1000 },
+        ],
+      }),
+    );
+    await assertSucceeds(
+      confirmPaymentTransaction(db, {
+        customerId,
+        paymentId: 'phase6-smoke-upi-001',
+        amountPaise: 500,
+        method: 'upi',
+        externalReference: 'DEV-PHASE6-UPI-001',
+        allocations: [
+          { billId: '2026-11', billingMonth: '2026-11', amountPaise: 500 },
+        ],
+      }),
+    );
+
+    const cashRef = doc(db, `${customerPath}/payments/phase6-smoke-cash-001`);
+    const upiRef = doc(db, `${customerPath}/payments/phase6-smoke-upi-001`);
+    const originalCash = (await getDoc(cashRef)).data();
+    const originalUpi = (await getDoc(upiRef)).data();
+
+    await assertSucceeds(
+      reversePaymentTransaction(db, {
+        customerId,
+        paymentId: 'phase6-smoke-cash-001',
+        reversalId: 'phase6-smoke-reversal-cash-001',
+        amountPaise: 400,
+        reason: 'Synthetic partial cash reversal',
+        allocations: [
+          { billId: '2026-11', billingMonth: '2026-11', amountPaise: 400 },
+        ],
+      }),
+    );
+    await assertSucceeds(
+      reversePaymentTransaction(db, {
+        customerId,
+        paymentId: 'phase6-smoke-cash-001',
+        reversalId: 'phase6-smoke-reversal-cash-002',
+        amountPaise: 600,
+        reason: 'Synthetic remaining cash reversal',
+        allocations: [
+          { billId: '2026-11', billingMonth: '2026-11', amountPaise: 600 },
+        ],
+      }),
+    );
+    await assertSucceeds(
+      reversePaymentTransaction(db, {
+        customerId,
+        paymentId: 'phase6-smoke-upi-001',
+        reversalId: 'phase6-smoke-reversal-upi-001',
+        amountPaise: 500,
+        reason: 'Synthetic UPI reversal',
+        allocations: [
+          { billId: '2026-11', billingMonth: '2026-11', amountPaise: 500 },
+        ],
+      }),
+    );
+
+    const payments = await getDocs(collection(db, `${customerPath}/payments`));
+    const paymentStates = await getDocs(
+      collection(db, `${customerPath}/paymentStates`),
+    );
+    const reversals = await getDocs(
+      collection(db, `${customerPath}/paymentReversals`),
+    );
+    assert.equal(payments.size, 2);
+    assert.equal(paymentStates.size, 2);
+    assert.equal(reversals.size, 3);
+    assert.deepEqual((await getDoc(cashRef)).data(), originalCash);
+    assert.deepEqual((await getDoc(upiRef)).data(), originalUpi);
+    assert.deepEqual(
+      new Set(paymentStates.docs.map((document) => document.data().status)),
+      new Set(['reversed']),
+    );
+
+    const collectionState = (
+      await getDoc(doc(db, `${customerPath}/collectionState/current`))
+    ).data();
+    assert.equal(collectionState.confirmedPaise, 1500);
+    assert.equal(collectionState.reversedPaise, 1500);
+    assert.equal(collectionState.outstandingPaise, 29184);
+    const billBalance = (
+      await getDoc(doc(db, `${customerPath}/billBalances/2026-11`))
+    ).data();
+    assert.equal(billBalance.allocatedPaise, 1500);
+    assert.equal(billBalance.reversedPaise, 1500);
+    assert.equal(billBalance.outstandingPaise, 29184);
+
+    const audits = await getDocs(
+      collection(db, 'businesses/business-a/auditRecords'),
+    );
+    const smokeAudits = audits.docs.filter(
+      (document) => document.data().customerId === customerId,
+    );
+    assert.equal(
+      smokeAudits.filter(
+        (document) => document.data().action === 'paymentConfirmed',
+      ).length,
+      2,
+    );
+    assert.equal(
+      smokeAudits.filter(
+        (document) => document.data().action === 'paymentReversed',
+      ).length,
+      3,
+    );
+  });
+
+  test('Head records partial and multiple payments through atomic projections', async () => {
+    await seedCollectionProjection();
+    const db = auth('head-a', 'head-a@example.com');
+
+    await assertSucceeds(
+      confirmPaymentTransaction(db, {
+        paymentId: 'payment-partial-1',
+        amountPaise: 25000,
+      }),
+    );
+    let state = await getDoc(
+      doc(
+        db,
+        'businesses/business-a/customers/C-MANAGED/collectionState/current',
+      ),
+    );
+    assert.equal(state.data().outstandingPaise, 35000);
+    assert.equal(state.data().confirmedPaise, 25000);
+
+    await assertSucceeds(
+      confirmPaymentTransaction(db, {
+        paymentId: 'payment-partial-2',
+        amountPaise: 35000,
+        allocations: [
+          {
+            billId: '2026-09',
+            billingMonth: '2026-09',
+            amountPaise: 35000,
+          },
+        ],
+      }),
+    );
+    state = await getDoc(
+      doc(
+        db,
+        'businesses/business-a/customers/C-MANAGED/collectionState/current',
+      ),
+    );
+    assert.equal(state.data().outstandingPaise, 0);
+    assert.equal(state.data().confirmedPaise, 60000);
+    assert.equal(
+      (
+        await getDocs(
+          collection(
+            db,
+            'businesses/business-a/customers/C-MANAGED/payments',
+          ),
+        )
+      ).size,
+      2,
+    );
+    assert.equal(
+      (
+        await getDoc(
+          doc(
+            db,
+            'businesses/business-a/customers/C-MANAGED/billBalances/2026-09',
+          ),
+        )
+      ).data().status,
+      'settled',
+    );
+  });
+
+  test('multi-bill allocations require matching totals and projections', async () => {
+    await seedCollectionProjection({
+      bills: [
+        { month: '2026-07', outstandingPaise: 20000 },
+        { month: '2026-08', outstandingPaise: 30000 },
+      ],
+    });
+    const db = auth('head-a', 'head-a@example.com');
+    await assertSucceeds(
+      confirmPaymentTransaction(db, {
+        paymentId: 'payment-multibill',
+        amountPaise: 35000,
+        allocations: [
+          {
+            billId: '2026-07',
+            billingMonth: '2026-07',
+            amountPaise: 20000,
+          },
+          {
+            billId: '2026-08',
+            billingMonth: '2026-08',
+            amountPaise: 15000,
+          },
+        ],
+      }),
+    );
+    assert.equal(
+      (
+        await getDoc(
+          doc(
+            db,
+            'businesses/business-a/customers/C-MANAGED/billBalances/2026-07',
+          ),
+        )
+      ).data().outstandingPaise,
+      0,
+    );
+    assert.equal(
+      (
+        await getDoc(
+          doc(
+            db,
+            'businesses/business-a/customers/C-MANAGED/billBalances/2026-08',
+          ),
+        )
+      ).data().outstandingPaise,
+      15000,
+    );
+    await assertFails(
+      confirmPaymentTransaction(db, {
+        paymentId: 'payment-forged-total',
+        amountPaise: 1000,
+        allocations: [
+          {
+            billId: '2026-08',
+            billingMonth: '2026-08',
+            amountPaise: 999,
+          },
+        ],
+      }),
+    );
+  });
+
+  test('overpayment, duplicate confirmation, edits, and deletes are denied', async () => {
+    await seedCollectionProjection();
+    const db = auth('head-a', 'head-a@example.com');
+    await assertFails(
+      confirmPaymentTransaction(db, {
+        paymentId: 'payment-over',
+        amountPaise: 60001,
+        allocations: [
+          {
+            billId: '2026-09',
+            billingMonth: '2026-09',
+            amountPaise: 60001,
+          },
+        ],
+      }),
+    );
+    await assertSucceeds(
+      confirmPaymentTransaction(db, { paymentId: 'payment-stable-1' }),
+    );
+    await assertFails(
+      confirmPaymentTransaction(db, { paymentId: 'payment-stable-1' }),
+    );
+    const payment = doc(
+      db,
+      'businesses/business-a/customers/C-MANAGED/payments/payment-stable-1',
+    );
+    await assertFails(updateDoc(payment, { amountPaise: 1 }));
+    await assertFails(deleteDoc(payment));
+    await assertFails(
+      deleteDoc(
+        doc(
+          db,
+          'businesses/business-a/auditRecords/payment-stable-1-audit',
+        ),
+      ),
+    );
+  });
+
+  test('all manual methods share the ledger and require safe metadata', async () => {
+    await seedCollectionProjection();
+    const db = auth('head-a', 'head-a@example.com');
+    const cases = [
+      { id: 'payment-cash-1', method: 'cash' },
+      {
+        id: 'payment-upi-1',
+        method: 'upi',
+        externalReference: 'UPI-SYNTHETIC-1',
+      },
+      {
+        id: 'payment-bank-1',
+        method: 'bankTransfer',
+        externalReference: 'BANK-SYNTHETIC-1',
+      },
+      { id: 'payment-other-1', method: 'other', notes: 'Synthetic voucher' },
+    ];
+    for (const entry of cases) {
+      await assertSucceeds(
+        confirmPaymentTransaction(db, {
+          paymentId: entry.id,
+          amountPaise: 1000,
+          method: entry.method,
+          externalReference: entry.externalReference ?? '',
+          notes: entry.notes ?? '',
+          allocations: [
+            {
+              billId: '2026-09',
+              billingMonth: '2026-09',
+              amountPaise: 1000,
+            },
+          ],
+        }),
+      );
+    }
+    await assertFails(
+      confirmPaymentTransaction(db, {
+        paymentId: 'payment-upi-no-reference',
+        amountPaise: 1000,
+        method: 'upi',
+        allocations: [
+          {
+            billId: '2026-09',
+            billingMonth: '2026-09',
+            amountPaise: 1000,
+          },
+        ],
+      }),
+    );
+  });
+
+  test('employee collection enforces permission, assignment, area, active status, and tenant', async () => {
+    await seedCollectionProjection();
+    await seedCollectionProjection({
+      customerId: 'C-WRONG-AREA',
+      assignedEmployeeId: 'employee-a',
+      areaId: 'west',
+    });
+    await seedCollectionProjection({
+      customerId: 'C-ARCHIVED',
+      assignedEmployeeId: 'employee-a',
+      areaId: 'east',
+      status: 'archived',
+    });
+    const employee = auth('employee-a', 'employee-a@example.com');
+    await assertSucceeds(
+      confirmPaymentTransaction(employee, {
+        paymentId: 'employee-payment-1',
+        actorId: 'employee-a',
+      }),
+    );
+    for (const customerId of ['C-EMPLOYEE', 'C-WRONG-AREA', 'C-ARCHIVED']) {
+      await assertFails(
+        confirmPaymentTransaction(employee, {
+          customerId,
+          paymentId: `employee-denied-${customerId}`,
+          actorId: 'employee-a',
+        }),
+      );
+    }
+    await assertFails(
+      confirmPaymentTransaction(auth('employee-b', 'employee-b@example.com'), {
+        paymentId: 'foreign-payment',
+        actorId: 'employee-b',
+      }),
+    );
+  });
+
+  test('history queries are tenant constrained and collector scoped', async () => {
+    await seedCollectionProjection();
+    const employee = auth('employee-a', 'employee-a@example.com');
+    await assertSucceeds(
+      confirmPaymentTransaction(employee, {
+        paymentId: 'employee-history-1',
+        actorId: 'employee-a',
+      }),
+    );
+    await assertSucceeds(
+      getDocs(
+        query(
+          collectionGroup(employee, 'payments'),
+          where('businessId', '==', 'business-a'),
+          where('collectorUid', '==', 'employee-a'),
+          orderBy('confirmedAt', 'desc'),
+          limit(25),
+        ),
+      ),
+    );
+    await assertFails(
+      getDocs(
+        query(
+          collectionGroup(employee, 'payments'),
+          where('businessId', '==', 'business-a'),
+          orderBy('confirmedAt', 'desc'),
+          limit(25),
+        ),
+      ),
+    );
+  });
+
+  test('Head records partial then full reversal without mutating payment', async () => {
+    await seedCollectionProjection();
+    const db = auth('head-a', 'head-a@example.com');
+    await assertSucceeds(
+      confirmPaymentTransaction(db, { paymentId: 'payment-reverse-1' }),
+    );
+    const paymentRef = doc(
+      db,
+      'businesses/business-a/customers/C-MANAGED/payments/payment-reverse-1',
+    );
+    const original = (await getDoc(paymentRef)).data();
+    await assertSucceeds(
+      reversePaymentTransaction(db, {
+        paymentId: 'payment-reverse-1',
+        reversalId: 'reversal-partial-1',
+        amountPaise: 5000,
+      }),
+    );
+    let state = await getDoc(
+      doc(
+        db,
+        'businesses/business-a/customers/C-MANAGED/paymentStates/payment-reverse-1',
+      ),
+    );
+    assert.equal(state.data().status, 'partiallyReversed');
+    assert.equal(state.data().refundablePaise, 20000);
+
+    await assertSucceeds(
+      reversePaymentTransaction(db, {
+        paymentId: 'payment-reverse-1',
+        reversalId: 'reversal-full-1',
+        amountPaise: 20000,
+        allocations: [
+          {
+            billId: '2026-09',
+            billingMonth: '2026-09',
+            amountPaise: 20000,
+          },
+        ],
+      }),
+    );
+    state = await getDoc(
+      doc(
+        db,
+        'businesses/business-a/customers/C-MANAGED/paymentStates/payment-reverse-1',
+      ),
+    );
+    assert.equal(state.data().status, 'reversed');
+    assert.equal(state.data().refundablePaise, 0);
+    assert.deepEqual((await getDoc(paymentRef)).data(), original);
+    assert.equal(
+      (
+        await getDoc(
+          doc(
+            db,
+            'businesses/business-a/customers/C-MANAGED/collectionState/current',
+          ),
+        )
+      ).data().outstandingPaise,
+      60000,
+    );
+  });
+
+  test('employee and over-payment reversal attempts are denied', async () => {
+    await seedCollectionProjection();
+    const head = auth('head-a', 'head-a@example.com');
+    await assertSucceeds(
+      confirmPaymentTransaction(head, { paymentId: 'payment-protected-1' }),
+    );
+    await assertFails(
+      reversePaymentTransaction(auth('employee-a', 'employee-a@example.com'), {
+        paymentId: 'payment-protected-1',
+        reversalId: 'employee-reversal-1',
+        actorId: 'employee-a',
+      }),
+    );
+    await assertFails(
+      reversePaymentTransaction(head, {
+        paymentId: 'payment-protected-1',
+        reversalId: 'over-reversal-1',
+        amountPaise: 25001,
+        allocations: [
+          {
+            billId: '2026-09',
+            billingMonth: '2026-09',
+            amountPaise: 25001,
+          },
+        ],
+      }),
+    );
+  });
+
+  test('Head-only UPI writes are audited while employees can read for collection', async () => {
+    const head = auth('head-a', 'head-a@example.com');
+    await assertSucceeds(writeUpiSettings(head));
+    const employee = auth('employee-a', 'employee-a@example.com');
+    await assertSucceeds(
+      getDoc(doc(employee, 'businesses/business-a/configuration/upi')),
+    );
+    await assertFails(
+      writeUpiSettings(employee, {
+        actorId: 'employee-a',
+        auditId: 'employee-upi-audit',
+      }),
+    );
+    await assertFails(
+      deleteDoc(doc(head, 'businesses/business-a/configuration/upi')),
+    );
   });
 });
 

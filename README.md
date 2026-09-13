@@ -102,7 +102,7 @@ env JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" \
   npm run test:rules
 ```
 
-The last local verification completed on 12 September 2026 with clean formatting, no analyzer issues, 85 passing Dart/widget tests, 43 passing Firestore Rules/transaction tests, and a passing emulator-backed Chrome Phase 5 repository/screen integration test. The expanded Rules suite covers deterministic bill IDs, strict financial shapes and arithmetic, immutable bill/line/adjustment history, paired audits, Head-only financial mutations, assigned-employee reads, tenant isolation, concurrent finalization, idempotent recovery, delivery exceptions, and both document and collection-membership source-conflict detection in addition to every earlier phase.
+The last local verification completed on 13 September 2026 with clean formatting, no analyzer issues, 109 passing Dart/widget tests, 53 passing Firestore Rules/transaction tests, and a passing emulator-backed Chrome Phase 6 repository/screen integration test. The expanded suite covers immutable payment and reversal history, deterministic allocation projections, duplicate-ID recovery, partial collections, Head and employee authority, tenant isolation, UPI request safety, prior-balance carry-forward, and every earlier billing protection.
 
 The Phase 3 integration test signs in as a synthetic verified Head, creates a complete customer with an opening balance, assigns the customer, edits the profile, archives and reactivates it, and verifies the audit history. It then signs in as the assigned synthetic employee, verifies assignment-scoped visibility and the hidden Head financial view, and saves an authorized location-note edit through the real repository and local Security Rules. All data is recreated in the local `demo-paper-route` emulators; no live Firebase customer records are created.
 
@@ -138,6 +138,17 @@ flutter run -d chrome \
 ```
 
 It verifies catalog price precedence, a customer-specific price, a scheduled pause, one no-delivery exception, service-source revision advances, a signed adjustment, read-only preview, simultaneous idempotent finalization, immutable daily snapshots, pagination, prior-bill carry-forward, and employee denial. It never connects to `paperroutedev`.
+
+The Phase 6 connected test uses the same local-only seed and exercises collections through real Auth, Firestore repositories, and Security Rules:
+
+```sh
+npm run seed:phase6-emulator
+flutter run -d chrome \
+  --target integration_test/phase6_collections_smoke_test.dart \
+  --dart-define=USE_FIREBASE_EMULATORS=true
+```
+
+It verifies concurrent duplicate-ID confirmation, cash and UPI collection, amount-specific QR construction, immutable allocations, partial and full reversals, UPI settings, receipt and history screens, employee collection scope, and future-month carry-forward. All confirmed-payment records are synthetic and remain inside `demo-paper-route`.
 
 ## Security model
 
@@ -195,7 +206,7 @@ Cost controls planned for later phases:
 
 ## Deployment
 
-The reviewed Phase 5 deny-by-default Firestore Rules and all 15 Phase 4 composite indexes are deployed to the development project `paperroutedev`. The active Rules API source matches `firestore.rules` exactly at SHA-256 `9f788dab0b5d576cf79918d12149e5b4d57df0d1196a234bef9bc5f845f280f2`; Phase 5 required no index change, and the existing index definitions remain `READY`. No production project or application binary has been deployed.
+The reviewed Phase 6 deny-by-default Firestore Rules and all 15 composite indexes are deployed to the development project `paperroutedev`. The active Rules API source matches `firestore.rules` exactly at SHA-256 `688fa3ab9ca980e47a3aca5dea14a3972c769a8111914d249283f1a7e83f7127`; both Phase 6 replacement payment-history indexes are `READY`, and the deployed set matches `firestore.indexes.json`. No production project or application binary has been deployed.
 
 For any future production deployment, rerun the emulator tests and obtain explicit owner approval first:
 

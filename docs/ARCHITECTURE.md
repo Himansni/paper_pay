@@ -59,7 +59,17 @@ Heads control catalog, shared prices, and every customer subscription in their t
 
 The bill header stores compact customer and newspaper subtotal snapshots; individual daily lines live in a paginated subcollection to avoid unbounded header growth. Bills and lines cannot be updated or deleted. Head-only signed adjustments are append-only and advance the month control transactionally. A correction to a finalized month is recorded against a later open month with an optional reference to the earlier bill rather than rewriting history.
 
-The first bill uses the customer's immutable `openingBalancePaise` as its prior-balance source. A later bill uses the most recent earlier finalized bill's `totalDuePaise`; it does not add the opening balance again. Until Phase 6, no payment subtraction is performed. Phase 6 must replace that carried outstanding input with the earlier bill total less only server-acknowledged confirmed payments plus append-only reversals/corrections; a pending QR or UPI request must never reduce it.
+The first bill uses the customer's immutable `openingBalancePaise` as its prior-balance source and atomically establishes the collection projections. A later bill uses the transactionally maintained current outstanding after confirmed payments and immutable reversals, rather than carrying the earlier bill's original full total. It stores the prior bill ID for statement continuity, but adds only new charges and signed adjustments. This prevents opening balance, prior cumulative totals, payments, or reversals from being counted twice.
+
+## Collections boundary
+
+`FirebaseCollectionsRepository` records one immutable payment, one private mutable payment-state projection, affected bill-balance projections, current account state, and one append-only audit in a single transaction. Payment IDs are generated once per collection form and are the idempotency key. A duplicate request succeeds only when the existing payment's immutable amount, method, reference, notes, and collector match exactly. After a successful write, the app reads the payment, payment state, and account state from the server before displaying a confirmed receipt. A bounded recovery path performs only two server reads after an ambiguous transaction error; it never retries the financial write.
+
+Allocation is deterministic: an explicitly selected bill is considered first, otherwise the oldest positive bill component is paid first, and remaining money continues chronologically. Firestore Rules validate every allocation and all paired projections. To remain below the Rules expression budget, one payment can span at most two bill components; larger arrears require separate confirmed payments. Overpayment is rejected rather than creating implicit credit.
+
+The original payment is never updated. A Head may append a partial or full reversal with a reason. The same transaction advances the private payment-state projection, restores the affected bill balances newest-allocation-first, advances the account state, and appends an audit. Cumulative reversals cannot exceed the original payment. Employees require `recordPayments`, the customer's current assignment, and current area coverage to collect; they cannot reverse payments or change UPI configuration.
+
+UPI settings store only a UPI ID, payee name, optional reference prefix, and enabled state. The URI builder is a pure deterministic function over integer paise. QR display and app launch remain local request states and never write a payment; the collector must explicitly confirm observed receipt before the shared ledger transaction runs. Static QR omits an amount and follows the same non-confirmation rule.
 
 ## Online/offline boundary
 
@@ -73,7 +83,7 @@ Firestore may cache non-financial reads. Financial transactions fail offline and
 - Query only one customer's subscription subcollection and one newspaper's bounded price history at a time; never load all customers to render either workflow.
 - Store normalized name/phone/landmark fields and bounded prefix tokens. Search uses exact customer-code equality, `array-contains` for name/phone/landmark prefixes, and an `areaId` equality filter without downloading the whole tenant.
 - Finalize bills on demand once per customer/month.
-- Query payments by business/user/month using collection-group indexes only for authorized Head reports.
+- Query customer payment history under one customer. Query tenant-wide Head history by business and employee history by business plus collector, ordered by server confirmation time with path-aware cursors.
 - Maintain month/employee/area summary documents later for dashboards. Treat them as rebuildable projections.
 - Avoid listeners over entire customer/payment collections.
 

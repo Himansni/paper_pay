@@ -1,6 +1,6 @@
 # PaperRoute implementation checklist
 
-Updated: 12 September 2026
+Updated: 13 September 2026
 
 ## Phase 0 — Environment and architecture
 
@@ -90,11 +90,22 @@ Updated: 12 September 2026
 - [x] Requested/pending payments excluded from confirmed totals
 - [x] Duplicate payment ID rejection
 - [x] Append-only payment/reversal Security Rules
-- [ ] Head UPI settings UI
-- [ ] Amount-specific UPI URI and QR display
-- [ ] Explicit manual receipt confirmation
-- [ ] Server-acknowledgement and retry UX
-- [ ] Customer and employee collection history
+- [x] Integer-paise collection projections integrated with Phase 5 prior balances
+- [x] Deterministic oldest-bill-first allocation with optional selected-bill priority
+- [x] Cash, UPI, bank-transfer, and controlled-other confirmation workflows
+- [x] Head-only partial/full reversals with immutable original payments
+- [x] Head UPI settings UI
+- [x] Amount-specific UPI URI and QR display
+- [x] Explicit manual receipt confirmation
+- [x] Server-acknowledgement and bounded idempotency recovery UX
+- [x] Customer and employee cursor-paginated collection history
+- [x] Receipt, allocation detail, outstanding summary, and Head reversal UI
+- [x] Flutter domain/widget tests and Firestore Emulator security/transaction tests
+- [x] Emulator-backed Head/employee collection, carry-forward, QR, and reversal workflow
+- [x] Trusted projection backfill, live compatibility verification, and owner-approved Rules/index deployment
+- [x] Owner-approved live UPI configuration and amount-specific QR/request verification with safe cleanup
+- [x] Exact ₹10/₹5 duplicate-ID, allocation, and ₹4/₹6/₹5 reversal smoke sequence in the Firebase Emulator
+- [ ] Live confirmed-payment receipt verification (requires actual receipt or an explicit test-only transaction mechanism)
 
 ## Phase 7 — Dashboards and reports
 

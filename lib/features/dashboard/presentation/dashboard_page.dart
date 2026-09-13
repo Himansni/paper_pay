@@ -14,10 +14,7 @@ class DashboardPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final nameParts = user.displayName.trim().split(' ');
     final firstName = nameParts.first.isEmpty ? 'there' : nameParts.first;
-    final plannedSections =
-        user.isHead
-            ? const ['Collections', 'Reports']
-            : const ['Collections', 'Profile'];
+    final plannedSections = user.isHead ? const ['Reports'] : const ['Profile'];
 
     return Scaffold(
       appBar: AppBar(
@@ -163,6 +160,14 @@ class DashboardPage extends ConsumerWidget {
                         subtitle: 'Preview, finalize, and review monthly bills',
                         onTap: () => context.go('/billing'),
                       ),
+                      _WorkspaceActionCard(
+                        width: width,
+                        icon: Icons.payments_outlined,
+                        title: 'Collections',
+                        subtitle:
+                            'Outstanding balances, payments, and reversals',
+                        onTap: () => context.go('/collections'),
+                      ),
                     ],
                   );
                 },
@@ -193,6 +198,15 @@ class DashboardPage extends ConsumerWidget {
                     title: 'My customer bills',
                     subtitle: 'Read finalized bills for assigned customers',
                     onTap: () => context.go('/billing'),
+                  ),
+                  const SizedBox(height: 12),
+                  _WorkspaceActionCard(
+                    width: double.infinity,
+                    icon: Icons.payments_outlined,
+                    title: 'Collections',
+                    subtitle:
+                        'Collect from assigned customers and view history',
+                    onTap: () => context.go('/collections'),
                   ),
                   const SizedBox(height: 12),
                   Wrap(
@@ -226,7 +240,7 @@ class DashboardPage extends ConsumerWidget {
                     const SizedBox(height: 8),
                     Text(
                       user.isHead
-                          ? 'Employee access, delivery areas, customers, catalog pricing, subscriptions, and deterministic monthly billing use connected Firestore workflows.'
+                          ? 'Employee access, delivery areas, customers, catalog pricing, subscriptions, deterministic monthly billing, and append-only collections use connected Firestore workflows.'
                           : 'Your active membership, assigned areas, customer access, and subscription permissions are enforced by Firestore Security Rules.',
                       style: const TextStyle(
                         color: Color(0xFF627D98),

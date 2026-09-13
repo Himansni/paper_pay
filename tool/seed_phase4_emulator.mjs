@@ -132,7 +132,7 @@ await writeIdentity({
   email: 'phase4-employee@example.test',
   displayName: 'Phase 4 Employee',
   role: 'employee',
-  permissions: ['manageAssignedSubscriptions'],
+  permissions: ['manageAssignedSubscriptions', 'recordPayments'],
   areaIds: ['central'],
 });
 

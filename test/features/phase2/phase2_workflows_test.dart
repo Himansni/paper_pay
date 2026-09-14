@@ -93,6 +93,42 @@ void main() {
     expect(find.text('Business settings updated.'), findsOneWidget);
   });
 
+  testWidgets('Head saves a normalized primary pricing region', (tester) async {
+    final businessRepository = _FakeBusinessRepository();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          businessRepositoryProvider.overrideWithValue(businessRepository),
+        ],
+        child: const MaterialApp(home: BusinessSettingsPage(user: head)),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const ValueKey('pricing-region-state')),
+      ' Chhattisgarh ',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('pricing-region-city')),
+      ' Raipur ',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('pricing-region-edition')),
+      ' Central ',
+    );
+    final saveRegion = find.byKey(const ValueKey('save-pricing-region'));
+    await tester.ensureVisible(saveRegion);
+    await tester.pumpAndSettle();
+    await tester.tap(saveRegion);
+    await tester.pumpAndSettle();
+
+    expect(businessRepository.updatedRegion?.state, 'Chhattisgarh');
+    expect(businessRepository.updatedRegion?.districtCity, 'Raipur');
+    expect(businessRepository.updatedRegion?.editionServiceRegion, 'Central');
+    expect(find.text('Pricing region saved.'), findsOneWidget);
+  });
+
   testWidgets('Head creates a validated employee invitation', (tester) async {
     final employeeRepository = _FakeEmployeeRepository(
       members: const [headMember],
@@ -311,6 +347,7 @@ class _FakeBusinessRepository implements BusinessRepository {
   String? updatedName;
   String? updatedPhone;
   String? updatedAddress;
+  PricingRegion? updatedRegion;
 
   @override
   Stream<BusinessProfile> watchBusiness(String businessId) => Stream.value(
@@ -333,6 +370,15 @@ class _FakeBusinessRepository implements BusinessRepository {
     updatedName = name;
     updatedPhone = phone;
     updatedAddress = address;
+  }
+
+  @override
+  Future<void> updatePrimaryPricingRegion({
+    required String businessId,
+    required String actorId,
+    required PricingRegion region,
+  }) async {
+    updatedRegion = region.normalized();
   }
 }
 

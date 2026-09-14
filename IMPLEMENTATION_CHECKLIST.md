@@ -1,6 +1,6 @@
 # PaperRoute implementation checklist
 
-Updated: 13 September 2026
+Updated: 14 September 2026
 
 ## Phase 0 — Environment and architecture
 
@@ -109,13 +109,18 @@ Updated: 13 September 2026
 
 ## Phase 7 — Dashboards and reports
 
-- [ ] Real Head metrics and alerts
-- [ ] Real Employee metrics and quick actions
-- [ ] Daily/monthly/employee/area collection reports
-- [ ] Outstanding and payment-status reports
-- [ ] Newspaper counts and billing totals
-- [ ] Paginated CSV export
-- [ ] Economical summary projection strategy
+- [x] Real Head metrics and alerts
+- [x] Real Employee metrics and quick actions
+- [x] Daily/monthly/employee/area collection reports
+- [x] Outstanding and payment-status reports
+- [x] Newspaper counts and billing totals
+- [x] Paginated CSV export
+- [x] Economical aggregate/projection strategy without a duplicate financial ledger
+- [x] Primary Pricing Region and centralized Daily Pricing workflow
+- [x] Head-only report routing, employee data scoping, and tenant-isolation Rules tests
+- [x] Emulator-backed dashboard, report, filter, pagination, pricing, and immutable-bill workflow
+- [x] Read-only live compatibility inventory and owner-approved Phase 7 Rules/index deployment
+- [x] Owner-approved live Phase 7 read-only verification without synthetic writes
 
 ## Phase 8 — Production readiness
 

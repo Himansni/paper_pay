@@ -127,6 +127,8 @@ class ConfirmedPayment {
     required this.externalReference,
     required this.notes,
     required this.collectorUid,
+    this.assignedEmployeeId = '',
+    this.areaId = '',
     required this.allocations,
     required this.reversedPaise,
     required this.lastAuditId,
@@ -145,6 +147,8 @@ class ConfirmedPayment {
   final String externalReference;
   final String notes;
   final String collectorUid;
+  final String assignedEmployeeId;
+  final String areaId;
   final List<BillAllocation> allocations;
   final int reversedPaise;
   final String lastAuditId;

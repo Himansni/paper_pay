@@ -324,6 +324,9 @@ class MonthlyBillPreview {
     required this.adjustments,
     required this.issues,
     required this.alreadyFinalizedBill,
+    this.areaId = '',
+    this.assignedEmployeeId = '',
+    this.customerStatus = 'active',
   });
 
   final String businessId;
@@ -339,6 +342,9 @@ class MonthlyBillPreview {
   final List<BillingAdjustment> adjustments;
   final List<BillPreviewIssue> issues;
   final FinalizedMonthlyBill? alreadyFinalizedBill;
+  final String areaId;
+  final String assignedEmployeeId;
+  final String customerStatus;
 
   bool get canFinalize => issues.isEmpty && alreadyFinalizedBill == null;
   int get currentChargesPaise =>
@@ -409,6 +415,9 @@ class FinalizedMonthlyBill {
     required this.calculationVersion,
     required this.finalizedBy,
     required this.lastAuditId,
+    this.areaId = '',
+    this.assignedEmployeeId = '',
+    this.customerStatus = 'active',
     this.finalizedAt,
   });
 
@@ -443,6 +452,9 @@ class FinalizedMonthlyBill {
         calculationVersion: data['calculationVersion'] as String? ?? '',
         finalizedBy: data['finalizedBy'] as String? ?? '',
         lastAuditId: data['lastAuditId'] as String? ?? '',
+        areaId: data['areaId'] as String? ?? '',
+        assignedEmployeeId: data['assignedEmployeeId'] as String? ?? '',
+        customerStatus: data['customerStatus'] as String? ?? 'active',
         finalizedAt: data['finalizedAt'] as DateTime?,
       );
 
@@ -465,6 +477,9 @@ class FinalizedMonthlyBill {
   final String calculationVersion;
   final String finalizedBy;
   final String lastAuditId;
+  final String areaId;
+  final String assignedEmployeeId;
+  final String customerStatus;
   final DateTime? finalizedAt;
 }
 

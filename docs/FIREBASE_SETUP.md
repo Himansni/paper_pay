@@ -1,6 +1,6 @@
 # Firebase setup and first-Head bootstrap
 
-Android and Web are connected to the Spark project **PaperRouteDev** (`paperroutedev`). FlutterFire generated the platform configuration on 7 September 2026. The reviewed Phase 6 Firestore Rules and all 15 composite indexes are deployed; both replacement payment-history indexes are `READY`. No paid service or billing account was enabled.
+Android and Web are connected to the Spark project **PaperRouteDev** (`paperroutedev`). FlutterFire generated the platform configuration on 7 September 2026. The reviewed Phase 7 Firestore Rules and all 61 composite indexes are deployed and verified; every index is `READY`. No paid service or billing account was enabled.
 
 The project creation, Email/Password provider, Firestore database, CLI login, FlutterFire configuration, first-Head bootstrap, and verified login are complete. Keep these steps as a recovery/reference guide.
 
@@ -163,6 +163,16 @@ The owner-approved deployment replaced only the two payment-history indexes, wai
 The live Head smoke test verified ₹291.84 outstanding, collection history, UPI settings, and an amount-specific ₹5.00 QR marked as a request rather than a receipt. Because no real money was received, the final receipt confirmation was deliberately cancelled. Cleanup restored empty disabled UPI defaults and re-archived the synthetic customer. Live Firestore retains zero payments, zero private payment states, and zero reversals; confirmed and reversed totals remain zero. Exactly four append-only audits record the temporary customer reactivation/archive and UPI enable/disable changes.
 
 Confirmed-payment, duplicate-ID, allocation, and reversal behavior was verified only in `demo-paper-route`. The exact emulator regression starts at ₹291.84, creates immutable ₹10 cash and ₹5 UPI payments, rejects the duplicate cash ID, records ₹4, ₹6, and ₹5 reversals, and finishes at ₹15 confirmed, ₹15 reversed, and ₹291.84 outstanding with two payments, two private payment states, and three reversals. A live confirmed receipt remains intentionally unverified until actual receipt or a separately designed explicit test-only transaction mechanism is available.
+
+### Phase 7 reporting deployment and read-only verification — complete
+
+Phase 7 adds role-scoped operational dashboards, cursor-paginated Head reports, aggregate metrics, local CSV export, Primary Pricing Region settings, and a central Daily Pricing screen. It introduces 46 additional composite-index definitions and stricter Rules for immutable bill/payment/reversal report snapshots and transactionally maintained customer collection projections.
+
+The owner-approved compatibility inventory found seven missing operational fields on the existing pre-Phase-7 `collectionState/current` projection and three immutable report snapshots on finalized bill `2026-11`. One trusted Admin transaction added only those reviewed fields and a deterministic append-only migration audit. Its second invocation returned a no-op; financial amounts, bill lines, source audit, and unrelated data remained untouched.
+
+After the migration, indexes were deployed first and allowed to finish before the Rules deployment. The active Rules were read back and matched the local source at SHA-256 `cf34cff33665106cf24ba6e85b8b45acb801f3c5aebe38530c81f13550408dca`. All 61 deployed indexes match `firestore.indexes.json` and are `READY`, including the six-field employee outstanding aggregate index containing `outstandingPaise`. The complete 58-test Rules/transaction suite passed, and live read-only Head/report and employee aggregate query shapes completed without permission or missing-index errors.
+
+No synthetic Phase 7 live writes were needed. Functions, Hosting, paid services, and unrelated resources remained untouched.
 
 ## 6. Bootstrap the first Head securely — complete
 

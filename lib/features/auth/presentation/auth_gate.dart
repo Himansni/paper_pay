@@ -19,11 +19,13 @@ import 'package:paper_route/features/customers/presentation/customers_page.dart'
 import 'package:paper_route/features/dashboard/presentation/dashboard_page.dart';
 import 'package:paper_route/features/employees/presentation/employees_page.dart';
 import 'package:paper_route/features/newspapers/presentation/newspaper_detail_page.dart';
+import 'package:paper_route/features/newspapers/presentation/daily_pricing_page.dart';
 import 'package:paper_route/features/newspapers/presentation/newspaper_form_page.dart';
 import 'package:paper_route/features/newspapers/presentation/newspaper_pricing_page.dart';
 import 'package:paper_route/features/newspapers/presentation/newspapers_page.dart';
 import 'package:paper_route/features/subscriptions/presentation/subscription_detail_page.dart';
 import 'package:paper_route/features/subscriptions/presentation/subscription_form_page.dart';
+import 'package:paper_route/features/reports/presentation/reports_page.dart';
 
 enum AuthenticatedDestination {
   dashboard,
@@ -31,6 +33,8 @@ enum AuthenticatedDestination {
   employees,
   areas,
   customers,
+  reports,
+  dailyPricing,
   billing,
   billPreview,
   billDetail,
@@ -92,6 +96,8 @@ class AuthGate extends ConsumerWidget {
           AuthenticatedDestination.businessSettings ||
           AuthenticatedDestination.employees ||
           AuthenticatedDestination.areas ||
+          AuthenticatedDestination.reports ||
+          AuthenticatedDestination.dailyPricing ||
           AuthenticatedDestination.newspaperCreate ||
           AuthenticatedDestination.newspaperEdit => true,
           AuthenticatedDestination.billPreview => true,
@@ -106,7 +112,15 @@ class AuthGate extends ConsumerWidget {
           ),
           AuthenticatedDestination.employees => EmployeesPage(user: user),
           AuthenticatedDestination.areas => AreasPage(user: user),
-          AuthenticatedDestination.customers => CustomersPage(user: user),
+          AuthenticatedDestination.customers => CustomersPage(
+            user: user,
+            initialSearch: resourceId ?? '',
+          ),
+          AuthenticatedDestination.reports => ReportsPage(
+            user: user,
+            initialTab: resourceId ?? '',
+          ),
+          AuthenticatedDestination.dailyPricing => DailyPricingPage(user: user),
           AuthenticatedDestination.billing => BillingWorkspacePage(user: user),
           AuthenticatedDestination.billPreview => BillPreviewPage(
             user: user,

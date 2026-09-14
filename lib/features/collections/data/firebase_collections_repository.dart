@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:paper_route/core/errors/app_exception.dart';
 import 'package:paper_route/features/auth/domain/access_policy.dart';
 import 'package:paper_route/features/auth/domain/app_user.dart';
+import 'package:paper_route/features/collections/domain/collection_balance_engine.dart';
 import 'package:paper_route/features/collections/domain/collection_models.dart';
 import 'package:paper_route/features/collections/domain/collection_repository.dart';
 import 'package:paper_route/features/collections/domain/payment_allocation_engine.dart';
@@ -376,6 +377,8 @@ class FirebaseCollectionsRepository implements CollectionsRepository {
         'customerId': customerId,
         'customerCode': customerData['customerCode'],
         'customerName': customerData['name'],
+        'areaId': customerData['areaId'],
+        'assignedEmployeeId': customerData['assignedEmployeeId'],
         'paymentId': value.idempotencyKey,
         'idempotencyKey': value.idempotencyKey,
         'amountPaise': value.amountPaise,
@@ -415,13 +418,25 @@ class FirebaseCollectionsRepository implements CollectionsRepository {
       });
 
       final nextOutstanding = context.outstandingPaise - value.amountPaise;
+      final nextConfirmed = context.confirmedPaise + value.amountPaise;
       final nextState = {
         'businessId': businessId,
         'customerId': customerId,
         'stateId': 'current',
+        'customerCode': customerData['customerCode'],
+        'customerName': customerData['name'],
+        'areaId': customerData['areaId'],
+        'assignedEmployeeId': customerData['assignedEmployeeId'],
+        'customerStatus': customerData['status'],
         'outstandingPaise': nextOutstanding,
-        'confirmedPaise': context.confirmedPaise + value.amountPaise,
+        'confirmedPaise': nextConfirmed,
         'reversedPaise': context.reversedPaise,
+        'reportingStatus': collectionReportingStatus(
+          outstandingPaise: nextOutstanding,
+          confirmedPaise: nextConfirmed,
+          reversedPaise: context.reversedPaise,
+        ),
+        'oldestOutstandingMonth': _oldestAfterPayment(context, plan),
         'revision': context.revision + 1,
         'lastMutationType': 'paymentConfirmed',
         'lastMutationId': value.idempotencyKey,
@@ -549,6 +564,12 @@ class FirebaseCollectionsRepository implements CollectionsRepository {
           'customerId': customerId,
           'reversalId': value.idempotencyKey,
           'paymentId': value.paymentId,
+          'customerCode': payment['customerCode'],
+          'customerName': payment['customerName'],
+          'areaId': payment['areaId'],
+          'assignedEmployeeId': payment['assignedEmployeeId'],
+          'collectorUid': payment['collectorUid'],
+          'method': payment['method'],
           'idempotencyKey': value.idempotencyKey,
           'amountPaise': value.amountPaise,
           'reason': value.reason,
@@ -578,11 +599,23 @@ class FirebaseCollectionsRepository implements CollectionsRepository {
           'lastReversalId': value.idempotencyKey,
           'updatedAt': now,
         });
+        final nextOutstanding =
+            (account['outstandingPaise'] as int? ?? 0) + value.amountPaise;
+        final nextAccountReversed =
+            (account['reversedPaise'] as int? ?? 0) + value.amountPaise;
+        final confirmedPaise = account['confirmedPaise'] as int? ?? 0;
         transaction.update(accountRef, {
-          'outstandingPaise':
-              (account['outstandingPaise'] as int? ?? 0) + value.amountPaise,
-          'reversedPaise':
-              (account['reversedPaise'] as int? ?? 0) + value.amountPaise,
+          'outstandingPaise': nextOutstanding,
+          'reversedPaise': nextAccountReversed,
+          'reportingStatus': collectionReportingStatus(
+            outstandingPaise: nextOutstanding,
+            confirmedPaise: confirmedPaise,
+            reversedPaise: nextAccountReversed,
+          ),
+          'oldestOutstandingMonth': _oldestAfterReversal(
+            account['oldestOutstandingMonth'] as String? ?? '',
+            plan.allocations,
+          ),
           'revision': (account['revision'] as int? ?? 0) + 1,
           'lastMutationType': 'paymentReversed',
           'lastMutationId': value.idempotencyKey,
@@ -1083,6 +1116,8 @@ class FirebaseCollectionsRepository implements CollectionsRepository {
     externalReference: data['externalReference'] as String? ?? '',
     notes: data['notes'] as String? ?? '',
     collectorUid: data['collectorUid'] as String? ?? '',
+    assignedEmployeeId: data['assignedEmployeeId'] as String? ?? '',
+    areaId: data['areaId'] as String? ?? '',
     allocations: _allocations(data['allocations']),
     reversedPaise: state?['reversedPaise'] as int? ?? 0,
     lastAuditId: data['lastAuditId'] as String? ?? '',
@@ -1152,6 +1187,39 @@ class FirebaseCollectionsRepository implements CollectionsRepository {
         status: data['status'] as String? ?? 'settled',
         revision: data['revision'] as int? ?? 0,
       );
+
+  String _oldestAfterPayment(
+    _AllocationContext context,
+    PaymentAllocationPlan plan,
+  ) {
+    final deductions = {
+      for (final allocation in plan.allocations)
+        allocation.billId: allocation.amountPaise,
+    };
+    for (final bill in context.bills) {
+      final remaining = bill.outstandingPaise - (deductions[bill.billId] ?? 0);
+      if (remaining > 0) return bill.billingMonth;
+    }
+    return '';
+  }
+
+  String _oldestAfterReversal(
+    String current,
+    List<BillAllocation> allocations,
+  ) {
+    final restored =
+        allocations
+            .where((allocation) => allocation.amountPaise > 0)
+            .map((allocation) => allocation.billingMonth)
+            .where((month) => month.isNotEmpty)
+            .toList()
+          ..sort();
+    if (restored.isEmpty) return current;
+    if (current.isEmpty || restored.first.compareTo(current) < 0) {
+      return restored.first;
+    }
+    return current;
+  }
 
   List<BillAllocation> _allocations(Object? value) =>
       value is List

@@ -4,6 +4,7 @@ import 'package:paper_route/core/errors/app_exception.dart';
 import 'package:paper_route/features/auth/domain/app_user.dart';
 import 'package:paper_route/features/billing/domain/billing_repository.dart';
 import 'package:paper_route/features/billing/domain/monthly_bill.dart';
+import 'package:paper_route/features/collections/domain/collection_balance_engine.dart';
 import 'package:paper_route/features/customers/data/firebase_customer_repository.dart';
 import 'package:paper_route/features/customers/domain/customer.dart';
 import 'package:uuid/uuid.dart';
@@ -236,6 +237,9 @@ class FirebaseBillingRepository implements BillingRepository {
             preview.customerName,
           ),
           'customerAddress': preview.customerAddress,
+          'areaId': preview.areaId,
+          'assignedEmployeeId': preview.assignedEmployeeId,
+          'customerStatus': preview.customerStatus,
           'billingMonth': monthKey,
           'status': 'finalized',
           'openingBalancePaise': preview.openingBalancePaise,
@@ -325,9 +329,25 @@ class FirebaseBillingRepository implements BillingRepository {
           'businessId': businessId,
           'customerId': customerId,
           'stateId': 'current',
+          'customerCode': preview.customerCode,
+          'customerName': preview.customerName,
+          'areaId': preview.areaId,
+          'assignedEmployeeId': preview.assignedEmployeeId,
+          'customerStatus': preview.customerStatus,
           'outstandingPaise': preview.totalDuePaise,
           'confirmedPaise': prepared.collectionConfirmedPaise,
           'reversedPaise': prepared.collectionReversedPaise,
+          'reportingStatus': collectionReportingStatus(
+            outstandingPaise: preview.totalDuePaise,
+            confirmedPaise: prepared.collectionConfirmedPaise,
+            reversedPaise: prepared.collectionReversedPaise,
+          ),
+          'oldestOutstandingMonth':
+              preview.totalDuePaise <= 0
+                  ? ''
+                  : prepared.collectionOutstandingPaise > 0
+                  ? prepared.collectionOldestOutstandingMonth
+                  : monthKey,
           'revision': prepared.collectionStateRevision + 1,
           'lastMutationType': 'billFinalized',
           'lastMutationId': monthKey,
@@ -365,6 +385,8 @@ class FirebaseBillingRepository implements BillingRepository {
           customerCode: preview.customerCode,
           customerName: preview.customerName,
           customerAddress: preview.customerAddress,
+          areaId: preview.areaId,
+          assignedEmployeeId: preview.assignedEmployeeId,
           billingMonth: monthKey,
           openingBalancePaise: preview.openingBalancePaise,
           previousBillId: preview.previousBillId,
@@ -623,6 +645,8 @@ class FirebaseBillingRepository implements BillingRepository {
           collectionStateRevision: 0,
           collectionConfirmedPaise: 0,
           collectionReversedPaise: 0,
+          collectionOutstandingPaise: 0,
+          collectionOldestOutstandingMonth: '',
         );
       }
 
@@ -975,6 +999,27 @@ class FirebaseBillingRepository implements BillingRepository {
           ),
         );
       }
+      if (collectionStateData != null &&
+          (collectionStateData['customerCode'] is! String ||
+              collectionStateData['customerName'] is! String ||
+              collectionStateData['areaId'] is! String ||
+              collectionStateData['assignedEmployeeId'] is! String ||
+              collectionStateData['customerStatus'] is! String ||
+              collectionStateData['reportingStatus'] is! String ||
+              collectionStateData['oldestOutstandingMonth'] is! String ||
+              ((collectionStateData['outstandingPaise'] as int? ?? 0) > 0 &&
+                  !RegExp(r'^\d{4}-\d{2}$').hasMatch(
+                    collectionStateData['oldestOutstandingMonth'] as String? ??
+                        '',
+                  )))) {
+        issues.add(
+          const BillPreviewIssue(
+            code: 'reporting-projection-required',
+            message:
+                'This collection balance needs a reviewed Phase 7 reporting projection migration before another bill is finalized.',
+          ),
+        );
+      }
       final previousOutstanding =
           previousBill == null
               ? 0
@@ -988,6 +1033,9 @@ class FirebaseBillingRepository implements BillingRepository {
           customerCode: customer.customerCode,
           customerName: customer.name,
           customerAddress: customer.addressSummary,
+          areaId: customer.areaId,
+          assignedEmployeeId: customer.assignedEmployeeId,
+          customerStatus: customer.status.value,
           billingMonth: monthKey,
           lineItems: lines,
           openingBalancePaise: customer.openingBalancePaise,
@@ -1012,6 +1060,12 @@ class FirebaseBillingRepository implements BillingRepository {
             collectionStateData?['reversedPaise'] is int
                 ? collectionStateData!['reversedPaise'] as int
                 : 0,
+        collectionOutstandingPaise:
+            collectionStateData?['outstandingPaise'] is int
+                ? collectionStateData!['outstandingPaise'] as int
+                : 0,
+        collectionOldestOutstandingMonth:
+            collectionStateData?['oldestOutstandingMonth'] as String? ?? '',
       );
     } on AppException {
       rethrow;
@@ -1113,6 +1167,8 @@ class _PreparedBillingPreview {
     required this.collectionStateRevision,
     required this.collectionConfirmedPaise,
     required this.collectionReversedPaise,
+    required this.collectionOutstandingPaise,
+    required this.collectionOldestOutstandingMonth,
   });
 
   final MonthlyBillPreview preview;
@@ -1122,4 +1178,6 @@ class _PreparedBillingPreview {
   final int collectionStateRevision;
   final int collectionConfirmedPaise;
   final int collectionReversedPaise;
+  final int collectionOutstandingPaise;
+  final String collectionOldestOutstandingMonth;
 }

@@ -239,11 +239,32 @@ service cloud.firestore {
 
     function customerReferencesAuditAfter(businessId, customerId, auditId) {
       let customer = getAfter(customerPath(businessId, customerId)).data;
+      let audit = getAfter(auditPath(businessId, auditId)).data;
+      let statePath = collectionStatePath(businessId, customerId);
+      let state = getAfter(statePath).data;
       return existsAfter(customerPath(businessId, customerId))
         && customer.businessId == businessId
         && customer.lastAuditId == auditId
         && customer.updatedBy == request.auth.uid
-        && customer.updatedAt == request.time;
+        && customer.updatedAt == request.time
+        && (
+          !exists(statePath) || (
+            existsAfter(statePath)
+            && state.lastMutationId == auditId
+            && (
+              (
+                audit.action == 'customerUpdated'
+                && state.lastMutationType == 'customerProfileUpdated'
+              ) || (
+                audit.action in ['customerArchived', 'customerReactivated']
+                && state.lastMutationType == 'customerStatusUpdated'
+              ) || (
+                audit.action == 'customerAssignmentUpdated'
+                && state.lastMutationType == 'customerAssignmentUpdated'
+              )
+            )
+          )
+        );
     }
 
     function validCustomerProfileUpdate(businessId, customerId) {
@@ -290,7 +311,7 @@ service cloud.firestore {
               request.resource.data.lastAuditId,
               'customerReactivated'
             )
-          )
+            )
         );
     }
 
@@ -530,29 +551,91 @@ service cloud.firestore {
     }
 
     function validCollectionStateShape(businessId, customerId, data) {
+      let customer = getAfter(customerPath(businessId, customerId)).data;
       return data.keys().hasOnly([
-          'businessId', 'customerId', 'stateId', 'outstandingPaise',
-          'confirmedPaise', 'reversedPaise', 'revision', 'lastMutationType',
-          'lastMutationId', 'updatedBy', 'createdAt', 'updatedAt'
+          'businessId', 'customerId', 'stateId', 'customerCode',
+          'customerName', 'areaId', 'assignedEmployeeId', 'customerStatus',
+          'outstandingPaise', 'confirmedPaise', 'reversedPaise',
+          'reportingStatus', 'oldestOutstandingMonth', 'revision',
+          'lastMutationType', 'lastMutationId', 'updatedBy', 'createdAt',
+          'updatedAt'
         ])
         && data.businessId == businessId
         && data.customerId == customerId
         && data.stateId == 'current'
+        && customer.businessId == businessId
+        && customer.customerCode == customerId
+        && data.customerCode == customer.customerCode
+        && data.customerName == customer.name
+        && data.areaId == customer.areaId
+        && data.assignedEmployeeId == customer.assignedEmployeeId
+        && data.customerStatus == customer.status
+        && data.customerStatus in ['active', 'archived']
         && validSignedMoney(data.outstandingPaise)
         && data.confirmedPaise is int
         && data.confirmedPaise >= 0
         && data.reversedPaise is int
         && data.reversedPaise >= 0
         && data.reversedPaise <= data.confirmedPaise
+        && (
+          (
+            data.outstandingPaise < 0
+            && data.reportingStatus == 'credit'
+          ) || (
+            data.outstandingPaise == 0
+            && data.reportingStatus == 'fullyPaid'
+          ) || (
+            data.outstandingPaise > 0
+            && data.confirmedPaise > data.reversedPaise
+            && data.reportingStatus == 'partiallyPaid'
+          ) || (
+            data.outstandingPaise > 0
+            && data.confirmedPaise == data.reversedPaise
+            && data.reportingStatus == 'unpaid'
+          )
+        )
+        && (
+          (
+            data.outstandingPaise > 0
+            && validMonth(data.oldestOutstandingMonth)
+          ) || (
+            data.outstandingPaise <= 0
+            && data.oldestOutstandingMonth == ''
+          )
+        )
         && data.revision is int
         && data.revision >= 1
         && data.lastMutationType in [
-          'billFinalized', 'paymentConfirmed', 'paymentReversed'
+          'billFinalized', 'paymentConfirmed', 'paymentReversed',
+          'customerProfileUpdated', 'customerStatusUpdated',
+          'customerAssignmentUpdated'
         ]
         && data.lastMutationId is string
         && data.lastMutationId.size() > 0
         && data.updatedBy == request.auth.uid
         && data.updatedAt == request.time;
+    }
+
+    function validCustomerReportingStateUpdate(businessId, customerId) {
+      let state = request.resource.data;
+      let customer = getAfter(customerPath(businessId, customerId)).data;
+      return state.diff(resource.data).affectedKeys().hasOnly([
+          'customerCode', 'customerName', 'areaId', 'assignedEmployeeId',
+          'customerStatus', 'revision', 'lastMutationType', 'lastMutationId',
+          'updatedBy', 'updatedAt'
+        ])
+        && state.outstandingPaise == resource.data.outstandingPaise
+        && state.confirmedPaise == resource.data.confirmedPaise
+        && state.reversedPaise == resource.data.reversedPaise
+        && state.reportingStatus == resource.data.reportingStatus
+        && state.oldestOutstandingMonth == resource.data.oldestOutstandingMonth
+        && state.lastMutationType in [
+          'customerProfileUpdated', 'customerStatusUpdated',
+          'customerAssignmentUpdated'
+        ]
+        && state.lastMutationId == customer.lastAuditId
+        && customer.updatedBy == request.auth.uid
+        && customer.updatedAt == request.time;
     }
 
     function validBillBalanceAmounts(data) {
@@ -714,6 +797,7 @@ service cloud.firestore {
     function validPaymentShape(businessId, customerId, paymentId, data) {
       return data.keys().hasAll([
           'businessId', 'customerId', 'customerCode', 'customerName',
+          'areaId', 'assignedEmployeeId',
           'paymentId', 'idempotencyKey', 'amountPaise', 'method', 'status',
           'externalReference', 'notes', 'collectorUid', 'allocations',
           'allocationCount', 'allocatedPaise', 'lastAuditId', 'confirmedAt',
@@ -721,6 +805,7 @@ service cloud.firestore {
         ])
         && data.keys().hasOnly([
           'businessId', 'customerId', 'customerCode', 'customerName',
+          'areaId', 'assignedEmployeeId',
           'paymentId', 'idempotencyKey', 'amountPaise', 'method', 'status',
           'externalReference', 'notes', 'collectorUid', 'allocations',
           'allocationCount', 'allocatedPaise', 'lastAuditId', 'confirmedAt',
@@ -732,6 +817,10 @@ service cloud.firestore {
           == get(customerPath(businessId, customerId)).data.customerCode
         && data.customerName
           == get(customerPath(businessId, customerId)).data.name
+        && data.areaId
+          == get(customerPath(businessId, customerId)).data.areaId
+        && data.assignedEmployeeId
+          == get(customerPath(businessId, customerId)).data.assignedEmployeeId
         && data.paymentId == paymentId
         && data.idempotencyKey == paymentId
         && validLedgerAmount(data.amountPaise)
@@ -951,8 +1040,15 @@ service cloud.firestore {
     }
 
     function validReversalShape(businessId, customerId, reversalId, data) {
+      let payment = get(paymentPath(
+        businessId,
+        customerId,
+        data.paymentId
+      )).data;
       return data.keys().hasOnly([
           'businessId', 'customerId', 'reversalId', 'paymentId',
+          'customerCode', 'customerName', 'areaId', 'assignedEmployeeId',
+          'collectorUid', 'method',
           'idempotencyKey', 'amountPaise', 'reason', 'reversedBy',
           'allocations', 'allocationCount', 'restoredPaise', 'lastAuditId',
           'reversedAt', 'createdAt'
@@ -962,6 +1058,12 @@ service cloud.firestore {
         && data.reversalId == reversalId
         && data.paymentId is string
         && data.paymentId.size() > 0
+        && data.customerCode == payment.customerCode
+        && data.customerName == payment.customerName
+        && data.areaId == payment.areaId
+        && data.assignedEmployeeId == payment.assignedEmployeeId
+        && data.collectorUid == payment.collectorUid
+        && data.method == payment.method
         && data.idempotencyKey == reversalId
         && validLedgerAmount(data.amountPaise)
         && data.reason is string
@@ -1120,6 +1222,8 @@ service cloud.firestore {
                 state.lastMutationId
               )).data
             )
+          ) || (
+            validCustomerReportingStateUpdate(businessId, customerId)
           )
         );
     }
@@ -1388,6 +1492,15 @@ service cloud.firestore {
             && after.reversedPaise == 0
             && after.revision == 1
             && after.createdAt == request.time
+            && (
+              (
+                after.outstandingPaise > 0
+                && after.oldestOutstandingMonth == billingMonth
+              ) || (
+                after.outstandingPaise <= 0
+                && after.oldestOutstandingMonth == ''
+              )
+            )
           ) || (
             exists(path)
             && data.previousBillId != ''
@@ -1398,6 +1511,21 @@ service cloud.firestore {
             && after.reversedPaise == get(path).data.reversedPaise
             && after.revision == get(path).data.revision + 1
             && after.createdAt == get(path).data.createdAt
+            && (
+              (
+                after.outstandingPaise > 0
+                && get(path).data.outstandingPaise > 0
+                && after.oldestOutstandingMonth
+                  == get(path).data.oldestOutstandingMonth
+              ) || (
+                after.outstandingPaise > 0
+                && get(path).data.outstandingPaise <= 0
+                && after.oldestOutstandingMonth == billingMonth
+              ) || (
+                after.outstandingPaise <= 0
+                && after.oldestOutstandingMonth == ''
+              )
+            )
           )
         );
     }
@@ -1455,7 +1583,8 @@ service cloud.firestore {
     function validBillShape(businessId, customerId, billingMonth, data) {
       return data.keys().hasOnly([
           'businessId', 'customerId', 'customerCode', 'customerName',
-          'customerSearchName', 'customerAddress', 'billingMonth', 'status',
+          'customerSearchName', 'customerAddress', 'areaId',
+          'assignedEmployeeId', 'customerStatus', 'billingMonth', 'status',
           'openingBalancePaise', 'previousBillId',
           'previousOutstandingPaise', 'priorBalancePaise',
           'currentChargesPaise', 'adjustmentsPaise', 'totalDuePaise',
@@ -1473,6 +1602,12 @@ service cloud.firestore {
         && data.customerSearchName.size() >= 2
         && data.customerAddress is string
         && data.customerAddress.size() <= 700
+        && data.areaId
+          == get(customerPath(businessId, customerId)).data.areaId
+        && data.assignedEmployeeId
+          == get(customerPath(businessId, customerId)).data.assignedEmployeeId
+        && data.customerStatus
+          == get(customerPath(businessId, customerId)).data.status
         && data.billingMonth == billingMonth
         && validMonth(data.billingMonth)
         && data.status == 'finalized'
@@ -2658,8 +2793,34 @@ service cloud.firestore {
       allow create, delete: if false;
       allow update: if head(businessId)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'name', 'phone', 'address', 'updatedAt'
+          'name', 'phone', 'address', 'primaryPricingRegion', 'updatedAt'
         ])
+        && (
+          !request.resource.data.diff(resource.data).affectedKeys()
+            .hasAny(['primaryPricingRegion'])
+          || (
+            request.resource.data.primaryPricingRegion is map
+            && request.resource.data.primaryPricingRegion.keys().hasAll([
+              'state', 'districtCity', 'editionServiceRegion'
+            ])
+            && request.resource.data.primaryPricingRegion.keys().hasOnly([
+              'state', 'districtCity', 'editionServiceRegion'
+            ])
+            && request.resource.data.primaryPricingRegion.state is string
+            && request.resource.data.primaryPricingRegion.state.size() >= 2
+            && request.resource.data.primaryPricingRegion.state.size() <= 80
+            && request.resource.data.primaryPricingRegion.districtCity
+              is string
+            && request.resource.data.primaryPricingRegion.districtCity
+              .size() >= 2
+            && request.resource.data.primaryPricingRegion.districtCity
+              .size() <= 100
+            && request.resource.data.primaryPricingRegion.editionServiceRegion
+              is string
+            && request.resource.data.primaryPricingRegion.editionServiceRegion
+              .size() <= 100
+          )
+        )
         && request.resource.data.updatedAt == request.time;
 
       match /members/{memberId} {
@@ -3335,6 +3496,7 @@ service cloud.firestore {
               && !phase4AuditAction(request.resource.data.action)
               && !phase5AuditAction(request.resource.data.action)
               && !phase6AuditAction(request.resource.data.action)
+              && request.resource.data.entityType != 'customer'
             )
             || (
               request.resource.data.entityType == 'customer'
@@ -3349,10 +3511,6 @@ service cloud.firestore {
         allow update, delete: if false;
       }
 
-      match /monthlySummaries/{summaryId} {
-        allow read, create, update: if head(businessId);
-        allow delete: if false;
-      }
     }
 
     // Collection-group payment history is authorized from immutable payment
@@ -3363,6 +3521,43 @@ service cloud.firestore {
         && (
           head(resource.data.businessId)
           || resource.data.collectorUid == request.auth.uid
+        );
+    }
+
+    // Phase 7 Head reports use immutable financial snapshots. Employee
+    // collection summaries are constrained to their current assignment
+    // projection and cannot query another employee's customers.
+    match /{parentPath=**}/paymentReversals/{reversalId} {
+      allow list: if head(resource.data.businessId);
+    }
+
+    match /{parentPath=**}/bills/{billId} {
+      allow list: if head(resource.data.businessId);
+    }
+
+    match /{parentPath=**}/lineItems/{lineItemId} {
+      allow list: if head(resource.data.businessId);
+    }
+
+    match /{parentPath=**}/subscriptions/{subscriptionId} {
+      allow list: if head(resource.data.businessId);
+    }
+
+    match /{parentPath=**}/collectionState/{stateId} {
+      // Collection-group query authorization is evaluated from document data;
+      // the recursive-match document wildcard is not query-constrained.
+      allow list: if resource.data.stateId == 'current'
+        && activeMember(resource.data.businessId)
+        && (
+          head(resource.data.businessId)
+          || (
+            resource.data.customerStatus == 'active'
+            && resource.data.assignedEmployeeId == request.auth.uid
+            && memberData(resource.data.businessId).areaIds is list
+            && memberData(resource.data.businessId).areaIds.hasAny([
+              resource.data.areaId
+            ])
+          )
         );
     }
 

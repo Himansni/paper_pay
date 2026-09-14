@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -7,6 +6,9 @@ import 'package:paper_route/core/config/firebase_bootstrap.dart';
 import 'package:paper_route/features/auth/domain/app_user.dart';
 import 'package:paper_route/features/auth/domain/auth_repository.dart';
 import 'package:paper_route/features/auth/presentation/auth_providers.dart';
+import 'package:paper_route/features/reports/domain/report_models.dart';
+import 'package:paper_route/features/reports/domain/reporting_repository.dart';
+import 'package:paper_route/features/reports/presentation/reporting_providers.dart';
 
 void main() {
   testWidgets('shows actionable Firebase setup state', (tester) async {
@@ -40,7 +42,7 @@ void main() {
     expect(find.text('I have an employee invitation'), findsOneWidget);
   });
 
-  testWidgets('verified Head sees only connected Phase 2 actions', (
+  testWidgets('verified Head sees connected role-gated dashboard actions', (
     tester,
   ) async {
     const head = AppUser(
@@ -58,6 +60,9 @@ void main() {
           authRepositoryProvider.overrideWithValue(
             _FakeAuthRepository(currentUser: head),
           ),
+          reportingRepositoryProvider.overrideWithValue(
+            _FakeReportingRepository(),
+          ),
         ],
         child: const PaperRouteApp(startup: FirebaseStartup.ready()),
       ),
@@ -66,12 +71,11 @@ void main() {
 
     expect(find.text('Head Distributor workspace'), findsOneWidget);
     expect(find.text('Business settings'), findsOneWidget);
-    expect(find.text('Employees'), findsOneWidget);
-    expect(find.text('Areas'), findsOneWidget);
-    expect(find.text('Customers'), findsOneWidget);
-    await tester.drag(find.byType(Scrollable), const Offset(0, -500));
-    await tester.pumpAndSettle();
-    expect(find.text('Connected workflows'), findsOneWidget);
+    expect(find.text('Add employee'), findsOneWidget);
+    expect(find.text('Add area'), findsOneWidget);
+    expect(find.text('Add customer'), findsOneWidget);
+    expect(find.text('Daily pricing'), findsOneWidget);
+    expect(find.text('View reports'), findsOneWidget);
   });
 
   testWidgets('employee cannot open a Head management route', (tester) async {
@@ -90,6 +94,9 @@ void main() {
           authRepositoryProvider.overrideWithValue(
             _FakeAuthRepository(currentUser: employee),
           ),
+          reportingRepositoryProvider.overrideWithValue(
+            _FakeReportingRepository(),
+          ),
         ],
         child: const PaperRouteApp(startup: FirebaseStartup.ready()),
       ),
@@ -104,6 +111,64 @@ void main() {
     expect(find.text('Employee distribution workspace'), findsOneWidget);
     expect(find.text('Team access'), findsNothing);
   });
+}
+
+class _FakeReportingRepository implements ReportingRepository {
+  @override
+  Future<OperationalDashboard> fetchDashboard({
+    required AppUser actor,
+    required DateTime now,
+  }) async => const OperationalDashboard(
+    monthKey: '2026-09',
+    activeCustomers: 0,
+    archivedCustomers: 0,
+    activeEmployees: 0,
+    activeAreas: 0,
+    activeNewspapers: 0,
+    currentMonthBilledPaise: 0,
+    currentMonthCollectionsPaise: 0,
+    currentOutstandingPaise: 0,
+    todayCollectionsPaise: 0,
+    currentMonthPayments: 0,
+    currentMonthReversals: 0,
+    currentMonthReversedPaise: 0,
+    unpaidCustomers: 0,
+    partiallyPaidCustomers: 0,
+    fullyPaidCustomers: 0,
+    customersWithoutFinalizedBill: 0,
+    recentPayments: [],
+    recentBilling: [],
+    recentCustomers: [],
+    employeeCollections: [],
+    areaOutstanding: [],
+    routeSummaries: [],
+  );
+
+  @override
+  Future<ReportPage> fetchReport({
+    required AppUser actor,
+    required ReportFilter filter,
+    ReportCursor? cursor,
+    int pageSize = 25,
+  }) async => const ReportPage(
+    rows: [],
+    summary: ReportSummary(
+      totalCount: 0,
+      totalPaise: 0,
+      secondaryPaise: 0,
+      secondaryCount: 0,
+      breakdown: {},
+    ),
+    nextCursor: null,
+    hasMore: false,
+  );
+
+  @override
+  Future<List<ReportRow>> fetchExportRows({
+    required AppUser actor,
+    required ReportFilter filter,
+    int maximumRows = 5000,
+  }) async => const [];
 }
 
 class _FakeAuthRepository implements AuthRepository {

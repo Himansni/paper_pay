@@ -4,7 +4,7 @@ PaperRoute is an Android-first Flutter application for Indian newspaper agents. 
 
 ## Current status
 
-Phases 0 through 5 are complete in the development project. Monthly billing is locally tested, protected by the deployed Phase 5 Firestore Rules, and verified through an owner-approved synthetic live billing lifecycle in `paperroutedev`.
+Phases 0 through 7 are complete in the development project. Phase 7 dashboards, reports, CSV exports, and daily-pricing workflow are verified locally and against the reviewed Rules and 61 ready indexes deployed to `paperroutedev`.
 
 - Flutter project for Android, iOS, and web
 - Firebase project `paperroutedev` connected for Android and Web
@@ -28,10 +28,14 @@ Phases 0 through 5 are complete in the development project. Monthly billing is l
 - multiple versioned subscriptions per customer with quantities, weekday schedules, pauses, resume, end, and restart
 - assignment-, area-, and permission-scoped employee subscription management without pricing authority
 - deterministic version-aware monthly previews, immutable finalization, signed adjustments, bill status, and paginated daily bill detail
-- append-only payment/reversal ledger calculations
+- connected collections, partial-payment allocation, reversal, receipt, and UPI request workflows
+- role-scoped Head and Employee operational dashboards backed by aggregate queries
+- paginated Head reports for collections, billing, outstanding, customers, and subscriptions
+- filter-preserving, formula-safe CSV exports capped at 5,000 rows
+- audited Primary Pricing Region settings and a centralized Daily Pricing workflow
 - Dart unit/widget tests and Firebase Emulator Security Rules tests
 
-Collections/payment UI, dashboard metrics, reports, and exports are not yet implemented. Customer and newspaper records are archived rather than physically deleted, and subscription and bill history is retained. The dashboard exposes only connected workflows and identifies later modules honestly instead of displaying fabricated data.
+Customer and newspaper records are archived rather than physically deleted, and subscription, billing, payment, reversal, pricing, and audit history is retained. Phase 7 reporting remains read-only and derives from authoritative ledger records and compact projections instead of becoming another financial source of truth.
 
 Progress is tracked in [IMPLEMENTATION_CHECKLIST.md](IMPLEMENTATION_CHECKLIST.md).
 
@@ -59,8 +63,9 @@ lib/
     newspapers/           paginated catalog and effective-date prices
     subscriptions/        versioned customer subscription lifecycle
     billing/              monthly planning, Firestore finalization, and UI
-    collections/domain/   pure payment ledger calculation
-    dashboard/            role-aware authenticated landing page
+    collections/          payment/reversal ledger and collection UI
+    dashboard/            role-scoped operational dashboards
+    reports/              aggregates, filters, pagination, and CSV export
 test/
   app/                    widget tests
   features/               Dart business-rule tests
@@ -102,7 +107,7 @@ env JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" \
   npm run test:rules
 ```
 
-The last local verification completed on 13 September 2026 with clean formatting, no analyzer issues, 109 passing Dart/widget tests, 53 passing Firestore Rules/transaction tests, and a passing emulator-backed Chrome Phase 6 repository/screen integration test. The expanded suite covers immutable payment and reversal history, deterministic allocation projections, duplicate-ID recovery, partial collections, Head and employee authority, tenant isolation, UPI request safety, prior-balance carry-forward, and every earlier billing protection.
+The last local verification completed on 14 September 2026 with clean formatting, no analyzer issues, 122 passing Dart/widget tests, 58 passing Firestore Rules/transaction tests, a passing production-index regression, and passing emulator-backed Chrome Phase 6 and Phase 7 repository/screen workflows. The expanded suite covers role-scoped aggregate dashboards, report filters and pagination, CSV safety, reporting projection integrity, immutable post-finalization pricing behavior, and every earlier billing and collection protection.
 
 The Phase 3 integration test signs in as a synthetic verified Head, creates a complete customer with an opening balance, assigns the customer, edits the profile, archives and reactivates it, and verifies the audit history. It then signs in as the assigned synthetic employee, verifies assignment-scoped visibility and the hidden Head financial view, and saves an authorized location-note edit through the real repository and local Security Rules. All data is recreated in the local `demo-paper-route` emulators; no live Firebase customer records are created.
 
@@ -150,6 +155,17 @@ flutter run -d chrome \
 
 It verifies concurrent duplicate-ID confirmation, cash and UPI collection, amount-specific QR construction, immutable allocations, partial and full reversals, UPI settings, receipt and history screens, employee collection scope, and future-month carry-forward. All confirmed-payment records are synthetic and remain inside `demo-paper-route`.
 
+The Phase 7 connected test seeds the same local demo project and exercises real aggregate queries, report pagination, role scoping, dashboard/report widgets, region settings, daily pricing, and finalized-bill immutability:
+
+```sh
+npm run seed:phase7-emulator
+flutter run -d chrome \
+  --target integration_test/phase7_reporting_smoke_test.dart \
+  --dart-define=USE_FIREBASE_EMULATORS=true
+```
+
+It never connects to or modifies `paperroutedev`.
+
 ## Security model
 
 - All tenant data lives under `businesses/{businessId}`.
@@ -187,7 +203,7 @@ Exact-date rules take precedence over periods. Active periods for the same newsp
 
 Generating or showing a UPI QR does not prove that payment succeeded. Only a collection explicitly marked `manuallyConfirmed` contributes to paid totals. Requested, pending, failed, and cancelled records do not reduce the balance. Corrections are new reversal records; historical payment documents are never edited or deleted.
 
-Firestore transactions fail while offline. A future collection screen must keep the action visibly pending until the server acknowledges it and reuse the same payment ID when retrying.
+Firestore transactions fail while offline. The collection screen keeps the action visibly unconfirmed until the server acknowledges it and reuses the same payment ID for bounded recovery instead of repeating a financial write.
 
 ## Spark-plan design
 
@@ -195,18 +211,19 @@ As of 7 September 2026, Standard edition Firestore's free quota includes one fre
 
 Cloud Functions deployment requires Blaze, even though usage has a free allowance. PaperRoute therefore does not depend on Functions in the Spark release. Secure employee onboarding uses verified email invitations and Firestore Rules. See the official [Functions quotas guidance](https://firebase.google.com/docs/functions/quotas).
 
-Cost controls planned for later phases:
+Current cost controls include:
 
 - paginated, tenant-constrained customer queries
 - employee queries constrained by `assignedEmployeeId`
 - on-demand monthly bill finalization rather than daily fan-out writes
-- summary documents for dashboards, treated as caches rather than financial truth
+- server aggregate queries over authoritative compact projections instead of broad document scans or duplicate summary ledgers
 - no broad listeners over all customers or payments
 - one source-of-truth ledger with targeted month/date queries
+- cursor-paginated reports, one optional entity scope per query, and a 5,000-row CSV cap
 
 ## Deployment
 
-The reviewed Phase 6 deny-by-default Firestore Rules and all 15 composite indexes are deployed to the development project `paperroutedev`. The active Rules API source matches `firestore.rules` exactly at SHA-256 `688fa3ab9ca980e47a3aca5dea14a3972c769a8111914d249283f1a7e83f7127`; both Phase 6 replacement payment-history indexes are `READY`, and the deployed set matches `firestore.indexes.json`. No production project or application binary has been deployed.
+The reviewed Phase 7 deny-by-default Firestore Rules and all 61 composite indexes are deployed to the development project `paperroutedev`. The active Rules source matches the local file, every index is `READY`, and the final employee outstanding aggregate query is live-verified read-only. No production project or application binary has been deployed.
 
 For any future production deployment, rerun the emulator tests and obtain explicit owner approval first:
 
@@ -220,14 +237,15 @@ Before release, use separate development and production Firebase projects, revie
 ## Known limitations
 
 - Hard deletion of areas is intentionally not exposed; an area is archived by setting it inactive so historical references remain intact.
-- Phase 5 carries the previous finalized total due without subtracting payments; confirmed-payment settlement begins in Phase 6.
 - Atomic finalization is intentionally capped at 475 daily lines per customer/month.
-- Dashboard totals and report exports are not implemented.
-- UPI QR presentation and manual confirmation UI are Phase 6.
+- Dashboard employee/area breakdowns are intentionally bounded to 20 groups, report tables are paginated, and CSV export is capped at 5,000 rows.
+- Reports allow one customer, employee, area, or newspaper scope at a time to keep the composite-index matrix bounded.
+- PDF export and a maintained national newspaper master dataset are deferred; custom newspapers remain fully supported.
+- The existing pre-Phase-7 development bill and collection projection required and received one owner-approved, create-only audited compatibility backfill; future legacy imports require the same explicit review.
 - Fully offline financial writes are intentionally unsupported.
 - iOS builds require the local Xcode installation to be completed.
 - npm reports vulnerabilities in emulator-only development dependencies; these packages are not shipped in the Flutter application and should be refreshed as Firebase tooling updates.
 
 ## Roadmap
 
-The remaining phases are listed in [IMPLEMENTATION_CHECKLIST.md](IMPLEMENTATION_CHECKLIST.md): collections/UPI, dashboards/reports, and production hardening.
+The remaining production-hardening work is tracked as Phase 8 in [IMPLEMENTATION_CHECKLIST.md](IMPLEMENTATION_CHECKLIST.md). Phase 8 implementation has not begun.

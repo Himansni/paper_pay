@@ -327,6 +327,9 @@ const completeBill = ({
   adjustmentsPaise = 0,
   totalDuePaise = currentChargesPaise + priorBalancePaise + adjustmentsPaise,
   lineItemCount = 1,
+  areaId = 'east',
+  assignedEmployeeId = 'employee-a',
+  customerStatus = 'active',
 } = {}) => ({
   businessId: 'business-a',
   customerId,
@@ -334,6 +337,9 @@ const completeBill = ({
   customerName: 'Managed Customer',
   customerSearchName: 'managed customer',
   customerAddress: '1 Main Road, Paper Town, Near Clock Tower',
+  areaId,
+  assignedEmployeeId,
+  customerStatus,
   billingMonth: month,
   status: 'finalized',
   openingBalancePaise: 0,
@@ -469,9 +475,21 @@ const addBillFinalization = (
       businessId: 'business-a',
       customerId,
       stateId: 'current',
+      customerCode: customerId,
+      customerName: 'Managed Customer',
+      areaId: 'east',
+      assignedEmployeeId: 'employee-a',
+      customerStatus: 'active',
       outstandingPaise: totalDuePaise,
       confirmedPaise: 0,
       reversedPaise: 0,
+      reportingStatus:
+        totalDuePaise < 0
+          ? 'credit'
+          : totalDuePaise === 0
+            ? 'fullyPaid'
+            : 'unpaid',
+      oldestOutstandingMonth: totalDuePaise > 0 ? month : '',
       revision: 1,
       lastMutationType: 'billFinalized',
       lastMutationId: month,
@@ -620,6 +638,9 @@ const seedCollectionProjection = async ({
             month: bill.month,
             currentChargesPaise: bill.outstandingPaise,
             totalDuePaise: bill.outstandingPaise,
+            areaId,
+            assignedEmployeeId,
+            customerStatus: status,
           }),
           finalizedAt: new Date(),
           createdAt: new Date(),
@@ -657,9 +678,19 @@ const seedCollectionProjection = async ({
         businessId: 'business-a',
         customerId,
         stateId: 'current',
+        customerCode: customerId,
+        customerName: 'Managed Customer',
+        areaId,
+        assignedEmployeeId,
+        customerStatus: status,
         outstandingPaise,
         confirmedPaise: 0,
         reversedPaise: 0,
+        reportingStatus: outstandingPaise > 0 ? 'unpaid' : 'fullyPaid',
+        oldestOutstandingMonth:
+          outstandingPaise > 0
+            ? bills.map((bill) => bill.month).toSorted()[0]
+            : '',
         revision: 1,
         lastMutationType: 'billFinalized',
         lastMutationId: bills.at(-1).month,
@@ -715,6 +746,8 @@ const confirmPaymentTransaction = async (
       customerId,
       customerCode: customer.data()?.customerCode ?? customerId,
       customerName: customer.data()?.name ?? 'Managed Customer',
+      areaId: customer.data()?.areaId ?? '',
+      assignedEmployeeId: customer.data()?.assignedEmployeeId ?? '',
       paymentId,
       idempotencyKey: paymentId,
       amountPaise,
@@ -747,10 +780,31 @@ const confirmPaymentTransaction = async (
       createdAt: now,
       updatedAt: now,
     });
+    const nextOutstanding = account.data().outstandingPaise - amountPaise;
+    const nextConfirmed = account.data().confirmedPaise + amountPaise;
+    const allocatedByBill = Object.fromEntries(
+      allocations.map((allocation) => [allocation.billId, allocation.amountPaise]),
+    );
+    const oldestOutstandingMonth = [...balances.entries()]
+      .filter(
+        ([billId, balance]) =>
+          balance.snapshot.data().outstandingPaise -
+            (allocatedByBill[billId] ?? 0) >
+          0,
+      )
+      .map(([billId]) => billId)
+      .toSorted()[0] ?? '';
     transaction.update(accountRef, {
-      outstandingPaise: account.data().outstandingPaise - amountPaise,
-      confirmedPaise: account.data().confirmedPaise + amountPaise,
+      outstandingPaise: nextOutstanding,
+      confirmedPaise: nextConfirmed,
       reversedPaise: account.data().reversedPaise,
+      reportingStatus:
+        nextOutstanding === 0
+          ? 'fullyPaid'
+          : nextConfirmed > account.data().reversedPaise
+            ? 'partiallyPaid'
+            : 'unpaid',
+      oldestOutstandingMonth,
       revision: account.data().revision + 1,
       lastMutationType: 'paymentConfirmed',
       lastMutationId: paymentId,
@@ -837,6 +891,12 @@ const reversePaymentTransaction = async (
       customerId,
       reversalId,
       paymentId,
+      customerCode: payment.data().customerCode,
+      customerName: payment.data().customerName,
+      areaId: payment.data().areaId,
+      assignedEmployeeId: payment.data().assignedEmployeeId,
+      collectorUid: payment.data().collectorUid,
+      method: payment.data().method,
       idempotencyKey: reversalId,
       amountPaise,
       reason,
@@ -864,9 +924,26 @@ const reversePaymentTransaction = async (
       lastReversalId: reversalId,
       updatedAt: now,
     });
+    const nextOutstanding = account.data().outstandingPaise + amountPaise;
+    const nextAccountReversed = account.data().reversedPaise + amountPaise;
+    const restoredOldest = allocations
+      .map((allocation) => allocation.billingMonth)
+      .toSorted()[0];
+    const oldestOutstandingMonth =
+      account.data().oldestOutstandingMonth === '' ||
+      restoredOldest < account.data().oldestOutstandingMonth
+        ? restoredOldest
+        : account.data().oldestOutstandingMonth;
     transaction.update(accountRef, {
-      outstandingPaise: account.data().outstandingPaise + amountPaise,
-      reversedPaise: account.data().reversedPaise + amountPaise,
+      outstandingPaise: nextOutstanding,
+      reversedPaise: nextAccountReversed,
+      reportingStatus:
+        nextOutstanding === 0
+          ? 'fullyPaid'
+          : account.data().confirmedPaise > nextAccountReversed
+            ? 'partiallyPaid'
+            : 'unpaid',
+      oldestOutstandingMonth,
       revision: account.data().revision + 1,
       lastMutationType: 'paymentReversed',
       lastMutationId: reversalId,
@@ -3469,6 +3546,257 @@ describe('Phase 6 collections, reversals, and UPI security', () => {
     );
     await assertFails(
       deleteDoc(doc(head, 'businesses/business-a/configuration/upi')),
+    );
+  });
+});
+
+describe('Phase 7 reporting security and projection integrity', () => {
+  test('keeps the unused monthly summary collection deny-by-default', async () => {
+    const headDb = auth('head-a', 'head-a@example.com');
+    await assertFails(
+      setDoc(
+        doc(headDb, 'businesses/business-a/monthlySummaries/2026-09'),
+        {
+          businessId: 'business-a',
+          totalPaise: 999999,
+        },
+      ),
+    );
+  });
+
+  test('Head can query report groups while employee queries stay collector and assignment scoped', async () => {
+    await seedCollectionProjection();
+    const employee = auth('employee-a', 'employee-a@example.com');
+    await assertSucceeds(
+      confirmPaymentTransaction(employee, {
+        paymentId: 'phase7-employee-payment',
+        actorId: 'employee-a',
+        amountPaise: 1000,
+        allocations: [
+          { billId: '2026-09', billingMonth: '2026-09', amountPaise: 1000 },
+        ],
+      }),
+    );
+    const head = auth('head-a', 'head-a@example.com');
+    await assertSucceeds(
+      reversePaymentTransaction(head, {
+        paymentId: 'phase7-employee-payment',
+        reversalId: 'phase7-head-reversal',
+        amountPaise: 500,
+        allocations: [
+          { billId: '2026-09', billingMonth: '2026-09', amountPaise: 500 },
+        ],
+      }),
+    );
+
+    await assertSucceeds(
+      getDocs(
+        query(
+          collectionGroup(head, 'payments'),
+          where('businessId', '==', 'business-a'),
+        ),
+      ),
+    );
+    await assertSucceeds(
+      getDocs(
+        query(
+          collectionGroup(employee, 'payments'),
+          where('businessId', '==', 'business-a'),
+          where('collectorUid', '==', 'employee-a'),
+        ),
+      ),
+    );
+    await assertFails(
+      getDocs(
+        query(
+          collectionGroup(employee, 'payments'),
+          where('businessId', '==', 'business-a'),
+        ),
+      ),
+    );
+    await assertSucceeds(
+      getDocs(
+        query(
+          collectionGroup(head, 'paymentReversals'),
+          where('businessId', '==', 'business-a'),
+        ),
+      ),
+    );
+    await assertFails(
+      getDocs(
+        query(
+          collectionGroup(employee, 'paymentReversals'),
+          where('businessId', '==', 'business-a'),
+        ),
+      ),
+    );
+    await assertSucceeds(
+      getDocs(
+        query(
+          collectionGroup(head, 'bills'),
+          where('businessId', '==', 'business-a'),
+        ),
+      ),
+    );
+    await assertFails(
+      getDocs(
+        query(
+          collectionGroup(employee, 'bills'),
+          where('businessId', '==', 'business-a'),
+        ),
+      ),
+    );
+  });
+
+  test('employee balance metrics require their current assignment and area', async () => {
+    await seedCollectionProjection();
+    const employee = auth('employee-a', 'employee-a@example.com');
+    const assigned = query(
+      collectionGroup(employee, 'collectionState'),
+      where('businessId', '==', 'business-a'),
+      where('stateId', '==', 'current'),
+      where('assignedEmployeeId', '==', 'employee-a'),
+      where('customerStatus', '==', 'active'),
+      where('areaId', 'in', ['east']),
+    );
+    await assertSucceeds(getDocs(assigned));
+    await assertFails(
+      getDocs(
+        query(
+          collectionGroup(employee, 'collectionState'),
+          where('businessId', '==', 'business-a'),
+          where('stateId', '==', 'current'),
+          where('customerStatus', '==', 'active'),
+          where('areaId', '==', 'east'),
+        ),
+      ),
+    );
+    await assertFails(
+      getDocs(
+        query(
+          collectionGroup(employee, 'collectionState'),
+          where('businessId', '==', 'business-b'),
+          where('stateId', '==', 'current'),
+          where('assignedEmployeeId', '==', 'employee-a'),
+          where('customerStatus', '==', 'active'),
+          where('areaId', '==', 'east'),
+        ),
+      ),
+    );
+  });
+
+  test('customer reporting snapshots advance atomically and financial fields cannot be forged', async () => {
+    await seedCollectionProjection();
+    const db = auth('head-a', 'head-a@example.com');
+    const customerRef = doc(
+      db,
+      'businesses/business-a/customers/C-MANAGED',
+    );
+    const stateRef = doc(
+      db,
+      'businesses/business-a/customers/C-MANAGED/collectionState/current',
+    );
+    const auditRef = doc(
+      db,
+      'businesses/business-a/auditRecords/phase7-profile-audit',
+    );
+    const now = serverTimestamp();
+    const batch = writeBatch(db);
+    batch.update(customerRef, {
+      name: 'Managed Customer Updated',
+      searchName: 'managed customer updated',
+      searchTokens: ['name:ma', 'name:man'],
+      updatedBy: 'head-a',
+      lastAuditId: 'phase7-profile-audit',
+      updatedAt: now,
+    });
+    batch.update(stateRef, {
+      customerName: 'Managed Customer Updated',
+      revision: 2,
+      lastMutationType: 'customerProfileUpdated',
+      lastMutationId: 'phase7-profile-audit',
+      updatedBy: 'head-a',
+      updatedAt: now,
+    });
+    batch.set(auditRef, {
+      businessId: 'business-a',
+      actorId: 'head-a',
+      action: 'customerUpdated',
+      entityType: 'customer',
+      entityId: 'C-MANAGED',
+      changedFields: ['name', 'searchName', 'searchTokens'],
+      createdAt: now,
+    });
+    await assertSucceeds(batch.commit());
+    assert.equal((await getDoc(stateRef)).data().outstandingPaise, 60000);
+
+    const staleAuditId = 'phase7-stale-audit';
+    const stale = writeBatch(db);
+    stale.update(customerRef, {
+      name: 'Stale Projection',
+      searchName: 'stale projection',
+      searchTokens: ['name:st'],
+      updatedBy: 'head-a',
+      lastAuditId: staleAuditId,
+      updatedAt: serverTimestamp(),
+    });
+    stale.set(
+      doc(db, `businesses/business-a/auditRecords/${staleAuditId}`),
+      {
+        businessId: 'business-a',
+        actorId: 'head-a',
+        action: 'customerUpdated',
+        entityType: 'customer',
+        entityId: 'C-MANAGED',
+        changedFields: ['name', 'searchName', 'searchTokens'],
+        createdAt: serverTimestamp(),
+      },
+    );
+    await assertFails(stale.commit());
+    await assertFails(
+      updateDoc(stateRef, {
+        outstandingPaise: 1,
+        revision: 3,
+        lastMutationType: 'customerProfileUpdated',
+        lastMutationId: 'forged',
+        updatedBy: 'head-a',
+        updatedAt: serverTimestamp(),
+      }),
+    );
+  });
+
+  test('only Head can save a valid primary pricing region', async () => {
+    const head = auth('head-a', 'head-a@example.com');
+    const business = doc(head, 'businesses/business-a');
+    await assertSucceeds(
+      updateDoc(business, {
+        primaryPricingRegion: {
+          state: 'Chhattisgarh',
+          districtCity: 'Raipur',
+          editionServiceRegion: 'Central',
+        },
+        updatedAt: serverTimestamp(),
+      }),
+    );
+    await assertFails(
+      updateDoc(doc(auth('employee-a', 'employee-a@example.com'), business.path), {
+        primaryPricingRegion: {
+          state: 'Chhattisgarh',
+          districtCity: 'Bilaspur',
+          editionServiceRegion: '',
+        },
+        updatedAt: serverTimestamp(),
+      }),
+    );
+    await assertFails(
+      updateDoc(business, {
+        primaryPricingRegion: {
+          state: 'X',
+          districtCity: 'Raipur',
+          editionServiceRegion: '',
+        },
+        updatedAt: serverTimestamp(),
+      }),
     );
   });
 });

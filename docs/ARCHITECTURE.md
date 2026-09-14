@@ -16,7 +16,7 @@ Riverpod was chosen because it supports dependency overrides in tests, stream st
 
 GoRouter provides declarative routes. `AuthGate` is the role-routing authority in the UI: it observes the repository session and selects login, verification, activation, disabled-account, Head, or Employee state. A route argument is never accepted as proof of role.
 
-Every authenticated route re-enters `AuthGate`. Only an active Head membership can reach business settings, employee management, or area management. Customer directory, create, detail, and edit routes admit active employees, but the presentation policy and Firestore Rules independently enforce permissions, assigned areas, and assigned-customer access. An employee who enters a Head-only URL is returned to their own dashboard.
+Every authenticated route re-enters `AuthGate`. Only an active Head membership can reach business settings, employee management, area management, Reports, or Daily Pricing. Customer directory, create, detail, and edit routes admit active employees, but the presentation policy and Firestore Rules independently enforce permissions, assigned areas, and assigned-customer access. An employee who enters a Head-only URL is returned to their own dashboard.
 
 ## Authentication boundary
 
@@ -71,6 +71,18 @@ The original payment is never updated. A Head may append a partial or full rever
 
 UPI settings store only a UPI ID, payee name, optional reference prefix, and enabled state. The URI builder is a pure deterministic function over integer paise. QR display and app launch remain local request states and never write a payment; the collector must explicitly confirm observed receipt before the shared ledger transaction runs. Static QR omits an amount and follows the same non-confirmation rule.
 
+## Dashboard and reporting boundary
+
+`FirebaseReportingRepository` is a read-only adapter over authoritative customer, bill, payment, reversal, subscription, line-item, membership, area, and collection-state records. Dashboards use server aggregate `count`/`sum` queries plus small recent-activity pages; they never download every customer or ledger entry to calculate totals. Employee queries always include the authenticated collector or assigned-customer UID, active customer status, `collectionState/current`, and a membership-authorized area constraint. Head-only report queries use tenant-constrained collection-group indexes and path-aware cursors.
+
+The Head dashboard exposes the current operational month, today's gross receipts, reversal-aware net collections, total outstanding, bill coverage alerts, payment states, recent activity, and bounded employee/area summaries. The Employee dashboard exposes only assigned customer counts, assigned-area outstanding, the employee's own collections, route groupings, customer search, and collection actions. Reports cover collections, billing, outstanding/aging, customers, and subscriptions. A query can use one customer, employee, area, or newspaper dimension at a time, plus its report-specific status/method/date filters; this deliberate constraint keeps the composite-index set bounded and predictable.
+
+CSV creation is local and read-only. Export pagination reuses the exact active report filter and repository cursor until completion, caps output at 5,000 rows, quotes every cell, neutralizes spreadsheet formula prefixes, and sanitizes filenames. Reports never become a second financial source of truth.
+
+`collectionState/current` carries compact customer/assignment/status snapshots, a derived payment state, and the oldest outstanding month. Billing, payment, reversal, customer profile, lifecycle, and assignment transactions advance that projection atomically. The projection cannot mutate money during a customer-only change, and the Rules derive its financial status from authoritative integer-paise totals. Existing pre-Phase-7 projections require a separately approved trusted compatibility backfill before Phase 7 Rules can be deployed.
+
+The business document may store one Head-managed `primaryPricingRegion` (state, district/city, and optional edition/service region). Daily Pricing reads that context automatically and appends or corrects one exact-date rule for a selected newspaper. Finalized bill headers and line snapshots remain immutable. `NewspaperMasterCatalog` defines a future optional standardized suggestion source without bundling an invented national dataset or preventing custom newspapers.
+
 ## Online/offline boundary
 
 Firestore may cache non-financial reads. Financial transactions fail offline and must be shown as unconfirmed until acknowledged by the server. A retry reuses its original payment document ID. A UPI deep link or displayed QR remains a payment request, not proof of receipt.
@@ -84,7 +96,8 @@ Firestore may cache non-financial reads. Financial transactions fail offline and
 - Store normalized name/phone/landmark fields and bounded prefix tokens. Search uses exact customer-code equality, `array-contains` for name/phone/landmark prefixes, and an `areaId` equality filter without downloading the whole tenant.
 - Finalize bills on demand once per customer/month.
 - Query customer payment history under one customer. Query tenant-wide Head history by business and employee history by business plus collector, ordered by server confirmation time with path-aware cursors.
-- Maintain month/employee/area summary documents later for dashboards. Treat them as rebuildable projections.
+- Calculate operational dashboard totals through Firestore aggregate queries over compact authoritative projections. Bounded top-20 employee/area breakdowns trade a predictable small number of aggregate reads for no additional mutable summary source.
+- Query report tables in cursor pages and allow one entity-scope dimension at a time so required composite indexes remain bounded. CSV export follows the same pages and stops at 5,000 rows.
 - Avoid listeners over entire customer/payment collections.
 
 ## Trusted-backend boundary

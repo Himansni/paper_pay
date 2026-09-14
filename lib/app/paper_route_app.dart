@@ -75,8 +75,30 @@ class _PaperRouteAppState extends State<PaperRouteApp> {
         builder:
             (context, state) =>
                 widget.startup.isReady
-                    ? const AuthGate(
+                    ? AuthGate(
                       destination: AuthenticatedDestination.customers,
+                      resourceId: state.uri.queryParameters['q'],
+                    )
+                    : SetupRequiredPage(message: widget.startup.message),
+      ),
+      GoRoute(
+        path: '/reports',
+        builder:
+            (context, state) =>
+                widget.startup.isReady
+                    ? AuthGate(
+                      destination: AuthenticatedDestination.reports,
+                      resourceId: state.uri.queryParameters['tab'],
+                    )
+                    : SetupRequiredPage(message: widget.startup.message),
+      ),
+      GoRoute(
+        path: '/daily-pricing',
+        builder:
+            (context, state) =>
+                widget.startup.isReady
+                    ? const AuthGate(
+                      destination: AuthenticatedDestination.dailyPricing,
                     )
                     : SetupRequiredPage(message: widget.startup.message),
       ),

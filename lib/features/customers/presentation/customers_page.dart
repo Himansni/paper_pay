@@ -12,9 +12,10 @@ import 'package:paper_route/features/employees/domain/employee_member.dart';
 import 'package:paper_route/features/employees/presentation/employee_providers.dart';
 
 class CustomersPage extends ConsumerStatefulWidget {
-  const CustomersPage({required this.user, super.key});
+  const CustomersPage({required this.user, this.initialSearch = '', super.key});
 
   final AppUser user;
+  final String initialSearch;
 
   @override
   ConsumerState<CustomersPage> createState() => _CustomersPageState();
@@ -22,7 +23,7 @@ class CustomersPage extends ConsumerStatefulWidget {
 
 class _CustomersPageState extends ConsumerState<CustomersPage> {
   static const _accessPolicy = AccessPolicy();
-  final _searchController = TextEditingController();
+  late final TextEditingController _searchController;
   final _scrollController = ScrollController();
   final _customers = <Customer>[];
   CustomerStatus _status = CustomerStatus.active;
@@ -38,6 +39,8 @@ class _CustomersPageState extends ConsumerState<CustomersPage> {
   @override
   void initState() {
     super.initState();
+    _activeSearch = widget.initialSearch.trim();
+    _searchController = TextEditingController(text: _activeSearch);
     WidgetsBinding.instance.addPostFrameCallback((_) => _load(reset: true));
   }
 

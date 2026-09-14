@@ -65,6 +65,23 @@ class BusinessSettingsPage extends ConsumerWidget {
                   ),
             ),
             const SizedBox(height: 16),
+            business.when(
+              loading: () => const SizedBox.shrink(),
+              error: (_, _) => const SizedBox.shrink(),
+              data:
+                  (profile) => _PrimaryPricingRegionCard(
+                    region: profile.primaryPricingRegion,
+                    onSave:
+                        (region) => ref
+                            .read(businessRepositoryProvider)
+                            .updatePrimaryPricingRegion(
+                              businessId: businessId,
+                              actorId: user.uid,
+                              region: region,
+                            ),
+                  ),
+            ),
+            const SizedBox(height: 16),
             Card(
               child: ListTile(
                 key: const ValueKey('open-upi-settings'),
@@ -81,6 +98,198 @@ class BusinessSettingsPage extends ConsumerWidget {
         ),
       ),
     );
+  }
+}
+
+class _PrimaryPricingRegionCard extends StatefulWidget {
+  const _PrimaryPricingRegionCard({required this.region, required this.onSave});
+
+  final PricingRegion region;
+  final Future<void> Function(PricingRegion region) onSave;
+
+  @override
+  State<_PrimaryPricingRegionCard> createState() =>
+      _PrimaryPricingRegionCardState();
+}
+
+class _PrimaryPricingRegionCardState extends State<_PrimaryPricingRegionCard> {
+  var _editing = false;
+
+  @override
+  Widget build(BuildContext context) => Card(
+    child: Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.location_city_outlined),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Primary pricing region',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              if (widget.region.isConfigured && !_editing)
+                TextButton(
+                  onPressed: () => setState(() => _editing = true),
+                  child: const Text('Edit region'),
+                ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            widget.region.isConfigured
+                ? '${widget.region.displayName}, ${widget.region.state}'
+                : 'Set this once so Daily Pricing always opens in the correct local context.',
+            style: const TextStyle(color: Color(0xFF627D98), height: 1.4),
+          ),
+          if (!widget.region.isConfigured || _editing) ...[
+            const SizedBox(height: 16),
+            _PricingRegionForm(
+              key: ValueKey(widget.region),
+              initial: widget.region,
+              onCancel:
+                  widget.region.isConfigured
+                      ? () => setState(() => _editing = false)
+                      : null,
+              onSave: (region) async {
+                final messenger = ScaffoldMessenger.of(context);
+                await widget.onSave(region);
+                if (mounted) {
+                  setState(() => _editing = false);
+                  messenger.showSnackBar(
+                    const SnackBar(content: Text('Pricing region saved.')),
+                  );
+                }
+              },
+            ),
+          ],
+        ],
+      ),
+    ),
+  );
+}
+
+class _PricingRegionForm extends StatefulWidget {
+  const _PricingRegionForm({
+    required this.initial,
+    required this.onSave,
+    this.onCancel,
+    super.key,
+  });
+
+  final PricingRegion initial;
+  final Future<void> Function(PricingRegion region) onSave;
+  final VoidCallback? onCancel;
+
+  @override
+  State<_PricingRegionForm> createState() => _PricingRegionFormState();
+}
+
+class _PricingRegionFormState extends State<_PricingRegionForm> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _state;
+  late final TextEditingController _city;
+  late final TextEditingController _edition;
+  var _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _state = TextEditingController(text: widget.initial.state);
+    _city = TextEditingController(text: widget.initial.districtCity);
+    _edition = TextEditingController(text: widget.initial.editionServiceRegion);
+  }
+
+  @override
+  void dispose() {
+    _state.dispose();
+    _city.dispose();
+    _edition.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Form(
+    key: _formKey,
+    child: Column(
+      children: [
+        TextFormField(
+          key: const ValueKey('pricing-region-state'),
+          controller: _state,
+          decoration: const InputDecoration(labelText: 'State'),
+          validator: _required,
+        ),
+        const SizedBox(height: 12),
+        TextFormField(
+          key: const ValueKey('pricing-region-city'),
+          controller: _city,
+          decoration: const InputDecoration(labelText: 'District / city'),
+          validator: _required,
+        ),
+        const SizedBox(height: 12),
+        TextFormField(
+          key: const ValueKey('pricing-region-edition'),
+          controller: _edition,
+          decoration: const InputDecoration(
+            labelText: 'Edition / service region (optional)',
+          ),
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            if (widget.onCancel != null)
+              TextButton(
+                onPressed: widget.onCancel,
+                child: const Text('Cancel'),
+              ),
+            const Spacer(),
+            FilledButton.icon(
+              key: const ValueKey('save-pricing-region'),
+              onPressed: _saving ? null : _save,
+              icon:
+                  _saving
+                      ? const SizedBox.square(
+                        dimension: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                      : const Icon(Icons.save_outlined),
+              label: const Text('Save region'),
+            ),
+          ],
+        ),
+      ],
+    ),
+  );
+
+  String? _required(String? value) =>
+      (value?.trim().length ?? 0) < 2 ? 'Enter at least 2 characters.' : null;
+
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _saving = true);
+    try {
+      await widget.onSave(
+        PricingRegion(
+          state: _state.text,
+          districtCity: _city.text,
+          editionServiceRegion: _edition.text,
+        ),
+      );
+    } on Object catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.toString())));
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 }
 

@@ -10,4 +10,10 @@ abstract interface class BusinessRepository {
     required String phone,
     required String address,
   });
+
+  Future<void> updatePrimaryPricingRegion({
+    required String businessId,
+    required String actorId,
+    required PricingRegion region,
+  });
 }

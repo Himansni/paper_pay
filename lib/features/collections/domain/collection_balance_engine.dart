@@ -2,6 +2,16 @@ import 'dart:math' as math;
 
 import 'package:paper_route/core/errors/app_exception.dart';
 
+String collectionReportingStatus({
+  required int outstandingPaise,
+  required int confirmedPaise,
+  required int reversedPaise,
+}) {
+  if (outstandingPaise < 0) return 'credit';
+  if (outstandingPaise == 0) return 'fullyPaid';
+  return confirmedPaise > reversedPaise ? 'partiallyPaid' : 'unpaid';
+}
+
 class CollectionAccountBalance {
   const CollectionAccountBalance({
     required this.outstandingPaise,

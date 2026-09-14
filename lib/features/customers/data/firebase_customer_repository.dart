@@ -228,6 +228,9 @@ class FirebaseCustomerRepository implements CustomerRepository {
         }
         _validateCustomerTenant(data, businessId);
         final customer = _fromDocument(snapshot);
+        final collectionState = await transaction.get(
+          customerRef.collection('collectionState').doc('current'),
+        );
         if (!_accessPolicy.canEditCustomer(
           member: actor,
           customerBusinessId: customer.businessId,
@@ -267,6 +270,21 @@ class FirebaseCustomerRepository implements CustomerRepository {
           'lastAuditId': auditRef.id,
           'updatedAt': now,
         });
+        _updateReportingProjection(
+          transaction: transaction,
+          snapshot: collectionState,
+          actorId: actor.uid,
+          mutationType: 'customerProfileUpdated',
+          mutationId: auditRef.id,
+          now: now,
+          fields: {
+            'customerCode': customer.customerCode,
+            'customerName': value.name,
+            'areaId': customer.areaId,
+            'assignedEmployeeId': customer.assignedEmployeeId,
+            'customerStatus': customer.status.value,
+          },
+        );
         transaction.set(auditRef, {
           'businessId': businessId,
           'actorId': actor.uid,
@@ -304,6 +322,9 @@ class FirebaseCustomerRepository implements CustomerRepository {
     try {
       await _firestore.runTransaction((transaction) async {
         final snapshot = await transaction.get(customerRef);
+        final collectionState = await transaction.get(
+          customerRef.collection('collectionState').doc('current'),
+        );
         final data = snapshot.data();
         if (!snapshot.exists || data == null) {
           throw const AppException('Customer no longer exists.');
@@ -317,6 +338,21 @@ class FirebaseCustomerRepository implements CustomerRepository {
           'lastAuditId': auditRef.id,
           'updatedAt': now,
         });
+        _updateReportingProjection(
+          transaction: transaction,
+          snapshot: collectionState,
+          actorId: actor.uid,
+          mutationType: 'customerStatusUpdated',
+          mutationId: auditRef.id,
+          now: now,
+          fields: {
+            'customerCode': data['customerCode'] as String? ?? customerId,
+            'customerName': data['name'] as String? ?? '',
+            'areaId': data['areaId'] as String? ?? '',
+            'assignedEmployeeId': data['assignedEmployeeId'] as String? ?? '',
+            'customerStatus': nextStatus.value,
+          },
+        );
         transaction.set(auditRef, {
           'businessId': businessId,
           'actorId': actor.uid,
@@ -362,6 +398,9 @@ class FirebaseCustomerRepository implements CustomerRepository {
                 : await transaction.get(
                   _collection(businessId, 'members').doc(employeeId),
                 );
+        final collectionState = await transaction.get(
+          customerRef.collection('collectionState').doc('current'),
+        );
         final data = customer.data();
         if (!customer.exists || data == null) {
           throw const AppException('Customer no longer exists.');
@@ -390,6 +429,21 @@ class FirebaseCustomerRepository implements CustomerRepository {
           'lastAuditId': auditRef.id,
           'updatedAt': now,
         });
+        _updateReportingProjection(
+          transaction: transaction,
+          snapshot: collectionState,
+          actorId: actor.uid,
+          mutationType: 'customerAssignmentUpdated',
+          mutationId: auditRef.id,
+          now: now,
+          fields: {
+            'customerCode': data['customerCode'] as String? ?? customerId,
+            'customerName': data['name'] as String? ?? '',
+            'areaId': areaId,
+            'assignedEmployeeId': employeeId,
+            'customerStatus': data['status'] as String? ?? 'active',
+          },
+        );
         transaction.set(auditRef, {
           'businessId': businessId,
           'actorId': actor.uid,
@@ -521,6 +575,27 @@ class FirebaseCustomerRepository implements CustomerRepository {
       return true;
     }
     return left == right;
+  }
+
+  void _updateReportingProjection({
+    required Transaction transaction,
+    required DocumentSnapshot<Map<String, dynamic>> snapshot,
+    required String actorId,
+    required String mutationType,
+    required String mutationId,
+    required FieldValue now,
+    required Map<String, Object?> fields,
+  }) {
+    final data = snapshot.data();
+    if (!snapshot.exists || data == null) return;
+    transaction.update(snapshot.reference, {
+      ...fields,
+      'revision': (data['revision'] as int? ?? 0) + 1,
+      'lastMutationType': mutationType,
+      'lastMutationId': mutationId,
+      'updatedBy': actorId,
+      'updatedAt': now,
+    });
   }
 
   AppException _translate(FirebaseException error, String fallback) {

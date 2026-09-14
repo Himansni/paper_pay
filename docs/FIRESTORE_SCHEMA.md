@@ -26,7 +26,6 @@ businesses/{businessId}
   newspapers/{newspaperId}
     priceRules/{priceRuleId}
   configuration/upi
-  monthlySummaries/{monthKey}
   auditRecords/{auditId}
 ```
 
@@ -37,6 +36,8 @@ businesses/{businessId}
 `businesses/{businessId}/members/{uid}` is the authorization source used by Security Rules. It also stores assigned area IDs and notes. A role is immutable after creation. Disabling a member changes status; the historical member is not deleted.
 
 `invitations/{invitationId}` stores exact normalized email, fixed employee role, permissions, area IDs, pending/accepted/revoked status, creator, expiry, and acceptance metadata. The document ID is the one-time invitation code. Only the exact verified email can accept it.
+
+The business document may also store `primaryPricingRegion`, a strict map containing `state`, `districtCity`, and `editionServiceRegion` strings; the last field may be empty. Only a Head can set or edit it, and each change is paired with an append-only business audit. It is presentation and catalog-entry context only; it cannot alter historical prices, bills, or line snapshots.
 
 ## Areas and customers
 
@@ -81,15 +82,15 @@ Each terms change or restart writes a new `versions/{versionId}` and closes the 
 
 ## Bills and collection ledger
 
-The bill ID is the deterministic `YYYY-MM` month key under a customer, preventing more than one finalized bill per customer/month. A finalized header stores immutable customer identity/address snapshots, the opening balance snapshot, prior-balance source (`previousBillId` and `previousOutstandingPaise`), current charges, signed adjustments, total due, compact per-newspaper summaries, line count, calculation version, finalizer/audit IDs, and server timestamps.
+The bill ID is the deterministic `YYYY-MM` month key under a customer, preventing more than one finalized bill per customer/month. A finalized header stores immutable customer identity/address snapshots, `areaId`, `assignedEmployeeId`, `customerStatus`, the opening balance snapshot, prior-balance source (`previousBillId` and `previousOutstandingPaise`), current charges, signed adjustments, total due, compact per-newspaper summaries, line count, calculation version, finalizer/audit IDs, and server timestamps. The operational snapshots make tenant-scoped reports indexable without joining every customer and remain immutable with the bill.
 
 Line item IDs use the deterministic charge key `customerId:subscriptionId:YYYY-MM-DD`. Each stores service date, subscription/version/newspaper snapshots, unit price, quantity, arithmetic total, price-source kind and source record/revision, finalization audit ID, and timestamp. Lines are paginated and never recalculate after finalization. One atomic bill is limited to 475 lines so the header, control, audit, and all lines remain below Firestore's 500-write transaction ceiling.
 
 `billingControls/{YYYY-MM}` serializes Head adjustments against finalization with a monotonically increasing `adjustmentRevision`. Its final state points to the deterministic bill and cannot be reopened. `adjustments/{adjustmentId}` stores a non-zero signed paise amount, reason, target month, optional earlier finalized bill reference, creator/audit IDs, and timestamp. Adjustments are append-only; a finalized month rejects new adjustments. A later open month can carry an explicitly audited correction referencing an earlier immutable bill.
 
-The earliest finalized bill uses the customer's immutable opening balance as `priorBalancePaise`. Finalization also creates `collectionState/current` and `billBalances/{YYYY-MM}` in the same transaction. The collection state is the transactionally maintained signed account outstanding; each bill-balance projection stores only that bill's incremental debt, allocations, reversals, remaining positive component, revision, and last mutation. A later bill snapshots the collection state's actual remaining outstanding as `previousOutstandingPaise`, then adds only the new month's charges and signed adjustments. Opening balance, an earlier cumulative bill total, payments, and reversals are therefore never applied twice.
+The earliest finalized bill uses the customer's immutable opening balance as `priorBalancePaise`. Finalization also creates `collectionState/current` and `billBalances/{YYYY-MM}` in the same transaction. The collection state is the transactionally maintained signed account outstanding; each bill-balance projection stores only that bill's incremental debt, allocations, reversals, remaining positive component, revision, and last mutation. For reporting, `collectionState/current` also snapshots `customerCode`, `customerName`, `areaId`, `assignedEmployeeId`, `customerStatus`, a financially derived `reportingStatus`, and `oldestOutstandingMonth`. Customer profile, lifecycle, and assignment transactions may update only those operational snapshots; Firestore Rules require their money fields to remain unchanged. A later bill snapshots the collection state's actual remaining outstanding as `previousOutstandingPaise`, then adds only the new month's charges and signed adjustments. Opening balance, an earlier cumulative bill total, payments, and reversals are therefore never applied twice.
 
-Payment IDs are generated once when the collector opens the flow and reused as idempotency keys. A confirmed `payments/{paymentId}` document stores immutable business/customer snapshots, integer-paise amount, method, external reference or notes, collector UID, allocation list, paired audit ID, and server confirmation timestamp. Cash, UPI, bank transfer, and controlled other methods all use the same transaction. A payment may not exceed the positive account outstanding. Allocation defaults to the oldest positive bill component, or gives one explicitly selected bill priority before continuing oldest-first. One transaction can cover at most two bill components so the complete allocation validation stays within Firestore Rules evaluation limits; a longer arrears span is collected through separate idempotent payments.
+Payment IDs are generated once when the collector opens the flow and reused as idempotency keys. A confirmed `payments/{paymentId}` document stores immutable business/customer snapshots, `areaId`, `assignedEmployeeId`, integer-paise amount, method, external reference or notes, collector UID, allocation list, paired audit ID, and server confirmation timestamp. Reversals carry the same operational snapshots. These immutable fields make date-, employee-, area-, customer-, and method-filtered collection reports possible without mutable joins. Cash, UPI, bank transfer, and controlled other methods all use the same transaction. A payment may not exceed the positive account outstanding. Allocation defaults to the oldest positive bill component, or gives one explicitly selected bill priority before continuing oldest-first. One transaction can cover at most two bill components so the complete allocation validation stays within Firestore Rules evaluation limits; a longer arrears span is collected through separate idempotent payments.
 
 `paymentStates/{paymentId}` is a transaction-only derived projection containing refundable amount, status, revision, and per-allocation reversal totals. It may be created only with its immutable payment and may advance only with a valid Head reversal. The original payment never changes. Each `paymentReversals/{reversalId}` is a separate immutable, reasoned, audited entry that restores the newest refundable allocation first and cannot make cumulative reversals exceed the confirmed payment.
 
@@ -97,13 +98,13 @@ Displaying an amount-specific UPI QR, opening a UPI app, or using the static bus
 
 Legacy finalized bills created before these projections remain readable, but payment confirmation and the next bill are blocked with `collection-projection-required`. They need a separately reviewed trusted backfill before collections begin. Corrections to bills remain new adjustments; corrections to payments remain new reversals. Finalized bills, line items, payments, reversals, and audits cannot be updated or deleted by clients.
 
-## Summaries
+## Dashboards and reports
 
-`monthlySummaries` will hold rebuildable Head-only dashboard projections by month, employee, and area. They improve read cost but are not financial authority. The immutable bill/payment ledger remains the source of truth.
+Phase 7 deliberately does not introduce a duplicate monthly summary source. Dashboards calculate totals with Firestore server aggregate `count` and `sum` queries over authoritative compact documents, plus bounded recent-activity pages. Employee metrics remain constrained by collector UID or assigned customer UID, active customer status, `collectionState/current`, and a membership-authorized area. Reports use path-aware cursor pagination and one optional entity scope (`customer`, `employee`, `area`, or `newspaper`) at a time so the index set stays bounded. CSV export repeats the exact filtered pages locally and stops at 5,000 rows.
 
 ## Indexes
 
-`firestore.indexes.json` includes only implemented query shapes:
+`firestore.indexes.json` includes only implemented query shapes. In addition to the 15 Phase 6 definitions, Phase 7 adds 46 definitions for:
 
 - Head customer pages by business + status + normalized customer name, with an optional area filter
 - employee customer pages by business + assigned employee + status + normalized customer name, with an optional area filter
@@ -112,9 +113,13 @@ Legacy finalized bills created before these projections remain readable, but pay
 - newspaper pages by business + status + normalized name
 - price history by business + newspaper + descending start date
 - active exact-date and period conflict/resolution queries by business + newspaper + kind + status + date bounds
-- collection-group payments by business + collector + descending confirmation time
-- collection-group payments by business + descending time
+- recent customer, area, and member activity/label lookup
+- bill aggregates, recent activity, customer reports, and one-scope report filters
+- payment and reversal date, method, employee, customer, and area report filters
+- collection-state payment status, aging, assignment, area, and outstanding ordering
+- customer creation/status summaries and subscription status/scope reports
+- newspaper line-item billing totals
 
-Phase 6 replaces the two unused provisional payment-history definitions with the connected query fields `collectorUid` and `confirmedAt`. Customer-specific history stays under one customer path; tenant-wide Head and collector-specific employee history use the two collection-group indexes above and cursor pagination.
+Phase 6 replaced the two unused provisional payment-history definitions with the connected query fields `collectorUid` and `confirmedAt`. Customer-specific history stays under one customer path; tenant-wide Head and collector-specific employee history use collection-group indexes and cursor pagination.
 
-All 15 indexes are deployed and `READY` in `paperroutedev`, including the two Phase 6 payment-history replacements using `collectorUid` and `confirmedAt`. Add indexes only for implemented queries; unused composite indexes increase storage and write fan-out.
+All 61 indexes are deployed and `READY` in `paperroutedev`. The employee balance aggregate has a dedicated collection-group index containing its tenant, assignment, active-customer, permitted-area, state, and `outstandingPaise` sum fields. Add indexes only for implemented queries; unused composite indexes increase storage and write fan-out.

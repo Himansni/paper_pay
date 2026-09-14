@@ -66,4 +66,45 @@ class FirebaseBusinessRepository implements BusinessRepository {
       );
     }
   }
+
+  @override
+  Future<void> updatePrimaryPricingRegion({
+    required String businessId,
+    required String actorId,
+    required PricingRegion region,
+  }) async {
+    final value = region.normalized();
+    try {
+      value.validate();
+    } on FormatException catch (error) {
+      throw AppException(error.message);
+    }
+    final now = FieldValue.serverTimestamp();
+    final batch = _firestore.batch();
+    batch.update(_business(businessId), {
+      'primaryPricingRegion': value.toMap(),
+      'updatedAt': now,
+    });
+    batch.set(_business(businessId).collection('auditRecords').doc(), {
+      'businessId': businessId,
+      'actorId': actorId,
+      'action': 'primaryPricingRegionUpdated',
+      'entityType': 'business',
+      'entityId': businessId,
+      'state': value.state,
+      'districtCity': value.districtCity,
+      'editionServiceRegion': value.editionServiceRegion,
+      'createdAt': now,
+    });
+    try {
+      await batch.commit();
+    } on FirebaseException catch (error) {
+      throw AppException(
+        error.code == 'permission-denied'
+            ? 'Your Head access no longer permits region changes.'
+            : 'Could not update the primary pricing region.',
+        code: error.code,
+      );
+    }
+  }
 }

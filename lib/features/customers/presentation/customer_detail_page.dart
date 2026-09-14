@@ -171,7 +171,7 @@ class _CustomerDetailViewState extends ConsumerState<_CustomerDetailView> {
                       const SizedBox(height: 4),
                       SelectableText(
                         customer.customerCode,
-                        style: const TextStyle(color: Color(0xFF627D98)),
+                        style: const TextStyle(color: Color(0xFF486581)),
                       ),
                     ],
                   ),
@@ -500,7 +500,7 @@ class _DetailCard extends StatelessWidget {
                 Text(
                   row.label,
                   style: const TextStyle(
-                    color: Color(0xFF627D98),
+                    color: Color(0xFF486581),
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -555,7 +555,7 @@ class _CustomerHistory extends ConsumerWidget {
                       items.isEmpty
                           ? const Text(
                             'No customer audit entries are available yet.',
-                            style: TextStyle(color: Color(0xFF627D98)),
+                            style: TextStyle(color: Color(0xFF486581)),
                           )
                           : Column(
                             children: [

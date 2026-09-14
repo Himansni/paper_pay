@@ -65,7 +65,7 @@ class CustomerSubscriptionsSection extends ConsumerWidget {
             const SizedBox(height: 6),
             const Text(
               'Multiple publications, dated terms, delivery days, and pauses are preserved independently.',
-              style: TextStyle(color: Color(0xFF627D98), height: 1.4),
+              style: TextStyle(color: Color(0xFF486581), height: 1.4),
             ),
             const SizedBox(height: 14),
             subscriptions.when(
@@ -271,7 +271,7 @@ class _SubscriptionDetailPageState
                       const SizedBox(height: 4),
                       Text(
                         subscription.id,
-                        style: const TextStyle(color: Color(0xFF627D98)),
+                        style: const TextStyle(color: Color(0xFF486581)),
                       ),
                     ],
                   ),
@@ -567,7 +567,7 @@ class _InfoCard extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           for (final row in rows) ...[
-            Text(row.label, style: const TextStyle(color: Color(0xFF627D98))),
+            Text(row.label, style: const TextStyle(color: Color(0xFF486581))),
             const SizedBox(height: 2),
             SelectableText(row.value),
             const SizedBox(height: 10),
@@ -613,7 +613,7 @@ class _AsyncHistoryCard<T> extends StatelessWidget {
                     items.isEmpty
                         ? Text(
                           emptyMessage,
-                          style: const TextStyle(color: Color(0xFF627D98)),
+                          style: const TextStyle(color: Color(0xFF486581)),
                         )
                         : Column(
                           children: [

@@ -48,7 +48,7 @@ class UpiSettingsPage extends ConsumerWidget {
             const SizedBox(height: 6),
             const Text(
               'These details only construct standard UPI payment requests. PaperRoute never stores a bank PIN, password, or OTP.',
-              style: TextStyle(color: Color(0xFF627D98), height: 1.4),
+              style: TextStyle(color: Color(0xFF486581), height: 1.4),
             ),
             const SizedBox(height: 18),
             settings.when(
@@ -238,7 +238,7 @@ class _UpiSettingsFormState extends ConsumerState<_UpiSettingsForm> {
                     const Text(
                       'This QR contains no amount and does not confirm that a payment was received.',
                       textAlign: TextAlign.center,
-                      style: TextStyle(color: Color(0xFF627D98), height: 1.4),
+                      style: TextStyle(color: Color(0xFF486581), height: 1.4),
                     ),
                   ],
                 ),

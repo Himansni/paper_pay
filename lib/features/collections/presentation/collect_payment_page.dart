@@ -209,7 +209,7 @@ class _CollectPaymentFormState extends ConsumerState<_CollectPaymentForm> {
             const SizedBox(height: 4),
             Text(
               '${customer.customerCode}\n${customer.addressSummary}',
-              style: const TextStyle(color: Color(0xFF627D98), height: 1.4),
+              style: const TextStyle(color: Color(0xFF486581), height: 1.4),
             ),
             const SizedBox(height: 14),
             Card(
@@ -634,7 +634,7 @@ class _UpiRequestPanel extends StatelessWidget {
                   const Text(
                     'Ask the customer to pay, then verify receipt independently before confirming below.',
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: Color(0xFF627D98), height: 1.4),
+                    style: TextStyle(color: Color(0xFF486581), height: 1.4),
                   ),
                 ],
               ),

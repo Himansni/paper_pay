@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
-import 'package:paper_route/firebase_options.dart';
+import 'package:paper_route/core/config/app_environment.dart';
 
 /// Result of starting Firebase. Configuration errors are shown as a safe,
 /// actionable setup screen instead of crashing before the first frame.
@@ -18,8 +18,9 @@ class FirebaseStartup {
   final String? message;
 }
 
-/// Initializes the real Firebase project or an explicitly requested local
-/// demo project. Production is always the default.
+/// Initializes the selected live Firebase project or an explicitly requested
+/// local demo project. Development is the safe default; production fails
+/// closed unless its distinct build flavor and public client options agree.
 abstract final class FirebaseBootstrap {
   static const bool _useEmulators = bool.fromEnvironment(
     'USE_FIREBASE_EMULATORS',
@@ -41,10 +42,8 @@ abstract final class FirebaseBootstrap {
         );
         await _connectToEmulators();
       } else {
-        // flutterfire configure replaces the checked-in placeholder with the
-        // non-secret identifiers for each selected platform.
         await Firebase.initializeApp(
-          options: DefaultFirebaseOptions.currentPlatform,
+          options: AppEnvironmentConfig.currentOptions(),
         );
       }
       return const FirebaseStartup.ready();

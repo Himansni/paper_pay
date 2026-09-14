@@ -73,7 +73,7 @@ class AuthScaffold extends StatelessWidget {
                   Text(
                     subtitle,
                     style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: const Color(0xFF627D98),
+                      color: const Color(0xFF486581),
                       height: 1.45,
                     ),
                   ),

@@ -137,7 +137,7 @@ class _NewspaperDetailViewState extends ConsumerState<_NewspaperDetailView> {
                       ),
                       Text(
                         newspaper.newspaperCode,
-                        style: const TextStyle(color: Color(0xFF627D98)),
+                        style: const TextStyle(color: Color(0xFF486581)),
                       ),
                     ],
                   ),
@@ -198,7 +198,7 @@ class _NewspaperDetailViewState extends ConsumerState<_NewspaperDetailView> {
                     ),
                     const Text(
                       'Preview the deterministic unit price for an explicit calendar date.',
-                      style: TextStyle(color: Color(0xFF627D98)),
+                      style: TextStyle(color: Color(0xFF486581)),
                     ),
                     const SizedBox(height: 12),
                     TextField(
@@ -311,7 +311,7 @@ class _NewspaperDetailViewState extends ConsumerState<_NewspaperDetailView> {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(color: Color(0xFF627D98))),
+        Text(label, style: const TextStyle(color: Color(0xFF486581))),
         const SizedBox(height: 2),
         SelectableText(value.isEmpty ? fallback : value),
       ],

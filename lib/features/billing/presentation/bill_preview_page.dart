@@ -177,7 +177,7 @@ class _BillPreviewPageState extends ConsumerState<BillPreviewPage> {
                     '${preview.customerName} • ${preview.customerCode}\n'
                     '${preview.customerAddress}',
                     style: const TextStyle(
-                      color: Color(0xFF627D98),
+                      color: Color(0xFF486581),
                       height: 1.4,
                     ),
                   ),
@@ -245,7 +245,7 @@ class _BillPreviewPageState extends ConsumerState<BillPreviewPage> {
                   if (preview.adjustments.isEmpty)
                     const Text(
                       'No signed adjustments for this month.',
-                      style: TextStyle(color: Color(0xFF627D98)),
+                      style: TextStyle(color: Color(0xFF486581)),
                     )
                   else
                     for (final adjustment in preview.adjustments)
@@ -265,7 +265,7 @@ class _BillPreviewPageState extends ConsumerState<BillPreviewPage> {
                   if (preview.newspaperSubtotalsPaise.isEmpty)
                     const Text(
                       'No chargeable delivery dates in this month.',
-                      style: TextStyle(color: Color(0xFF627D98)),
+                      style: TextStyle(color: Color(0xFF486581)),
                     )
                   else
                     for (final entry in preview.newspaperSubtotalsPaise.entries)

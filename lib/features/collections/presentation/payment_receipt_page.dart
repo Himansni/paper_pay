@@ -353,7 +353,7 @@ class _ReceiptRow extends StatelessWidget {
             child: Text(
               label,
               style: const TextStyle(
-                color: Color(0xFF627D98),
+                color: Color(0xFF486581),
                 fontWeight: FontWeight.w600,
               ),
             ),

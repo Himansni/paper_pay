@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // START: FlutterFire Configuration
@@ -7,6 +9,18 @@ plugins {
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
+
+val releaseSigningProperties = Properties()
+val releaseSigningFile = rootProject.file("key.properties")
+if (releaseSigningFile.exists()) {
+    releaseSigningFile.inputStream().use(releaseSigningProperties::load)
+}
+val releaseSigningConfigured = listOf(
+    "storeFile",
+    "storePassword",
+    "keyAlias",
+    "keyPassword",
+).all { !releaseSigningProperties.getProperty(it).isNullOrBlank() }
 
 android {
     namespace = "in.paperroute.paper_route"
@@ -32,14 +46,75 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        manifestPlaceholders["appName"] = "PaperRoute Dev"
+        manifestPlaceholders["usesCleartextTraffic"] = "true"
+    }
+
+    flavorDimensions += "environment"
+    productFlavors {
+        create("development") {
+            dimension = "environment"
+            applicationId = "in.paperroute.paper_route"
+            manifestPlaceholders["appName"] = "PaperRoute Dev"
+            manifestPlaceholders["usesCleartextTraffic"] = "true"
+        }
+        create("production") {
+            dimension = "environment"
+            applicationId = "in.paperroute.paper_route.prod"
+            manifestPlaceholders["appName"] = "PaperRoute"
+            manifestPlaceholders["usesCleartextTraffic"] = "false"
+        }
+    }
+
+    signingConfigs {
+        if (releaseSigningConfigured) {
+            create("release") {
+                storeFile = rootProject.file(
+                    releaseSigningProperties.getProperty("storeFile"),
+                )
+                storePassword = releaseSigningProperties.getProperty("storePassword")
+                keyAlias = releaseSigningProperties.getProperty("keyAlias")
+                keyPassword = releaseSigningProperties.getProperty("keyPassword")
+            }
+        }
     }
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig =
+                if (releaseSigningConfigured) signingConfigs.getByName("release") else null
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
         }
+    }
+}
+
+val verifyProductionReleaseInputs by tasks.registering {
+    group = "verification"
+    description = "Fails closed until production Firebase and signing inputs exist."
+    doLast {
+        val firebaseConfig = file("src/production/google-services.json")
+        check(firebaseConfig.exists()) {
+            "Missing android/app/src/production/google-services.json. " +
+                "Register in.paperroute.paper_route.prod in the approved production Firebase project."
+        }
+        check(releaseSigningConfigured) {
+            "Missing complete android/key.properties release signing configuration."
+        }
+    }
+}
+
+tasks.configureEach {
+    if (
+        name == "processProductionReleaseGoogleServices" ||
+        name == "packageProductionRelease" ||
+        name == "bundleProductionRelease"
+    ) {
+        dependsOn(verifyProductionReleaseInputs)
     }
 }
 

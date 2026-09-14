@@ -58,7 +58,7 @@ class EmployeesPage extends ConsumerWidget {
             const SizedBox(height: 6),
             const Text(
               'Invite verified employees, control their operational permissions, and suspend access without deleting history.',
-              style: TextStyle(color: Color(0xFF627D98), height: 1.4),
+              style: TextStyle(color: Color(0xFF486581), height: 1.4),
             ),
             const SizedBox(height: 20),
             members.when(
@@ -427,7 +427,7 @@ class _InvitationDialogState extends State<_InvitationDialog> {
                     padding: EdgeInsets.only(top: 8),
                     child: Text(
                       'No active areas yet. You can assign areas later.',
-                      style: TextStyle(color: Color(0xFF627D98)),
+                      style: TextStyle(color: Color(0xFF486581)),
                     ),
                   )
                 else

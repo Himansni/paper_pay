@@ -62,7 +62,9 @@ Re-run it only when adding a platform or changing Firebase services. During inte
 1. Select the Firebase project ID `paperroutedev`.
 2. Select **android** and **web**.
 3. Accept the Android package name `in.paperroute.paper_route`.
-4. Let the tool replace `lib/firebase_options.dart` and update platform configuration.
+4. Let the tool replace `lib/firebase_options.dart`, then verify the development
+   Android output remains `android/app/src/development/google-services.json`.
+   Never let development configuration populate the production flavor folder.
 
 The generated Firebase options contain client identifiers, not Admin SDK secrets. Never download or add a service-account JSON key to the Flutter project.
 
@@ -216,7 +218,7 @@ Give the employee the business ID and invitation code through a trusted channel.
 ## 8. Run the real app
 
 ```sh
-flutter run
+flutter run --flavor development --dart-define=APP_ENV=development
 ```
 
 Choose an Android device/emulator. The local Android toolchain is ready. iOS requires completing Xcode installation first.

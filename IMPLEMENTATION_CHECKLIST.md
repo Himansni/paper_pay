@@ -124,11 +124,30 @@ Updated: 14 September 2026
 
 ## Phase 8 — Production readiness
 
-- [ ] Complete emulator integration suite
-- [ ] Performance/read-cost profiling with 1,000+ customers
-- [ ] Accessibility and outdoor-readability review
-- [ ] Android signing and release flavors
-- [ ] Separate development and production Firebase projects
-- [ ] App Check evaluation and rollout
-- [ ] Privacy, retention, backup, and incident procedures
+- [x] Complete emulator integration suite
+- [x] Emulator-only performance/read-cost profile with 1,200 customers and representative operational records
+- [x] Focused accessibility, large-text, tap-target, outdoor-readability, and financial-confirmation review
+- [x] Separate Android development/production flavors, R8 release build, signing guard, and secure signing documentation
+- [x] Fail-closed development/production Firebase configuration boundary and exact production setup plan
+- [x] App Check evaluation and staged non-enforcing rollout plan
+- [x] Privacy, retention, export, backup/recovery, credential rotation, and incident procedures
+- [x] Focused tenant/role/privacy/immutable-ledger security audit; no Rules weakening required
+- [x] Cost-conscious quota/error monitoring and scale-risk guidance
+- [x] Reproducible CI gate for formatting, analysis, Flutter/Rules/index tests, hygiene scan, and Android release build
+- [x] Production release, staged rollout, and app/Rules/index/data rollback runbook
+- [ ] Create and configure the separate production Firebase project (requires explicit owner approval)
+- [ ] Create and protect the Android upload key and Play signing configuration (owner action)
+- [ ] Complete production App Check monitoring and later enforcement (requires release traffic and explicit approval)
+- [ ] Complete iOS Xcode, Apple signing, and production FlutterFire configuration (deferred)
 - [ ] Production deployment only after explicit owner approval
+
+### Phase 8 local verification — 14 September 2026
+
+- [x] 127 Dart files formatted; `flutter analyze` reported no issues
+- [x] 128 Flutter unit/widget tests passed
+- [x] 58 Firestore Rules/transaction tests passed
+- [x] Phase 7 connected Auth/Firestore emulator browser workflow passed (2 test stages)
+- [x] 3 production index/regression tests passed; exactly 61 unique indexes retained
+- [x] JSON and JavaScript validation, `git diff --check`, and versionable-file secret/generated-artifact scan passed
+- [x] Emulator-only scale profile passed with 1,200 customers and 5,525 operational documents
+- [x] R8/resource-shrunk development release APK built successfully

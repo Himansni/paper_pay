@@ -66,7 +66,7 @@ class DashboardPage extends ConsumerWidget {
                 user.isHead
                     ? 'Head Distributor workspace'
                     : 'Employee distribution workspace',
-                style: const TextStyle(color: Color(0xFF627D98)),
+                style: const TextStyle(color: Color(0xFF486581)),
               ),
               const SizedBox(height: 18),
               dashboard.when(
@@ -363,7 +363,7 @@ class _PrimaryMetrics extends StatelessWidget {
                         const SizedBox(height: 4),
                         Text(
                           item.label,
-                          style: const TextStyle(color: Color(0xFF627D98)),
+                          style: const TextStyle(color: Color(0xFF486581)),
                         ),
                       ],
                     ),
@@ -423,7 +423,7 @@ class _QuickActions extends StatelessWidget {
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                            color: Color(0xFF627D98),
+                            color: Color(0xFF486581),
                             fontSize: 12,
                           ),
                         ),

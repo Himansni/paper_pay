@@ -101,7 +101,7 @@ class _CollectionsWorkspacePageState
                   : widget.user.isHead
                   ? 'Confirmed payments and reversals are retained as an immutable financial trail.'
                   : 'Your own immutable collection receipts remain available after a customer is reassigned.',
-              style: const TextStyle(color: Color(0xFF627D98), height: 1.4),
+              style: const TextStyle(color: Color(0xFF486581), height: 1.4),
             ),
             const SizedBox(height: 12),
             Card(

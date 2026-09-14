@@ -222,7 +222,7 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
                 _isEditing
                     ? 'Customer ID ${existing!.customerCode} is permanent. Assignment and status have separate audited actions.'
                     : 'A permanent customer ID is generated when this record is saved.',
-                style: const TextStyle(color: Color(0xFF627D98), height: 1.4),
+                style: const TextStyle(color: Color(0xFF486581), height: 1.4),
               ),
               const SizedBox(height: 20),
               _SectionCard(
@@ -326,7 +326,7 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
                     const SizedBox(height: 10),
                     const Text(
                       'Use Change assignment on the customer detail screen to transfer the customer.',
-                      style: TextStyle(color: Color(0xFF627D98)),
+                      style: TextStyle(color: Color(0xFF486581)),
                     ),
                   ] else if (areas.isLoading)
                     const Center(child: CircularProgressIndicator())
@@ -428,7 +428,7 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
                         padding: EdgeInsets.only(top: 12),
                         child: Text(
                           'This customer will be assigned to you. Firestore verifies the selected area against your membership.',
-                          style: TextStyle(color: Color(0xFF627D98)),
+                          style: TextStyle(color: Color(0xFF486581)),
                         ),
                       ),
                   ],
@@ -707,7 +707,7 @@ class _SectionCard extends StatelessWidget {
               const SizedBox(height: 5),
               Text(
                 subtitle!,
-                style: const TextStyle(color: Color(0xFF627D98), height: 1.35),
+                style: const TextStyle(color: Color(0xFF486581), height: 1.35),
               ),
             ],
             const SizedBox(height: 16),

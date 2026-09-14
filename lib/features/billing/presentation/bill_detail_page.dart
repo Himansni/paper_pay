@@ -152,7 +152,7 @@ class _FinalizedBillViewState extends ConsumerState<_FinalizedBillView> {
           const SizedBox(height: 6),
           Text(
             '${bill.customerName} • ${bill.customerCode}\n${bill.customerAddress}',
-            style: const TextStyle(color: Color(0xFF627D98), height: 1.4),
+            style: const TextStyle(color: Color(0xFF486581), height: 1.4),
           ),
           const SizedBox(height: 12),
           Card(

@@ -4,7 +4,7 @@ PaperRoute is an Android-first Flutter application for Indian newspaper agents. 
 
 ## Current status
 
-Phases 0 through 7 are complete in the development project. Phase 7 dashboards, reports, CSV exports, and daily-pricing workflow are verified locally and against the reviewed Rules and 61 ready indexes deployed to `paperroutedev`.
+Phases 0 through 7 are complete in the development project. Safe local Phase 8 production-readiness work is complete; creating or deploying the separate production Firebase project remains an owner-approved launch step. Phase 7 dashboards, reports, CSV exports, and daily-pricing workflow are verified against the reviewed Rules and 61 ready indexes deployed to `paperroutedev`.
 
 - Flutter project for Android, iOS, and web
 - Firebase project `paperroutedev` connected for Android and Web
@@ -83,14 +83,16 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/FIRESTORE_SCHEMA.md](
 2. Run `flutter doctor -v` and resolve Android issues.
 3. Run `flutter pub get`.
 4. Complete [docs/FIREBASE_SETUP.md](docs/FIREBASE_SETUP.md).
-5. Start an Android emulator and run `flutter run`.
+5. Start an Android emulator and run `flutter run --flavor development --dart-define=APP_ENV=development`.
 
 For local Firebase-only development:
 
 ```sh
 npm install
 npx firebase emulators:start --project demo-paper-route --only auth,firestore
-flutter run --dart-define=USE_FIREBASE_EMULATORS=true
+flutter run --flavor development \
+  --dart-define=APP_ENV=development \
+  --dart-define=USE_FIREBASE_EMULATORS=true
 ```
 
 The Android emulator connects to the host through `10.0.2.2`; web and Apple platforms use `127.0.0.1`. Emulator persistence is disabled deliberately so stale local data does not hide test failures.
@@ -107,7 +109,7 @@ env JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" \
   npm run test:rules
 ```
 
-The last local verification completed on 14 September 2026 with clean formatting, no analyzer issues, 122 passing Dart/widget tests, 58 passing Firestore Rules/transaction tests, a passing production-index regression, and passing emulator-backed Chrome Phase 6 and Phase 7 repository/screen workflows. The expanded suite covers role-scoped aggregate dashboards, report filters and pagination, CSV safety, reporting projection integrity, immutable post-finalization pricing behavior, and every earlier billing and collection protection.
+The final Phase 8 verification commands and counts are recorded in the implementation checklist. The suite covers environment isolation, accessibility safeguards, role-scoped aggregate dashboards, report filters and pagination, CSV safety, reporting projection integrity, immutable financial behavior, and every earlier billing and collection protection.
 
 The Phase 3 integration test signs in as a synthetic verified Head, creates a complete customer with an opening balance, assigns the customer, edits the profile, archives and reactivates it, and verifies the audit history. It then signs in as the assigned synthetic employee, verifies assignment-scoped visibility and the hidden Head financial view, and saves an authorized location-note edit through the real repository and local Security Rules. All data is recreated in the local `demo-paper-route` emulators; no live Firebase customer records are created.
 
@@ -248,4 +250,4 @@ Before release, use separate development and production Firebase projects, revie
 
 ## Roadmap
 
-The remaining production-hardening work is tracked as Phase 8 in [IMPLEMENTATION_CHECKLIST.md](IMPLEMENTATION_CHECKLIST.md). Phase 8 implementation has not begun.
+Production preparation, release gates, remaining owner actions, privacy/operations, performance monitoring, accessibility, and App Check are documented in [PRODUCTION_RELEASE.md](docs/PRODUCTION_RELEASE.md), [PRIVACY_AND_OPERATIONS.md](docs/PRIVACY_AND_OPERATIONS.md), [PERFORMANCE_AND_MONITORING.md](docs/PERFORMANCE_AND_MONITORING.md), [UX_ACCESSIBILITY_REVIEW.md](docs/UX_ACCESSIBILITY_REVIEW.md), [SECURITY_REVIEW.md](docs/SECURITY_REVIEW.md), and [APP_CHECK_ROLLOUT.md](docs/APP_CHECK_ROLLOUT.md).

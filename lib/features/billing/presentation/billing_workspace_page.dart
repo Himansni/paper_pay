@@ -117,7 +117,7 @@ class _BillingWorkspacePageState extends ConsumerState<BillingWorkspacePage> {
               widget.user.isHead
                   ? 'Review deterministic daily charges before finalization. Previews never write data.'
                   : 'You can read finalized bills only for customers currently assigned to you.',
-              style: const TextStyle(color: Color(0xFF627D98), height: 1.4),
+              style: const TextStyle(color: Color(0xFF486581), height: 1.4),
             ),
             const SizedBox(height: 16),
             OutlinedButton.icon(

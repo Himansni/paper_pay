@@ -5,6 +5,7 @@ abstract final class AppTheme {
   static const Color brand = Color(0xFF0B6E4F);
   static const Color accent = Color(0xFFF2B134);
   static const Color canvas = Color(0xFFF5F7F4);
+  static const Color mutedInk = Color(0xFF486581);
 
   static ThemeData get light {
     final scheme = ColorScheme.fromSeed(
@@ -48,6 +49,24 @@ abstract final class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
           ),
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          minimumSize: const Size(48, 48),
+          tapTargetSize: MaterialTapTargetSize.padded,
+        ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          minimumSize: const Size(48, 48),
+          tapTargetSize: MaterialTapTargetSize.padded,
+        ),
+      ),
+      iconButtonTheme: const IconButtonThemeData(
+        style: ButtonStyle(
+          minimumSize: WidgetStatePropertyAll(Size.square(48)),
+          tapTargetSize: MaterialTapTargetSize.padded,
         ),
       ),
       cardTheme: CardThemeData(

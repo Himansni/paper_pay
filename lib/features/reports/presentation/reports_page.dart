@@ -237,7 +237,7 @@ class _ReportsPageState extends ConsumerState<ReportsPage> {
               const SizedBox(height: 5),
               const Text(
                 'Server-side totals and paginated records respect the selected filters. CSV exports use the same query scope.',
-                style: TextStyle(color: Color(0xFF627D98), height: 1.4),
+                style: TextStyle(color: Color(0xFF486581), height: 1.4),
               ),
               const SizedBox(height: 16),
               _ReportKindSelector(

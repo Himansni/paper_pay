@@ -35,7 +35,7 @@ class BusinessSettingsPage extends ConsumerWidget {
             const SizedBox(height: 6),
             const Text(
               'These shared details identify the business. Roles and access remain controlled by membership records.',
-              style: TextStyle(color: Color(0xFF627D98), height: 1.4),
+              style: TextStyle(color: Color(0xFF486581), height: 1.4),
             ),
             const SizedBox(height: 20),
             business.when(
@@ -146,7 +146,7 @@ class _PrimaryPricingRegionCardState extends State<_PrimaryPricingRegionCard> {
             widget.region.isConfigured
                 ? '${widget.region.displayName}, ${widget.region.state}'
                 : 'Set this once so Daily Pricing always opens in the correct local context.',
-            style: const TextStyle(color: Color(0xFF627D98), height: 1.4),
+            style: const TextStyle(color: Color(0xFF486581), height: 1.4),
           ),
           if (!widget.region.isConfigured || _editing) ...[
             const SizedBox(height: 16),

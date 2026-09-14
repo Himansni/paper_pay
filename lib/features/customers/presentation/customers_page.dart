@@ -159,7 +159,7 @@ class _CustomersPageState extends ConsumerState<CustomersPage> {
                 widget.user.isHead
                     ? 'Search and manage customer records without loading the entire business directory.'
                     : 'Only customers currently assigned to you are returned by Firestore.',
-                style: const TextStyle(color: Color(0xFF627D98), height: 1.4),
+                style: const TextStyle(color: Color(0xFF486581), height: 1.4),
               ),
               const SizedBox(height: 18),
               _SearchAndFilterCard(
@@ -229,7 +229,7 @@ class _CustomersPageState extends ConsumerState<CustomersPage> {
                 Text(
                   '${_customers.length} customer${_customers.length == 1 ? '' : 's'} loaded',
                   style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: const Color(0xFF627D98),
+                    color: const Color(0xFF486581),
                   ),
                 ),
                 const SizedBox(height: 10),
@@ -495,7 +495,7 @@ class _CustomerCard extends StatelessWidget {
                     const SizedBox(height: 3),
                     SelectableText(
                       customer.customerCode,
-                      style: const TextStyle(color: Color(0xFF627D98)),
+                      style: const TextStyle(color: Color(0xFF486581)),
                     ),
                     const SizedBox(height: 8),
                     Text('${customer.phone} • $areaName'),
@@ -515,7 +515,7 @@ class _CustomerCard extends StatelessWidget {
                       const SizedBox(height: 5),
                       Text(
                         'Assigned: $employeeName',
-                        style: const TextStyle(color: Color(0xFF627D98)),
+                        style: const TextStyle(color: Color(0xFF486581)),
                       ),
                     ],
                   ],

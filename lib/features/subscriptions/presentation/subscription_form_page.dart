@@ -256,7 +256,7 @@ class _SubscriptionFormPageState extends ConsumerState<SubscriptionFormPage> {
                 _isChanging
                     ? 'Existing terms remain in immutable version history. Enter the date on which the new terms begin.'
                     : 'Each newspaper has one stable subscription series. Later changes create dated versions.',
-                style: const TextStyle(color: Color(0xFF627D98), height: 1.4),
+                style: const TextStyle(color: Color(0xFF486581), height: 1.4),
               ),
               const SizedBox(height: 20),
               if (_loadingNewspapers)
@@ -368,7 +368,7 @@ class _SubscriptionFormPageState extends ConsumerState<SubscriptionFormPage> {
                 const SizedBox(height: 6),
                 const Text(
                   'Optional. This Head-authorized fixed unit price takes precedence over catalog prices until terms change.',
-                  style: TextStyle(color: Color(0xFF627D98), height: 1.4),
+                  style: TextStyle(color: Color(0xFF486581), height: 1.4),
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
@@ -392,7 +392,7 @@ class _SubscriptionFormPageState extends ConsumerState<SubscriptionFormPage> {
                   widget.subscription!.customPricePaise != null) ...[
                 const Text(
                   'The existing Head-authorized customer price will be preserved. Employees cannot change privileged pricing.',
-                  style: TextStyle(color: Color(0xFF627D98), height: 1.4),
+                  style: TextStyle(color: Color(0xFF486581), height: 1.4),
                 ),
               ],
               const SizedBox(height: 24),

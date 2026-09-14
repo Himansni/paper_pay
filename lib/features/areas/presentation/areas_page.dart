@@ -43,7 +43,7 @@ class AreasPage extends ConsumerWidget {
             const SizedBox(height: 6),
             const Text(
               'Create operational areas and keep employee coverage synchronized with authoritative member records.',
-              style: TextStyle(color: Color(0xFF627D98), height: 1.4),
+              style: TextStyle(color: Color(0xFF486581), height: 1.4),
             ),
             const SizedBox(height: 20),
             areas.when(
@@ -240,7 +240,7 @@ class _AreaList extends StatelessWidget {
                         Text(
                           '${area.isActive ? 'Active' : 'Inactive'} • '
                           '${_assignedCount(area, employees)} employees',
-                          style: const TextStyle(color: Color(0xFF627D98)),
+                          style: const TextStyle(color: Color(0xFF486581)),
                         ),
                       ],
                     ),

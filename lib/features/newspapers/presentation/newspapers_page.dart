@@ -154,7 +154,7 @@ class _NewspapersPageState extends ConsumerState<NewspapersPage> {
                 widget.user.isHead
                     ? 'Manage the tenant catalog and open a publication to configure audited date-specific prices.'
                     : 'Browse active publications and their effective prices. Catalog and pricing changes are Head-only.',
-                style: const TextStyle(color: Color(0xFF627D98), height: 1.4),
+                style: const TextStyle(color: Color(0xFF486581), height: 1.4),
               ),
               const SizedBox(height: 18),
               Card(
@@ -278,7 +278,7 @@ class _NewspapersPageState extends ConsumerState<NewspapersPage> {
                 Text(
                   '${_newspapers.length} newspaper${_newspapers.length == 1 ? '' : 's'} loaded',
                   style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: const Color(0xFF627D98),
+                    color: const Color(0xFF486581),
                   ),
                 ),
                 const SizedBox(height: 10),

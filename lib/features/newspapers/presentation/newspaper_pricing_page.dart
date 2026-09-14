@@ -112,7 +112,7 @@ class _NewspaperPricingPageState extends ConsumerState<NewspaperPricingPage> {
             const SizedBox(height: 6),
             const Text(
               'Exact dates override periods, which override the immutable initial default. Corrections supersede records without deleting history.',
-              style: TextStyle(color: Color(0xFF627D98), height: 1.4),
+              style: TextStyle(color: Color(0xFF486581), height: 1.4),
             ),
             const SizedBox(height: 18),
             if (_rules.isEmpty && _isLoading)

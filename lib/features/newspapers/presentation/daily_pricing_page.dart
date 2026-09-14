@@ -182,7 +182,7 @@ class _DailyPricingPageState extends ConsumerState<DailyPricingPage> {
               region?.isConfigured == true
                   ? '${region!.state}${region.editionServiceRegion.isEmpty ? '' : ' · ${region.editionServiceRegion}'}'
                   : 'Set the Primary Pricing Region in Business Settings for persistent local context.',
-              style: const TextStyle(color: Color(0xFF627D98)),
+              style: const TextStyle(color: Color(0xFF486581)),
             ),
             const SizedBox(height: 18),
             if (_loading)
@@ -289,7 +289,7 @@ class _DailyPricingPageState extends ConsumerState<DailyPricingPage> {
                         const Text(
                           'Customer-specific exceptions still take priority. Finalized bills and their line snapshots never change.',
                           style: TextStyle(
-                            color: Color(0xFF627D98),
+                            color: Color(0xFF486581),
                             height: 1.4,
                           ),
                         ),

@@ -70,7 +70,7 @@ class CustomerCollectionSummary extends ConsumerWidget {
                     children: [
                       const Text(
                         'Current outstanding',
-                        style: TextStyle(color: Color(0xFF627D98)),
+                        style: TextStyle(color: Color(0xFF486581)),
                       ),
                       const SizedBox(height: 3),
                       Text(
@@ -133,7 +133,7 @@ class CustomerCollectionSummary extends ConsumerWidget {
                           padding: EdgeInsets.only(top: 8),
                           child: Text(
                             'Collection requires this assignment, area access, and the record-payments permission.',
-                            style: TextStyle(color: Color(0xFF627D98)),
+                            style: TextStyle(color: Color(0xFF486581)),
                           ),
                         ),
                     ],

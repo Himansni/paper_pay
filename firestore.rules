@@ -69,9 +69,11 @@ service cloud.firestore {
     }
 
     function validActiveEmployeeForArea(businessId, employeeId, areaId) {
-      let employee = get(memberPath(businessId, employeeId)).data;
+      let employee = exists(memberPath(businessId, employeeId))
+        ? get(memberPath(businessId, employeeId)).data
+        : null;
       return employeeId is string
-        && exists(memberPath(businessId, employeeId))
+        && employee != null
         && employee.businessId == businessId
         && employee.uid == employeeId
         && employee.role == 'employee'
@@ -487,13 +489,17 @@ service cloud.firestore {
     }
 
     function canCollectCustomer(businessId, customerId) {
-      let customer = get(customerPath(businessId, customerId)).data;
-      let member = memberData(businessId);
+      let member = exists(memberPath(businessId, request.auth.uid))
+        ? get(memberPath(businessId, request.auth.uid)).data
+        : null;
+      let customer = exists(customerPath(businessId, customerId))
+        ? get(customerPath(businessId, customerId)).data
+        : null;
       return signedIn()
-        && exists(memberPath(businessId, request.auth.uid))
+        && member != null
         && member.status == 'active'
         && member.businessId == businessId
-        && exists(customerPath(businessId, customerId))
+        && customer != null
         && customer.businessId == businessId
         && customer.status == 'active'
         && (
@@ -510,13 +516,17 @@ service cloud.firestore {
     }
 
     function canReadCollectionHistory(businessId, customerId) {
-      let customer = get(customerPath(businessId, customerId)).data;
-      let member = memberData(businessId);
+      let member = exists(memberPath(businessId, request.auth.uid))
+        ? get(memberPath(businessId, request.auth.uid)).data
+        : null;
+      let customer = exists(customerPath(businessId, customerId))
+        ? get(customerPath(businessId, customerId)).data
+        : null;
       return signedIn()
-        && exists(memberPath(businessId, request.auth.uid))
+        && member != null
         && member.status == 'active'
         && member.businessId == businessId
-        && exists(customerPath(businessId, customerId))
+        && customer != null
         && customer.businessId == businessId
         && (
           member.role == 'head'
@@ -2250,13 +2260,17 @@ service cloud.firestore {
     }
 
     function canManageAssignedSubscription(businessId, customerId) {
-      let member = get(memberPath(businessId, request.auth.uid)).data;
-      let customer = get(customerPath(businessId, customerId)).data;
+      let member = exists(memberPath(businessId, request.auth.uid))
+        ? get(memberPath(businessId, request.auth.uid)).data
+        : null;
+      let customer = exists(customerPath(businessId, customerId))
+        ? get(customerPath(businessId, customerId)).data
+        : null;
       return signedIn()
-        && exists(memberPath(businessId, request.auth.uid))
+        && member != null
         && member.status == 'active'
         && member.businessId == businessId
-        && exists(customerPath(businessId, customerId))
+        && customer != null
         && customer.businessId == businessId
         && customer.status == 'active'
         && (

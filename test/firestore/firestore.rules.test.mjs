@@ -1277,6 +1277,49 @@ describe('verified employee invitation', () => {
   });
 });
 
+describe('member guard ordering and collection read guards', () => {
+  test('referenced member document must exist before dereference', async () => {
+    const employee = auth('employee-a', 'employee-a@example.com');
+    await assertFails(
+      getDoc(doc(employee, 'businesses/business-a/members/not-present')),
+    );
+  });
+
+  test('Head self-member read remains allowed', async () => {
+    await assertSucceeds(
+      getDoc(doc(auth('head-a', 'head-a@example.com'), 'businesses/business-a/members/head-a')),
+    );
+  });
+
+  test('employee cases remain authorized only for the matching member and area', async () => {
+    const employee = auth('employee-a', 'employee-a@example.com');
+    await assertSucceeds(
+      getDoc(doc(employee, 'businesses/business-a/members/employee-a')),
+    );
+    await assertFails(
+      getDoc(doc(employee, 'businesses/business-a/members/head-a')),
+    );
+    await assertFails(
+      getDoc(doc(auth('employee-b', 'employee-b@example.com'), 'businesses/business-a/members/employee-a')),
+    );
+  });
+
+  test('first collectionState/current case is allowed only when member and customer are present and valid', async () => {
+    await seedCollectionProjection();
+    const head = auth('head-a', 'head-a@example.com');
+    const employee = auth('employee-a', 'employee-a@example.com');
+    await assertSucceeds(
+      getDoc(doc(head, 'businesses/business-a/customers/C-MANAGED/collectionState/current')),
+    );
+    await assertSucceeds(
+      getDoc(doc(employee, 'businesses/business-a/customers/C-MANAGED/collectionState/current')),
+    );
+    await assertFails(
+      getDoc(doc(head, 'businesses/business-a/customers/ghost/collectionState/current')),
+    );
+  });
+});
+
 describe('Phase 2 Head operations', () => {
   test('Head updates permitted business settings with audit while employee is denied', async () => {
     const db = auth('head-a', 'head-a@example.com');

@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 
 const expectedLocalHosts = [
   process.env.FIRESTORE_EMULATOR_HOST,
@@ -32,26 +32,115 @@ const phases = [
   },
 ];
 
-function run(command, args, label) {
-  process.stdout.write(`\n=== ${label} ===\n`);
+const requestedPhase = process.argv[2]?.toLowerCase();
+const phasesToRun = requestedPhase
+  ? phases.filter(
+      (phase) =>
+        phase.name.toLowerCase().includes(requestedPhase) ||
+        phase.seedScript.toLowerCase().includes(requestedPhase),
+    )
+  : phases;
 
-  const result = spawnSync(command, args, {
-    stdio: 'inherit',
-    env: process.env,
-  });
-
-  if (result.error) {
-    throw result.error;
-  }
-
-  if (result.status !== 0) {
-    throw new Error(`${label} failed with exit code ${result.status ?? 'unknown'}.`);
-  }
+if (requestedPhase && phasesToRun.length === 0) {
+  throw new Error(
+    `No matching phase found for "${process.argv[2]}". Available phases: Phase 5, Phase 6, Phase 7.`,
+  );
 }
 
-for (const phase of phases) {
-  run('node', [phase.seedScript], `${phase.name}: seed`);
-  run(
+function runCommand(command, args, label, { isFlutterTest = false } = {}) {
+  process.stdout.write(`\n=== ${label} ===\n`);
+
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: process.env,
+    });
+
+    let combinedOutput = '';
+    let terminated = false;
+
+    function terminateFlutter() {
+      if (terminated) return;
+      terminated = true;
+      try {
+        child.stdin.write('q\n');
+        child.stdin.end();
+      } catch {}
+      setTimeout(() => {
+        try {
+          child.kill('SIGINT');
+        } catch {}
+      }, 3000);
+    }
+
+    child.stdout.on('data', (chunk) => {
+      process.stdout.write(chunk);
+      combinedOutput += chunk.toString();
+      if (
+        isFlutterTest &&
+        (combinedOutput.includes('All tests passed!') ||
+          combinedOutput.includes('Some tests failed.') ||
+          combinedOutput.includes('Application finished.'))
+      ) {
+        terminateFlutter();
+      }
+    });
+
+    child.stderr.on('data', (chunk) => {
+      process.stderr.write(chunk);
+      combinedOutput += chunk.toString();
+      if (
+        isFlutterTest &&
+        (combinedOutput.includes('All tests passed!') ||
+          combinedOutput.includes('Some tests failed.') ||
+          combinedOutput.includes('Application finished.'))
+      ) {
+        terminateFlutter();
+      }
+    });
+
+    child.on('error', (err) => {
+      reject(new Error(`${label} failed to spawn: ${err.message}`));
+    });
+
+    child.on('close', (status) => {
+      if (status !== 0 && status !== null) {
+        return reject(
+          new Error(`${label} failed with exit code ${status}.`),
+        );
+      }
+
+      if (isFlutterTest) {
+        const plainOutput = combinedOutput.replace(
+          /\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])/g,
+          '',
+        );
+        const hasPassedConfirmation = plainOutput.includes('All tests passed!');
+        const hasTestFailureMarker =
+          plainOutput.includes('Some tests failed.') ||
+          plainOutput.includes('Test failed.') ||
+          plainOutput.includes('EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK') ||
+          /\b\d+:\d+\s+\+\d+\s+-\d+:/.test(plainOutput) ||
+          /\b\d+:\d+\s+\+\d+.*\[E\]/.test(plainOutput);
+
+        if (hasTestFailureMarker || !hasPassedConfirmation) {
+          return reject(
+            new Error(
+              `${label} failed: test failure detected in Flutter output ` +
+                `(passed confirmation: ${hasPassedConfirmation}, failure marker: ${hasTestFailureMarker}).`,
+            ),
+          );
+        }
+      }
+
+      resolve();
+    });
+  });
+}
+
+for (const phase of phasesToRun) {
+  await runCommand('node', [phase.seedScript], `${phase.name}: seed`);
+  await runCommand(
     'flutter',
     [
       'run',
@@ -62,9 +151,10 @@ for (const phase of phases) {
       '--dart-define=USE_FIREBASE_EMULATORS=true',
     ],
     `${phase.name}: integration smoke test`,
+    { isFlutterTest: true },
   );
 }
 
 process.stdout.write(
-  '\nAll Phase 5, 6, and 7 emulator integration smoke tests passed.\n',
+  `\nAll ${phasesToRun.map((p) => p.name.split(' ')[0] + ' ' + p.name.split(' ')[1]).join(', ')} emulator integration smoke tests passed.\n`,
 );

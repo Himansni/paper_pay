@@ -308,7 +308,13 @@ void main() {
       await _settleRemote(tester);
       expect(find.text('Server-confirmed ledger entry'), findsOneWidget);
       expect(find.text('Reversed'), findsWidgets);
-      expect(find.text('2026-10'), findsOneWidget);
+      final allocationMonth = find.text('2026-10');
+      await tester.scrollUntilVisible(
+        allocationMonth,
+        250,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(allocationMonth, findsOneWidget);
 
       final firstHistory = await collections.fetchPaymentHistory(
         actor: head,

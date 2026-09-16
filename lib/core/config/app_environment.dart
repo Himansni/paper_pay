@@ -107,6 +107,25 @@ abstract final class AppEnvironmentConfig {
     }
   }
 
+  /// Determines whether Firebase App Check should be activated.
+  ///
+  /// Per security rollout policy, App Check token acquisition is enabled only
+  /// for live production Android builds using Play Integrity. Emulator runs,
+  /// development builds, Web, and iOS do not activate production App Check.
+  static bool shouldActivateAppCheck({
+    required AppEnvironment environment,
+    required TargetPlatform platform,
+    required bool isWeb,
+    required bool useEmulators,
+  }) {
+    if (useEmulators) {
+      return false;
+    }
+    return environment == AppEnvironment.production &&
+        !isWeb &&
+        platform == TargetPlatform.android;
+  }
+
   static FirebaseOptions _productionOptions() {
     if (!kIsWeb && defaultTargetPlatform != TargetPlatform.android) {
       throw UnsupportedError(

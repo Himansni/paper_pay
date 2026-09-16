@@ -317,7 +317,13 @@ void main() {
       );
       await _settleRemote(tester);
       expect(find.text('Business reports'), findsOneWidget);
-      expect(find.text('Synthetic C-EMPLOYEE'), findsOneWidget);
+      final employeeRow = find.text('Synthetic C-EMPLOYEE');
+      await tester.scrollUntilVisible(
+        employeeRow,
+        250,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(employeeRow, findsOneWidget);
 
       await tester.pumpWidget(
         ProviderScope(child: MaterialApp(home: DailyPricingPage(user: head))),
@@ -339,6 +345,7 @@ ReportFilter _filter(ReportKind kind) => ReportFilter(
 );
 
 Future<void> _settleRemote(WidgetTester tester) async {
+  await tester.pump(const Duration(milliseconds: 100));
   for (var index = 0; index < 40; index++) {
     await tester.pump(const Duration(milliseconds: 250));
     if (find.byType(CircularProgressIndicator).evaluate().isEmpty &&

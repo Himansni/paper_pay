@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:paper_route/core/config/app_environment.dart';
 
@@ -58,6 +59,58 @@ void main() {
           projectId: 'paperroute-production-in',
         ),
         returnsNormally,
+      );
+    });
+
+    test('activates App Check only for live production Android', () {
+      expect(
+        AppEnvironmentConfig.shouldActivateAppCheck(
+          environment: AppEnvironment.production,
+          platform: TargetPlatform.android,
+          isWeb: false,
+          useEmulators: false,
+        ),
+        isTrue,
+      );
+
+      expect(
+        AppEnvironmentConfig.shouldActivateAppCheck(
+          environment: AppEnvironment.development,
+          platform: TargetPlatform.android,
+          isWeb: false,
+          useEmulators: false,
+        ),
+        isFalse,
+      );
+
+      expect(
+        AppEnvironmentConfig.shouldActivateAppCheck(
+          environment: AppEnvironment.production,
+          platform: TargetPlatform.android,
+          isWeb: false,
+          useEmulators: true,
+        ),
+        isFalse,
+      );
+
+      expect(
+        AppEnvironmentConfig.shouldActivateAppCheck(
+          environment: AppEnvironment.production,
+          platform: TargetPlatform.android,
+          isWeb: true,
+          useEmulators: false,
+        ),
+        isFalse,
+      );
+
+      expect(
+        AppEnvironmentConfig.shouldActivateAppCheck(
+          environment: AppEnvironment.production,
+          platform: TargetPlatform.iOS,
+          isWeb: false,
+          useEmulators: false,
+        ),
+        isFalse,
       );
     });
   });

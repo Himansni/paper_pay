@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
@@ -26,7 +27,16 @@ abstract final class FirebaseBootstrap {
     'USE_FIREBASE_EMULATORS',
   );
 
-  static Future<FirebaseStartup> initialize() async {
+  static Future<FirebaseStartup> initialize({
+    @visibleForTesting
+    Future<void> Function({required AndroidProvider androidProvider})?
+    activateAppCheck,
+    @visibleForTesting
+    Future<void> Function({required FirebaseOptions options})?
+    initializeFirebase,
+    @visibleForTesting
+    bool? shouldActivateAppCheckOverride,
+  }) async {
     try {
       if (_useEmulators) {
         await Firebase.initializeApp(
@@ -42,8 +52,15 @@ abstract final class FirebaseBootstrap {
         );
         await _connectToEmulators();
       } else {
-        await Firebase.initializeApp(
-          options: AppEnvironmentConfig.currentOptions(),
+        final options = AppEnvironmentConfig.currentOptions();
+        if (initializeFirebase != null) {
+          await initializeFirebase(options: options);
+        } else {
+          await Firebase.initializeApp(options: options);
+        }
+        await _initializeProductionAppCheck(
+          activateAppCheck: activateAppCheck,
+          shouldActivateOverride: shouldActivateAppCheckOverride,
         );
       }
       return const FirebaseStartup.ready();
@@ -65,5 +82,39 @@ abstract final class FirebaseBootstrap {
     FirebaseFirestore.instance.settings = const Settings(
       persistenceEnabled: false,
     );
+  }
+
+  static Future<void> _initializeProductionAppCheck({
+    Future<void> Function({required AndroidProvider androidProvider})?
+    activateAppCheck,
+    bool? shouldActivateOverride,
+  }) async {
+    final shouldActivate =
+        shouldActivateOverride ??
+        AppEnvironmentConfig.shouldActivateAppCheck(
+          environment: AppEnvironmentConfig.current,
+          platform: defaultTargetPlatform,
+          isWeb: kIsWeb,
+          useEmulators: _useEmulators,
+        );
+    if (!shouldActivate) {
+      return;
+    }
+
+    try {
+      if (activateAppCheck != null) {
+        await activateAppCheck(androidProvider: AndroidProvider.playIntegrity);
+      } else {
+        await FirebaseAppCheck.instance.activate(
+          androidProvider: AndroidProvider.playIntegrity,
+        );
+      }
+    } on Object catch (error) {
+      // While App Check enforcement is OFF (monitoring only), token acquisition
+      // failure must not block application startup or Firebase services.
+      debugPrint(
+        'Warning: Firebase App Check activation failed in monitoring mode: $error',
+      );
+    }
   }
 }

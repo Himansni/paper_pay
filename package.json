@@ -5,9 +5,9 @@
   "scripts": {
     "seed:phase3-emulator": "node tool/seed_phase3_emulator.mjs",
     "seed:phase4-emulator": "node tool/seed_phase4_emulator.mjs",
-    "seed:phase5-emulator": "node tool/seed_phase4_emulator.mjs",
-    "seed:phase6-emulator": "node tool/seed_phase4_emulator.mjs",
-    "seed:phase7-emulator": "node tool/seed_phase4_emulator.mjs",
+    "seed:phase5-emulator": "node tool/seed_phase5_emulator.mjs",
+    "seed:phase6-emulator": "node tool/seed_phase6_emulator.mjs",
+    "seed:phase7-emulator": "node tool/seed_phase7_emulator.mjs",
     "validate:release": "node tool/validate_release_config.mjs",
     "validate:indexes": "node --test test/indexes/*.test.mjs",
     "validate:hygiene": "node tool/validate_repository_hygiene.mjs",

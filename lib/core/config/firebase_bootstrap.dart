@@ -34,8 +34,7 @@ abstract final class FirebaseBootstrap {
     @visibleForTesting
     Future<void> Function({required FirebaseOptions options})?
     initializeFirebase,
-    @visibleForTesting
-    bool? shouldActivateAppCheckOverride,
+    @visibleForTesting bool? shouldActivateAppCheckOverride,
   }) async {
     try {
       if (_useEmulators) {

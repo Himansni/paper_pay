@@ -48,28 +48,25 @@ void main() {
       },
     );
 
-    test(
-      'core Firebase initialization failure remains fail-closed',
-      () async {
-        var appCheckAttempted = false;
+    test('core Firebase initialization failure remains fail-closed', () async {
+      var appCheckAttempted = false;
 
-        final startup = await FirebaseBootstrap.initialize(
-          initializeFirebase: ({required options}) async {
-            throw Exception('Firebase configuration invalid');
-          },
-          shouldActivateAppCheckOverride: true,
-          activateAppCheck: ({required androidProvider}) async {
-            appCheckAttempted = true;
-          },
-        );
+      final startup = await FirebaseBootstrap.initialize(
+        initializeFirebase: ({required options}) async {
+          throw Exception('Firebase configuration invalid');
+        },
+        shouldActivateAppCheckOverride: true,
+        activateAppCheck: ({required androidProvider}) async {
+          appCheckAttempted = true;
+        },
+      );
 
-        expect(appCheckAttempted, isFalse);
-        expect(startup.isReady, isFalse);
-        expect(
-          startup.message,
-          contains('Firebase is not configured for this build'),
-        );
-      },
-    );
+      expect(appCheckAttempted, isFalse);
+      expect(startup.isReady, isFalse);
+      expect(
+        startup.message,
+        contains('Firebase is not configured for this build'),
+      );
+    });
   });
 }

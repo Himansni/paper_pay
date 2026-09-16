@@ -1,6 +1,6 @@
 # PaperRoute implementation checklist
 
-Updated: 14 September 2026
+Updated: 16 September 2026
 
 ## Phase 0 — Environment and architecture
 
@@ -135,8 +135,8 @@ Updated: 14 September 2026
 - [x] Cost-conscious quota/error monitoring and scale-risk guidance
 - [x] Reproducible CI gate for formatting, analysis, Flutter/Rules/index tests, hygiene scan, and Android release build
 - [x] Production release, staged rollout, and app/Rules/index/data rollback runbook
-- [ ] Create and configure the separate production Firebase project (requires explicit owner approval)
-- [ ] Create and protect the Android upload key and Play signing configuration (owner action)
+- [x] Create and configure the separate production Firebase project (`paperroute-production`)
+- [x] Create and protect the Android upload key and Play signing configuration
 - [ ] Complete production App Check monitoring and later enforcement (requires release traffic and explicit approval)
 - [ ] Complete iOS Xcode, Apple signing, and production FlutterFire configuration (deferred)
 - [ ] Production deployment only after explicit owner approval
@@ -151,3 +151,12 @@ Updated: 14 September 2026
 - [x] JSON and JavaScript validation, `git diff --check`, and versionable-file secret/generated-artifact scan passed
 - [x] Emulator-only scale profile passed with 1,200 customers and 5,525 operational documents
 - [x] R8/resource-shrunk development release APK built successfully
+
+### Phase 8 local verification — 16 September 2026 (post commit 8a02209)
+
+- [x] 62 Firestore Rules/transaction tests passed (0 failed, 11 suites)
+- [x] 128 Flutter unit/widget tests passed (0 failed)
+- [x] 3 production index/regression tests passed
+- [x] 231 versionable files scanned; repository hygiene passed
+- [x] 127 Dart files formatted (0 changed); `flutter analyze` reported 0 issues
+- [x] Branch `production-launch`; working tree clean except intentional untracked `android/app/src/production/google-services.json`

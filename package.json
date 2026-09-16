@@ -8,6 +8,7 @@
     "seed:phase5-emulator": "node tool/seed_phase5_emulator.mjs",
     "seed:phase6-emulator": "node tool/seed_phase6_emulator.mjs",
     "seed:phase7-emulator": "node tool/seed_phase7_emulator.mjs",
+    "test:integration": "firebase emulators:exec --project demo-paper-route --only auth,firestore \"node tool/run_phase5_7_integration.mjs\"",
     "validate:release": "node tool/validate_release_config.mjs",
     "validate:indexes": "node --test test/indexes/*.test.mjs",
     "validate:hygiene": "node tool/validate_repository_hygiene.mjs",

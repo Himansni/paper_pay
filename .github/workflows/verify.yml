@@ -38,5 +38,7 @@ jobs:
       - run: npm run validate:release
       - run: npm run validate:hygiene
       - run: git diff --check
+      - name: Run emulator integration smoke tests
+        run: xvfb-run --auto-servernum npm run test:integration
       - name: Build unsigned development release APK
         run: flutter build apk --release --flavor development --dart-define=APP_ENV=development

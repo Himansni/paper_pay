@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "720004989036",
+    "project_id": "paperroutedev",
+    "storage_bucket": "paperroutedev.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:720004989036:android:e7140626772487fd4c9849",
+        "android_client_info": {
+          "package_name": "in.paperroute.paper_route"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCxuPsUbxwZLfs_2CyDI2jE8NMAdU-_t0Y"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

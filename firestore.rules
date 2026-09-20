@@ -1,0 +1,3582 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function verifiedEmail() {
+      return signedIn() && request.auth.token.email_verified == true;
+    }
+
+    function memberPath(businessId, uid) {
+      return /databases/$(database)/documents/businesses/$(businessId)/members/$(uid);
+    }
+
+    function memberData(businessId) {
+      return get(memberPath(businessId, request.auth.uid)).data;
+    }
+
+    function activeMember(businessId) {
+      return signedIn()
+        && exists(memberPath(businessId, request.auth.uid))
+        && memberData(businessId).status == 'active'
+        && memberData(businessId).businessId == businessId;
+    }
+
+    function head(businessId) {
+      return activeMember(businessId) && memberData(businessId).role == 'head';
+    }
+
+    function permission(businessId, name) {
+      return activeMember(businessId)
+        && memberData(businessId).permissions is list
+        && memberData(businessId).permissions.hasAny([name]);
+    }
+
+    function customerPath(businessId, customerId) {
+      return /databases/$(database)/documents/businesses/$(businessId)/customers/$(customerId);
+    }
+
+    function areaPath(businessId, areaId) {
+      return /databases/$(database)/documents/businesses/$(businessId)/areas/$(areaId);
+    }
+
+    function auditPath(businessId, auditId) {
+      return /databases/$(database)/documents/businesses/$(businessId)/auditRecords/$(auditId);
+    }
+
+    function canReadCustomerData(businessId, data) {
+      return activeMember(businessId)
+        && data.businessId == businessId
+        && (head(businessId) || data.assignedEmployeeId == request.auth.uid);
+    }
+
+    function canReadCustomer(businessId, customerId) {
+      return canReadCustomerData(
+        businessId,
+        get(customerPath(businessId, customerId)).data
+      );
+    }
+
+    function activeArea(businessId, areaId) {
+      return areaId is string
+        && areaId.size() > 0
+        && exists(areaPath(businessId, areaId))
+        && get(areaPath(businessId, areaId)).data.businessId == businessId
+        && get(areaPath(businessId, areaId)).data.status == 'active';
+    }
+
+    function validActiveEmployeeForArea(businessId, employeeId, areaId) {
+      let employee = exists(memberPath(businessId, employeeId))
+        ? get(memberPath(businessId, employeeId)).data
+        : null;
+      return employeeId is string
+        && employee != null
+        && employee.businessId == businessId
+        && employee.uid == employeeId
+        && employee.role == 'employee'
+        && employee.status == 'active'
+        && employee.areaIds is list
+        && employee.areaIds.hasAny([areaId]);
+    }
+
+    function activeEmployeeForArea(businessId, employeeId, areaId) {
+      return employeeId == ''
+        || validActiveEmployeeForArea(businessId, employeeId, areaId);
+    }
+
+    function validCustomerCoordinates(data) {
+      return (
+          data.locationConsent == false
+          && data.coordinates == null
+        ) || (
+          data.locationConsent == true
+          && data.coordinates is map
+          && data.coordinates.keys().hasAll(['latitude', 'longitude'])
+          && data.coordinates.keys().hasOnly(['latitude', 'longitude'])
+          && data.coordinates.latitude is number
+          && data.coordinates.latitude >= -90
+          && data.coordinates.latitude <= 90
+          && data.coordinates.longitude is number
+          && data.coordinates.longitude >= -180
+          && data.coordinates.longitude <= 180
+        );
+    }
+
+    function validCustomerPreferences(data) {
+      return data.deliveryPreferences is map
+        && data.deliveryPreferences.keys().hasAll(['placement'])
+        && data.deliveryPreferences.keys().hasOnly(['placement'])
+        && data.deliveryPreferences.placement in [
+          'doorstep', 'handToCustomer', 'reception', 'collectionPoint'
+        ]
+        && data.billingPreferences is map
+        && data.billingPreferences.keys().hasAll(['cycle'])
+        && data.billingPreferences.keys().hasOnly(['cycle'])
+        && data.billingPreferences.cycle in [
+          'monthly', 'fortnightly', 'weekly'
+        ];
+    }
+
+    function validCustomerShape(businessId, customerId, data) {
+      return data.keys().hasOnly([
+          'businessId', 'customerCode', 'name', 'searchName', 'phone',
+          'searchPhone', 'alternatePhone', 'address', 'areaId', 'landmark',
+          'searchLandmark', 'searchTokens', 'houseNumber', 'buildingInfo',
+          'locationNotes', 'locationConsent', 'coordinates',
+          'assignedEmployeeId', 'status', 'subscriptionStatus',
+          'deliveryPreferences', 'billingPreferences', 'openingBalancePaise',
+          'notes', 'createdBy', 'updatedBy', 'lastAuditId', 'createdAt',
+          'updatedAt'
+        ])
+        && data.businessId == businessId
+        && data.customerCode == customerId
+        && data.name is string
+        && data.name.size() >= 2
+        && data.name.size() <= 100
+        && data.searchName is string
+        && data.searchName.size() >= 2
+        && data.phone is string
+        && data.phone.size() >= 7
+        && data.phone.size() <= 24
+        && data.searchPhone is string
+        && data.searchPhone.size() >= 7
+        && data.searchPhone.size() <= 15
+        && data.alternatePhone is string
+        && data.alternatePhone.size() <= 24
+        && data.address is string
+        && data.address.size() >= 5
+        && data.address.size() <= 300
+        && data.areaId is string
+        && data.landmark is string
+        && data.landmark.size() >= 2
+        && data.landmark.size() <= 120
+        && data.searchLandmark is string
+        && data.searchTokens is list
+        && data.searchTokens.size() <= 300
+        && data.houseNumber is string
+        && data.houseNumber.size() <= 80
+        && data.buildingInfo is string
+        && data.buildingInfo.size() <= 120
+        && data.locationNotes is string
+        && data.locationNotes.size() <= 300
+        && data.locationConsent is bool
+        && data.assignedEmployeeId is string
+        && data.status in ['active', 'archived']
+        && data.subscriptionStatus == 'notConfigured'
+        && data.openingBalancePaise is int
+        && data.openingBalancePaise >= 0
+        && data.openingBalancePaise <= 100000000
+        && data.notes is string
+        && data.notes.size() <= 500
+        && data.createdBy is string
+        && data.updatedBy is string
+        && data.lastAuditId is string
+        && data.lastAuditId.size() > 0
+        && validCustomerCoordinates(data)
+        && validCustomerPreferences(data);
+    }
+
+    function validCustomerAuditAfter(businessId, customerId, auditId, action) {
+      let audit = getAfter(auditPath(businessId, auditId)).data;
+      return existsAfter(auditPath(businessId, auditId))
+        && audit.businessId == businessId
+        && audit.actorId == request.auth.uid
+        && audit.entityType == 'customer'
+        && audit.entityId == customerId
+        && audit.action == action
+        && audit.createdAt == request.time;
+    }
+
+    function validCustomerCreateAuditAfter(businessId, customerId, auditId) {
+      let audit = getAfter(auditPath(businessId, auditId)).data;
+      return validCustomerAuditAfter(
+          businessId,
+          customerId,
+          auditId,
+          'customerCreated'
+        )
+        && audit.employeeId == request.resource.data.assignedEmployeeId
+        && audit.areaId == request.resource.data.areaId
+        && audit.openingBalancePaise == request.resource.data.openingBalancePaise;
+    }
+
+    function validCustomerProfileAuditAfter(businessId, customerId, auditId) {
+      let audit = getAfter(auditPath(businessId, auditId)).data;
+      return validCustomerAuditAfter(
+          businessId,
+          customerId,
+          auditId,
+          'customerUpdated'
+        )
+        && audit.changedFields is list
+        && audit.changedFields.size() > 0
+        && audit.changedFields.hasOnly([
+          'name', 'searchName', 'phone', 'searchPhone', 'alternatePhone',
+          'address', 'landmark', 'searchLandmark', 'searchTokens',
+          'houseNumber', 'buildingInfo', 'locationNotes', 'locationConsent',
+          'coordinates', 'deliveryPreferences', 'billingPreferences', 'notes'
+        ]);
+    }
+
+    function validCustomerAssignmentAuditAfter(
+      businessId,
+      customerId,
+      auditId
+    ) {
+      let audit = getAfter(auditPath(businessId, auditId)).data;
+      return validCustomerAuditAfter(
+          businessId,
+          customerId,
+          auditId,
+          'customerAssignmentUpdated'
+        )
+        && audit.previousEmployeeId == resource.data.assignedEmployeeId
+        && audit.employeeId == request.resource.data.assignedEmployeeId
+        && audit.previousAreaId == resource.data.areaId
+        && audit.areaId == request.resource.data.areaId;
+    }
+
+    function customerReferencesAuditAfter(businessId, customerId, auditId) {
+      let customer = getAfter(customerPath(businessId, customerId)).data;
+      let audit = getAfter(auditPath(businessId, auditId)).data;
+      let statePath = collectionStatePath(businessId, customerId);
+      let state = getAfter(statePath).data;
+      return existsAfter(customerPath(businessId, customerId))
+        && customer.businessId == businessId
+        && customer.lastAuditId == auditId
+        && customer.updatedBy == request.auth.uid
+        && customer.updatedAt == request.time
+        && (
+          !exists(statePath) || (
+            existsAfter(statePath)
+            && state.lastMutationId == auditId
+            && (
+              (
+                audit.action == 'customerUpdated'
+                && state.lastMutationType == 'customerProfileUpdated'
+              ) || (
+                audit.action in ['customerArchived', 'customerReactivated']
+                && state.lastMutationType == 'customerStatusUpdated'
+              ) || (
+                audit.action == 'customerAssignmentUpdated'
+                && state.lastMutationType == 'customerAssignmentUpdated'
+              )
+            )
+          )
+        );
+    }
+
+    function validCustomerProfileUpdate(businessId, customerId) {
+      return resource.data.status == 'active'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'name', 'searchName', 'phone', 'searchPhone', 'alternatePhone',
+          'address', 'landmark', 'searchLandmark', 'searchTokens',
+          'houseNumber', 'buildingInfo', 'locationNotes', 'locationConsent',
+          'coordinates', 'deliveryPreferences', 'billingPreferences', 'notes',
+          'updatedBy', 'lastAuditId', 'updatedAt'
+        ])
+        && request.resource.data.updatedBy == request.auth.uid
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.lastAuditId != resource.data.lastAuditId
+        && validCustomerProfileAuditAfter(
+          businessId,
+          customerId,
+          request.resource.data.lastAuditId
+        );
+    }
+
+    function validCustomerStatusUpdate(businessId, customerId) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status', 'updatedBy', 'lastAuditId', 'updatedAt'
+        ])
+        && request.resource.data.status != resource.data.status
+        && request.resource.data.updatedBy == request.auth.uid
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.lastAuditId != resource.data.lastAuditId
+        && (
+          (
+            request.resource.data.status == 'archived'
+            && validCustomerAuditAfter(
+              businessId,
+              customerId,
+              request.resource.data.lastAuditId,
+              'customerArchived'
+            )
+          ) || (
+            request.resource.data.status == 'active'
+            && validCustomerAuditAfter(
+              businessId,
+              customerId,
+              request.resource.data.lastAuditId,
+              'customerReactivated'
+            )
+            )
+        );
+    }
+
+    function validCustomerAssignmentUpdate(businessId, customerId) {
+      return resource.data.status == 'active'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'areaId', 'assignedEmployeeId', 'updatedBy', 'lastAuditId',
+          'updatedAt'
+        ])
+        && request.resource.data.updatedBy == request.auth.uid
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.lastAuditId != resource.data.lastAuditId
+        && activeArea(businessId, request.resource.data.areaId)
+        && activeEmployeeForArea(
+          businessId,
+          request.resource.data.assignedEmployeeId,
+          request.resource.data.areaId
+        )
+        && validCustomerAssignmentAuditAfter(
+          businessId,
+          customerId,
+          request.resource.data.lastAuditId
+        );
+    }
+
+    function newspaperPath(businessId, newspaperId) {
+      return /databases/$(database)/documents/businesses/$(businessId)/newspapers/$(newspaperId);
+    }
+
+    function priceRulePath(businessId, newspaperId, ruleId) {
+      return /databases/$(database)/documents/businesses/$(businessId)/newspapers/$(newspaperId)/priceRules/$(ruleId);
+    }
+
+    function subscriptionPath(businessId, customerId, subscriptionId) {
+      return /databases/$(database)/documents/businesses/$(businessId)/customers/$(customerId)/subscriptions/$(subscriptionId);
+    }
+
+    function subscriptionVersionPath(
+      businessId,
+      customerId,
+      subscriptionId,
+      versionId
+    ) {
+      return /databases/$(database)/documents/businesses/$(businessId)/customers/$(customerId)/subscriptions/$(subscriptionId)/versions/$(versionId);
+    }
+
+    function subscriptionPausePath(
+      businessId,
+      customerId,
+      subscriptionId,
+      pauseId
+    ) {
+      return /databases/$(database)/documents/businesses/$(businessId)/customers/$(customerId)/subscriptions/$(subscriptionId)/pauses/$(pauseId);
+    }
+
+    function deliveryExceptionPath(businessId, customerId, exceptionId) {
+      return /databases/$(database)/documents/businesses/$(businessId)/customers/$(customerId)/deliveryExceptions/$(exceptionId);
+    }
+
+    function serviceBillingSourcePath(businessId, customerId) {
+      return /databases/$(database)/documents/businesses/$(businessId)/customers/$(customerId)/billingSources/service;
+    }
+
+    function billPath(businessId, customerId, billingMonth) {
+      return /databases/$(database)/documents/businesses/$(businessId)/customers/$(customerId)/bills/$(billingMonth);
+    }
+
+    function billingControlPath(businessId, customerId, billingMonth) {
+      return /databases/$(database)/documents/businesses/$(businessId)/customers/$(customerId)/billingControls/$(billingMonth);
+    }
+
+    function adjustmentPath(businessId, customerId, adjustmentId) {
+      return /databases/$(database)/documents/businesses/$(businessId)/customers/$(customerId)/adjustments/$(adjustmentId);
+    }
+
+    function paymentPath(businessId, customerId, paymentId) {
+      return /databases/$(database)/documents/businesses/$(businessId)/customers/$(customerId)/payments/$(paymentId);
+    }
+
+    function paymentStatePath(businessId, customerId, paymentId) {
+      return /databases/$(database)/documents/businesses/$(businessId)/customers/$(customerId)/paymentStates/$(paymentId);
+    }
+
+    function paymentReversalPath(businessId, customerId, reversalId) {
+      return /databases/$(database)/documents/businesses/$(businessId)/customers/$(customerId)/paymentReversals/$(reversalId);
+    }
+
+    function collectionStatePath(businessId, customerId) {
+      return /databases/$(database)/documents/businesses/$(businessId)/customers/$(customerId)/collectionState/current;
+    }
+
+    function billBalancePath(businessId, customerId, billingMonth) {
+      return /databases/$(database)/documents/businesses/$(businessId)/customers/$(customerId)/billBalances/$(billingMonth);
+    }
+
+    function upiConfigurationPath(businessId) {
+      return /databases/$(database)/documents/businesses/$(businessId)/configuration/upi;
+    }
+
+    function validDate(value) {
+      return value is string
+        && value.size() == 10
+        && value.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+    }
+
+    function validMonth(value) {
+      return value is string
+        && value.size() == 7
+        && value.matches('^[0-9]{4}-[0-9]{2}$');
+    }
+
+    function validSignedMoney(value) {
+      return value is int
+        && value >= -9000000000000
+        && value <= 9000000000000;
+    }
+
+    function validAdjustmentAmount(value) {
+      return value is int && value >= -100000000 && value <= 100000000;
+    }
+
+    function validLedgerAmount(value) {
+      return value is int && value > 0 && value <= 9000000000000;
+    }
+
+    function validAllocationEntry(data) {
+      return data is map
+        && data.keys().hasOnly(['billId', 'billingMonth', 'amountPaise'])
+        && data.billId is string
+        && data.billId == data.billingMonth
+        && validMonth(data.billingMonth)
+        && validLedgerAmount(data.amountPaise);
+    }
+
+    function allocationAmountAt(allocations, index) {
+      return allocations.size() > index
+        ? allocations[index].amountPaise
+        : 0;
+    }
+
+    function allocationListHasDistinctBills(allocations) {
+      return (allocations.size() < 2
+          || allocations[0].billId != allocations[1].billId);
+    }
+
+    function optionalAllocationValid(allocations, index) {
+      return allocations.size() <= index
+        || validAllocationEntry(allocations[index]);
+    }
+
+    function validAllocationList(allocations, count, amountPaise) {
+      return allocations is list
+        && allocations.size() >= 1
+        // Two keeps each atomic ledger write below Firestore Rules' document
+        // access and expression limits, including membership and audits.
+        && allocations.size() <= 2
+        && count == allocations.size()
+        && optionalAllocationValid(allocations, 0)
+        && optionalAllocationValid(allocations, 1)
+        && allocationListHasDistinctBills(allocations)
+        && amountPaise == allocationAmountAt(allocations, 0)
+          + allocationAmountAt(allocations, 1);
+    }
+
+    function allocationAmountForBill(allocations, billId) {
+      return (
+          allocations.size() > 0 && allocations[0].billId == billId
+            ? allocations[0].amountPaise : 0
+        ) + (
+          allocations.size() > 1 && allocations[1].billId == billId
+            ? allocations[1].amountPaise : 0
+        );
+    }
+
+    function canCollectCustomer(businessId, customerId) {
+      let member = exists(memberPath(businessId, request.auth.uid))
+        ? get(memberPath(businessId, request.auth.uid)).data
+        : null;
+      let customer = exists(customerPath(businessId, customerId))
+        ? get(customerPath(businessId, customerId)).data
+        : null;
+      return signedIn()
+        && member != null
+        && member.status == 'active'
+        && member.businessId == businessId
+        && customer != null
+        && customer.businessId == businessId
+        && customer.status == 'active'
+        && (
+          member.role == 'head'
+          || (
+            member.role == 'employee'
+            && member.permissions is list
+            && member.permissions.hasAny(['recordPayments'])
+            && customer.assignedEmployeeId == request.auth.uid
+            && member.areaIds is list
+            && member.areaIds.hasAny([customer.areaId])
+          )
+        );
+    }
+
+    function canReadCollectionHistory(businessId, customerId) {
+      let member = exists(memberPath(businessId, request.auth.uid))
+        ? get(memberPath(businessId, request.auth.uid)).data
+        : null;
+      let customer = exists(customerPath(businessId, customerId))
+        ? get(customerPath(businessId, customerId)).data
+        : null;
+      return signedIn()
+        && member != null
+        && member.status == 'active'
+        && member.businessId == businessId
+        && customer != null
+        && customer.businessId == businessId
+        && (
+          member.role == 'head'
+          || (
+            member.role == 'employee'
+            && customer.assignedEmployeeId == request.auth.uid
+            && member.areaIds is list
+            && member.areaIds.hasAny([customer.areaId])
+          )
+        );
+    }
+
+    function canReadPaymentData(businessId, customerId, data) {
+      let member = memberData(businessId);
+      return signedIn()
+        && exists(memberPath(businessId, request.auth.uid))
+        && member.status == 'active'
+        && member.businessId == businessId
+        && (
+          member.role == 'head'
+          || data.collectorUid == request.auth.uid
+          || canReadCollectionHistory(businessId, customerId)
+        );
+    }
+
+    function canReadPaymentState(businessId, customerId, paymentId) {
+      return canReadPaymentData(
+        businessId,
+        customerId,
+        get(paymentPath(businessId, customerId, paymentId)).data
+      );
+    }
+
+    function validCollectionStateShape(businessId, customerId, data) {
+      let customer = getAfter(customerPath(businessId, customerId)).data;
+      return data.keys().hasOnly([
+          'businessId', 'customerId', 'stateId', 'customerCode',
+          'customerName', 'areaId', 'assignedEmployeeId', 'customerStatus',
+          'outstandingPaise', 'confirmedPaise', 'reversedPaise',
+          'reportingStatus', 'oldestOutstandingMonth', 'revision',
+          'lastMutationType', 'lastMutationId', 'updatedBy', 'createdAt',
+          'updatedAt'
+        ])
+        && data.businessId == businessId
+        && data.customerId == customerId
+        && data.stateId == 'current'
+        && customer.businessId == businessId
+        && customer.customerCode == customerId
+        && data.customerCode == customer.customerCode
+        && data.customerName == customer.name
+        && data.areaId == customer.areaId
+        && data.assignedEmployeeId == customer.assignedEmployeeId
+        && data.customerStatus == customer.status
+        && data.customerStatus in ['active', 'archived']
+        && validSignedMoney(data.outstandingPaise)
+        && data.confirmedPaise is int
+        && data.confirmedPaise >= 0
+        && data.reversedPaise is int
+        && data.reversedPaise >= 0
+        && data.reversedPaise <= data.confirmedPaise
+        && (
+          (
+            data.outstandingPaise < 0
+            && data.reportingStatus == 'credit'
+          ) || (
+            data.outstandingPaise == 0
+            && data.reportingStatus == 'fullyPaid'
+          ) || (
+            data.outstandingPaise > 0
+            && data.confirmedPaise > data.reversedPaise
+            && data.reportingStatus == 'partiallyPaid'
+          ) || (
+            data.outstandingPaise > 0
+            && data.confirmedPaise == data.reversedPaise
+            && data.reportingStatus == 'unpaid'
+          )
+        )
+        && (
+          (
+            data.outstandingPaise > 0
+            && validMonth(data.oldestOutstandingMonth)
+          ) || (
+            data.outstandingPaise <= 0
+            && data.oldestOutstandingMonth == ''
+          )
+        )
+        && data.revision is int
+        && data.revision >= 1
+        && data.lastMutationType in [
+          'billFinalized', 'paymentConfirmed', 'paymentReversed',
+          'customerProfileUpdated', 'customerStatusUpdated',
+          'customerAssignmentUpdated'
+        ]
+        && data.lastMutationId is string
+        && data.lastMutationId.size() > 0
+        && data.updatedBy == request.auth.uid
+        && data.updatedAt == request.time;
+    }
+
+    function validCustomerReportingStateUpdate(businessId, customerId) {
+      let state = request.resource.data;
+      let customer = getAfter(customerPath(businessId, customerId)).data;
+      return state.diff(resource.data).affectedKeys().hasOnly([
+          'customerCode', 'customerName', 'areaId', 'assignedEmployeeId',
+          'customerStatus', 'revision', 'lastMutationType', 'lastMutationId',
+          'updatedBy', 'updatedAt'
+        ])
+        && state.outstandingPaise == resource.data.outstandingPaise
+        && state.confirmedPaise == resource.data.confirmedPaise
+        && state.reversedPaise == resource.data.reversedPaise
+        && state.reportingStatus == resource.data.reportingStatus
+        && state.oldestOutstandingMonth == resource.data.oldestOutstandingMonth
+        && state.lastMutationType in [
+          'customerProfileUpdated', 'customerStatusUpdated',
+          'customerAssignmentUpdated'
+        ]
+        && state.lastMutationId == customer.lastAuditId
+        && customer.updatedBy == request.auth.uid
+        && customer.updatedAt == request.time;
+    }
+
+    function validBillBalanceAmounts(data) {
+      let net = data.sourceAmountPaise
+        - data.allocatedPaise + data.reversedPaise;
+      return validSignedMoney(data.sourceAmountPaise)
+        && data.allocatedPaise is int
+        && data.allocatedPaise >= 0
+        && data.reversedPaise is int
+        && data.reversedPaise >= 0
+        && data.reversedPaise <= data.allocatedPaise
+        && (
+          (
+            net > 0
+            && data.outstandingPaise == net
+            && data.status == 'outstanding'
+          ) || (
+            net == 0
+            && data.outstandingPaise == 0
+            && data.status == 'settled'
+          ) || (
+            net < 0
+            && data.outstandingPaise == 0
+            && data.status == 'credit'
+          )
+        );
+    }
+
+    function validBillBalanceShape(businessId, customerId, billId, data) {
+      return data.keys().hasOnly([
+          'businessId', 'customerId', 'billId', 'billingMonth',
+          'sourceAmountPaise', 'allocatedPaise', 'reversedPaise',
+          'outstandingPaise', 'status', 'revision', 'lastMutationType',
+          'lastMutationId', 'createdAt', 'updatedAt'
+        ])
+        && data.businessId == businessId
+        && data.customerId == customerId
+        && data.billId == billId
+        && data.billingMonth == billId
+        && validMonth(data.billingMonth)
+        && validBillBalanceAmounts(data)
+        && data.revision is int
+        && data.revision >= 0
+        && data.lastMutationType in [
+          'billFinalized', 'paymentConfirmed', 'paymentReversed'
+        ]
+        && data.lastMutationId is string
+        && data.lastMutationId.size() > 0
+        && data.updatedAt == request.time;
+    }
+
+    function paymentAllocationStateValid(payment, state, index) {
+      return payment.allocations.size() <= index || (
+        state.allocationStates[index] is map
+        && state.allocationStates[index].keys().hasOnly([
+          'billId', 'billingMonth', 'amountPaise', 'reversedPaise'
+        ])
+        && state.allocationStates[index].billId
+          == payment.allocations[index].billId
+        && state.allocationStates[index].billingMonth
+          == payment.allocations[index].billingMonth
+        && state.allocationStates[index].amountPaise
+          == payment.allocations[index].amountPaise
+        && state.allocationStates[index].reversedPaise == 0
+      );
+    }
+
+    function validPaymentStateCreateAfter(
+      businessId,
+      customerId,
+      paymentId,
+      payment
+    ) {
+      let path = paymentStatePath(businessId, customerId, paymentId);
+      let state = getAfter(path).data;
+      return !exists(path)
+        && existsAfter(path)
+        && state.keys().hasOnly([
+          'businessId', 'customerId', 'paymentId', 'amountPaise',
+          'reversedPaise', 'refundablePaise', 'status', 'allocationStates',
+          'revision', 'lastReversalId', 'createdAt', 'updatedAt'
+        ])
+        && state.businessId == businessId
+        && state.customerId == customerId
+        && state.paymentId == paymentId
+        && state.amountPaise == payment.amountPaise
+        && state.reversedPaise == 0
+        && state.refundablePaise == payment.amountPaise
+        && state.status == 'confirmed'
+        && state.allocationStates is list
+        && state.allocationStates.size() == payment.allocations.size()
+        && paymentAllocationStateValid(payment, state, 0)
+        && paymentAllocationStateValid(payment, state, 1)
+        && state.revision == 0
+        && state.lastReversalId == ''
+        && state.createdAt == request.time
+        && state.updatedAt == request.time;
+    }
+
+    function balanceReferencesPaymentAfter(
+      businessId,
+      customerId,
+      paymentId,
+      allocation
+    ) {
+      let path = billBalancePath(
+        businessId,
+        customerId,
+        allocation.billId
+      );
+      let after = getAfter(path).data;
+      return existsAfter(path)
+        && after.lastMutationType == 'paymentConfirmed'
+        && after.lastMutationId == paymentId;
+    }
+
+    function optionalPaymentBalanceCommitted(
+      businessId,
+      customerId,
+      paymentId,
+      allocations,
+      index
+    ) {
+      return allocations.size() <= index
+        || balanceReferencesPaymentAfter(
+          businessId,
+          customerId,
+          paymentId,
+          allocations[index]
+        );
+    }
+
+    function validPaymentAuditAfter(
+      businessId,
+      customerId,
+      paymentId,
+      data
+    ) {
+      let audit = getAfter(auditPath(businessId, data.lastAuditId)).data;
+      return existsAfter(auditPath(businessId, data.lastAuditId))
+        && audit.keys().hasOnly([
+          'businessId', 'actorId', 'action', 'entityType', 'entityId',
+          'customerId', 'paymentId', 'amountPaise', 'method',
+          'allocationCount', 'createdAt'
+        ])
+        && audit.businessId == businessId
+        && audit.actorId == request.auth.uid
+        && audit.action == 'paymentConfirmed'
+        && audit.entityType == 'payment'
+        && audit.entityId == paymentId
+        && audit.customerId == customerId
+        && audit.paymentId == paymentId
+        && audit.amountPaise == data.amountPaise
+        && audit.method == data.method
+        && audit.allocationCount == data.allocationCount
+        && audit.createdAt == request.time;
+    }
+
+    function validPaymentShape(businessId, customerId, paymentId, data) {
+      return data.keys().hasAll([
+          'businessId', 'customerId', 'customerCode', 'customerName',
+          'areaId', 'assignedEmployeeId',
+          'paymentId', 'idempotencyKey', 'amountPaise', 'method', 'status',
+          'externalReference', 'notes', 'collectorUid', 'allocations',
+          'allocationCount', 'allocatedPaise', 'lastAuditId', 'confirmedAt',
+          'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'businessId', 'customerId', 'customerCode', 'customerName',
+          'areaId', 'assignedEmployeeId',
+          'paymentId', 'idempotencyKey', 'amountPaise', 'method', 'status',
+          'externalReference', 'notes', 'collectorUid', 'allocations',
+          'allocationCount', 'allocatedPaise', 'lastAuditId', 'confirmedAt',
+          'createdAt'
+        ])
+        && data.businessId == businessId
+        && data.customerId == customerId
+        && data.customerCode
+          == get(customerPath(businessId, customerId)).data.customerCode
+        && data.customerName
+          == get(customerPath(businessId, customerId)).data.name
+        && data.areaId
+          == get(customerPath(businessId, customerId)).data.areaId
+        && data.assignedEmployeeId
+          == get(customerPath(businessId, customerId)).data.assignedEmployeeId
+        && data.paymentId == paymentId
+        && data.idempotencyKey == paymentId
+        && validLedgerAmount(data.amountPaise)
+        && data.method in ['cash', 'upi', 'bankTransfer', 'other']
+        && data.status == 'confirmed'
+        && data.externalReference is string
+        && data.externalReference.size() <= 120
+        && data.notes is string
+        && data.notes.size() <= 300
+        && (
+          !(data.method in ['upi', 'bankTransfer'])
+          || data.externalReference.size() >= 3
+        )
+        && (data.method != 'other' || data.notes.size() >= 3)
+        && data.collectorUid == request.auth.uid
+        && validAllocationList(
+          data.allocations,
+          data.allocationCount,
+          data.amountPaise
+        )
+        && data.allocatedPaise == data.amountPaise
+        && data.lastAuditId is string
+        && data.lastAuditId.size() > 0
+        && data.confirmedAt == request.time
+        && data.createdAt == request.time;
+    }
+
+    function validPaymentCollectionStateAfter(
+      businessId,
+      customerId,
+      paymentId,
+      payment
+    ) {
+      let path = collectionStatePath(businessId, customerId);
+      let before = get(path).data;
+      let after = getAfter(path).data;
+      return exists(path)
+        && existsAfter(path)
+        && before.outstandingPaise >= payment.amountPaise
+        && after.outstandingPaise
+          == before.outstandingPaise - payment.amountPaise
+        && after.confirmedPaise
+          == before.confirmedPaise + payment.amountPaise
+        && after.reversedPaise == before.reversedPaise
+        && after.lastMutationType == 'paymentConfirmed'
+        && after.lastMutationId == paymentId;
+    }
+
+    function validPaymentCreate(businessId, customerId, paymentId) {
+      let payment = request.resource.data;
+      return canCollectCustomer(businessId, customerId)
+        && validPaymentShape(businessId, customerId, paymentId, payment)
+        && getAfter(paymentStatePath(
+          businessId,
+          customerId,
+          paymentId
+        )).data.paymentId == paymentId
+        && getAfter(collectionStatePath(
+          businessId,
+          customerId
+        )).data.lastMutationType == 'paymentConfirmed'
+        && getAfter(collectionStatePath(
+          businessId,
+          customerId
+        )).data.lastMutationId == paymentId
+        && optionalPaymentBalanceCommitted(
+          businessId, customerId, paymentId, payment.allocations, 0
+        )
+        && optionalPaymentBalanceCommitted(
+          businessId, customerId, paymentId, payment.allocations, 1
+        )
+        && validPaymentAuditAfter(
+          businessId,
+          customerId,
+          paymentId,
+          payment
+        );
+    }
+
+    function reversalAllocationTargetsPayment(payment, reversal, index) {
+      return reversal.allocations.size() <= index || (
+        allocationAmountForBill(
+          payment.allocations,
+          reversal.allocations[index].billId
+        ) >= reversal.allocations[index].amountPaise
+      );
+    }
+
+    function reversalStateEntryValid(before, after, reversal, index) {
+      return before.allocationStates.size() <= index || (
+        after.allocationStates[index] is map
+        && after.allocationStates[index].keys().hasOnly([
+          'billId', 'billingMonth', 'amountPaise', 'reversedPaise'
+        ])
+        && after.allocationStates[index].billId
+          == before.allocationStates[index].billId
+        && after.allocationStates[index].billingMonth
+          == before.allocationStates[index].billingMonth
+        && after.allocationStates[index].amountPaise
+          == before.allocationStates[index].amountPaise
+        && after.allocationStates[index].reversedPaise
+          == before.allocationStates[index].reversedPaise
+            + allocationAmountForBill(
+              reversal.allocations,
+              before.allocationStates[index].billId
+            )
+        && after.allocationStates[index].reversedPaise
+          <= after.allocationStates[index].amountPaise
+      );
+    }
+
+    function validPaymentStateUpdateAfter(
+      businessId,
+      customerId,
+      reversalId,
+      reversal
+    ) {
+      let path = paymentStatePath(
+        businessId,
+        customerId,
+        reversal.paymentId
+      );
+      let before = get(path).data;
+      let after = getAfter(path).data;
+      return exists(path)
+        && existsAfter(path)
+        && before.refundablePaise >= reversal.amountPaise
+        && after.keys().hasOnly([
+          'businessId', 'customerId', 'paymentId', 'amountPaise',
+          'reversedPaise', 'refundablePaise', 'status', 'allocationStates',
+          'revision', 'lastReversalId', 'createdAt', 'updatedAt'
+        ])
+        && after.businessId == businessId
+        && after.customerId == customerId
+        && after.paymentId == reversal.paymentId
+        && after.amountPaise == before.amountPaise
+        && after.reversedPaise
+          == before.reversedPaise + reversal.amountPaise
+        && after.refundablePaise
+          == before.refundablePaise - reversal.amountPaise
+        && (
+          (
+            after.refundablePaise == 0
+            && after.status == 'reversed'
+          ) || (
+            after.refundablePaise > 0
+            && after.status == 'partiallyReversed'
+          )
+        )
+        && after.allocationStates is list
+        && after.allocationStates.size() == before.allocationStates.size()
+        && reversalStateEntryValid(before, after, reversal, 0)
+        && reversalStateEntryValid(before, after, reversal, 1)
+        && after.revision == before.revision + 1
+        && after.lastReversalId == reversalId
+        && after.createdAt == before.createdAt
+        && after.updatedAt == request.time;
+    }
+
+    function balanceReferencesReversalAfter(
+      businessId,
+      customerId,
+      reversalId,
+      allocation
+    ) {
+      let path = billBalancePath(
+        businessId,
+        customerId,
+        allocation.billId
+      );
+      let after = getAfter(path).data;
+      return existsAfter(path)
+        && after.lastMutationType == 'paymentReversed'
+        && after.lastMutationId == reversalId;
+    }
+
+    function optionalReversalBalanceCommitted(
+      businessId,
+      customerId,
+      reversalId,
+      allocations,
+      index
+    ) {
+      return allocations.size() <= index
+        || balanceReferencesReversalAfter(
+          businessId,
+          customerId,
+          reversalId,
+          allocations[index]
+        );
+    }
+
+    function validReversalAuditAfter(
+      businessId,
+      customerId,
+      reversalId,
+      data
+    ) {
+      let audit = getAfter(auditPath(businessId, data.lastAuditId)).data;
+      return existsAfter(auditPath(businessId, data.lastAuditId))
+        && audit.keys().hasOnly([
+          'businessId', 'actorId', 'action', 'entityType', 'entityId',
+          'customerId', 'paymentId', 'amountPaise', 'reason',
+          'allocationCount', 'createdAt'
+        ])
+        && audit.businessId == businessId
+        && audit.actorId == request.auth.uid
+        && audit.action == 'paymentReversed'
+        && audit.entityType == 'paymentReversal'
+        && audit.entityId == reversalId
+        && audit.customerId == customerId
+        && audit.paymentId == data.paymentId
+        && audit.amountPaise == data.amountPaise
+        && audit.reason == data.reason
+        && audit.allocationCount == data.allocationCount
+        && audit.createdAt == request.time;
+    }
+
+    function validReversalShape(businessId, customerId, reversalId, data) {
+      let payment = get(paymentPath(
+        businessId,
+        customerId,
+        data.paymentId
+      )).data;
+      return data.keys().hasOnly([
+          'businessId', 'customerId', 'reversalId', 'paymentId',
+          'customerCode', 'customerName', 'areaId', 'assignedEmployeeId',
+          'collectorUid', 'method',
+          'idempotencyKey', 'amountPaise', 'reason', 'reversedBy',
+          'allocations', 'allocationCount', 'restoredPaise', 'lastAuditId',
+          'reversedAt', 'createdAt'
+        ])
+        && data.businessId == businessId
+        && data.customerId == customerId
+        && data.reversalId == reversalId
+        && data.paymentId is string
+        && data.paymentId.size() > 0
+        && data.customerCode == payment.customerCode
+        && data.customerName == payment.customerName
+        && data.areaId == payment.areaId
+        && data.assignedEmployeeId == payment.assignedEmployeeId
+        && data.collectorUid == payment.collectorUid
+        && data.method == payment.method
+        && data.idempotencyKey == reversalId
+        && validLedgerAmount(data.amountPaise)
+        && data.reason is string
+        && data.reason.size() >= 3
+        && data.reason.size() <= 300
+        && data.reversedBy == request.auth.uid
+        && validAllocationList(
+          data.allocations,
+          data.allocationCount,
+          data.amountPaise
+        )
+        && data.restoredPaise == data.amountPaise
+        && data.lastAuditId is string
+        && data.lastAuditId.size() > 0
+        && data.reversedAt == request.time
+        && data.createdAt == request.time;
+    }
+
+    function validReversalCollectionStateAfter(
+      businessId,
+      customerId,
+      reversalId,
+      reversal
+    ) {
+      let path = collectionStatePath(businessId, customerId);
+      let before = get(path).data;
+      let after = getAfter(path).data;
+      return exists(path)
+        && existsAfter(path)
+        && after.outstandingPaise
+          == before.outstandingPaise + reversal.amountPaise
+        && after.confirmedPaise == before.confirmedPaise
+        && after.reversedPaise
+          == before.reversedPaise + reversal.amountPaise
+        && after.lastMutationType == 'paymentReversed'
+        && after.lastMutationId == reversalId;
+    }
+
+    function validReversalCreate(businessId, customerId, reversalId) {
+      let reversal = request.resource.data;
+      let payment = get(paymentPath(
+        businessId,
+        customerId,
+        reversal.paymentId
+      )).data;
+      return head(businessId)
+        && validReversalShape(businessId, customerId, reversalId, reversal)
+        && payment.businessId == businessId
+        && payment.customerId == customerId
+        && payment.paymentId == reversal.paymentId
+        && payment.status == 'confirmed'
+        && reversalAllocationTargetsPayment(payment, reversal, 0)
+        && reversalAllocationTargetsPayment(payment, reversal, 1)
+        && getAfter(paymentStatePath(
+          businessId,
+          customerId,
+          reversal.paymentId
+        )).data.lastReversalId == reversalId
+        && getAfter(collectionStatePath(
+          businessId,
+          customerId
+        )).data.lastMutationType == 'paymentReversed'
+        && getAfter(collectionStatePath(
+          businessId,
+          customerId
+        )).data.lastMutationId == reversalId
+        && optionalReversalBalanceCommitted(
+          businessId, customerId, reversalId, reversal.allocations, 0
+        )
+        && optionalReversalBalanceCommitted(
+          businessId, customerId, reversalId, reversal.allocations, 1
+        )
+        && validReversalAuditAfter(
+          businessId,
+          customerId,
+          reversalId,
+          reversal
+        );
+    }
+
+    function validCollectionStateCreateForBill(businessId, customerId) {
+      let state = request.resource.data;
+      let bill = getAfter(billPath(
+        businessId,
+        customerId,
+        state.lastMutationId
+      )).data;
+      return head(businessId)
+        && state.lastMutationType == 'billFinalized'
+        && !exists(billPath(businessId, customerId, state.lastMutationId))
+        && bill.customerId == customerId
+        && bill.billingMonth == state.lastMutationId
+        && validBillCollectionStateAfter(
+          businessId,
+          customerId,
+          state.lastMutationId,
+          bill
+        );
+    }
+
+    function validCollectionStateUpdate(businessId, customerId) {
+      let state = request.resource.data;
+      return validCollectionStateShape(businessId, customerId, state)
+        && state.createdAt == resource.data.createdAt
+        && state.revision == resource.data.revision + 1
+        && (
+          (
+            state.lastMutationType == 'billFinalized'
+            && head(businessId)
+            && !exists(billPath(
+              businessId,
+              customerId,
+              state.lastMutationId
+            ))
+            && validBillCollectionStateAfter(
+              businessId,
+              customerId,
+              state.lastMutationId,
+              getAfter(billPath(
+                businessId,
+                customerId,
+                state.lastMutationId
+              )).data
+            )
+          ) || (
+            state.lastMutationType == 'paymentConfirmed'
+            && !exists(paymentPath(
+              businessId,
+              customerId,
+              state.lastMutationId
+            ))
+            && validPaymentCollectionStateAfter(
+              businessId,
+              customerId,
+              state.lastMutationId,
+              getAfter(paymentPath(
+                businessId,
+                customerId,
+                state.lastMutationId
+              )).data
+            )
+          ) || (
+            state.lastMutationType == 'paymentReversed'
+            && !exists(paymentReversalPath(
+              businessId,
+              customerId,
+              state.lastMutationId
+            ))
+            && validReversalCollectionStateAfter(
+              businessId,
+              customerId,
+              state.lastMutationId,
+              getAfter(paymentReversalPath(
+                businessId,
+                customerId,
+                state.lastMutationId
+              )).data
+            )
+          ) || (
+            validCustomerReportingStateUpdate(businessId, customerId)
+          )
+        );
+    }
+
+    function validBillBalanceCreateForBill(
+      businessId,
+      customerId,
+      billingMonth
+    ) {
+      let billPathValue = billPath(businessId, customerId, billingMonth);
+      let bill = getAfter(billPathValue).data;
+      return head(businessId)
+        && !exists(billPathValue)
+        && bill.customerId == customerId
+        && bill.billingMonth == billingMonth
+        && validBillBalanceAfter(
+          businessId,
+          customerId,
+          billingMonth,
+          bill
+        );
+    }
+
+    function validBillBalancePaymentUpdate(
+      businessId,
+      customerId,
+      billId,
+      data
+    ) {
+      let paymentPathValue = paymentPath(
+        businessId,
+        customerId,
+        data.lastMutationId
+      );
+      let payment = getAfter(paymentPathValue).data;
+      let amount = allocationAmountForBill(payment.allocations, billId);
+      return data.lastMutationType == 'paymentConfirmed'
+        && !exists(paymentPathValue)
+        && amount > 0
+        && resource.data.outstandingPaise >= amount
+        && data.sourceAmountPaise == resource.data.sourceAmountPaise
+        && data.allocatedPaise == resource.data.allocatedPaise + amount
+        && data.reversedPaise == resource.data.reversedPaise;
+    }
+
+    function validBillBalanceReversalUpdate(
+      businessId,
+      customerId,
+      billId,
+      data
+    ) {
+      let reversalPathValue = paymentReversalPath(
+        businessId,
+        customerId,
+        data.lastMutationId
+      );
+      let reversal = getAfter(reversalPathValue).data;
+      let amount = allocationAmountForBill(reversal.allocations, billId);
+      return data.lastMutationType == 'paymentReversed'
+        && !exists(reversalPathValue)
+        && amount > 0
+        && resource.data.allocatedPaise - resource.data.reversedPaise >= amount
+        && data.sourceAmountPaise == resource.data.sourceAmountPaise
+        && data.allocatedPaise == resource.data.allocatedPaise
+        && data.reversedPaise == resource.data.reversedPaise + amount;
+    }
+
+    function validBillBalanceUpdate(businessId, customerId, billId) {
+      let data = request.resource.data;
+      return validBillBalanceShape(businessId, customerId, billId, data)
+        && data.createdAt == resource.data.createdAt
+        && data.revision == resource.data.revision + 1
+        && (
+          validBillBalancePaymentUpdate(
+            businessId,
+            customerId,
+            billId,
+            data
+          ) || validBillBalanceReversalUpdate(
+            businessId,
+            customerId,
+            billId,
+            data
+          )
+        );
+    }
+
+    function validPaymentStateCreate(businessId, customerId, paymentId) {
+      let paymentPathValue = paymentPath(businessId, customerId, paymentId);
+      let payment = getAfter(paymentPathValue).data;
+      return !exists(paymentPathValue)
+        && payment.paymentId == paymentId
+        && validPaymentStateCreateAfter(
+          businessId,
+          customerId,
+          paymentId,
+          payment
+        );
+    }
+
+    function validPaymentStateUpdate(businessId, customerId, paymentId) {
+      let reversalId = request.resource.data.lastReversalId;
+      let reversalPathValue = paymentReversalPath(
+        businessId,
+        customerId,
+        reversalId
+      );
+      let reversal = getAfter(reversalPathValue).data;
+      return !exists(reversalPathValue)
+        && reversal.paymentId == paymentId
+        && validPaymentStateUpdateAfter(
+          businessId,
+          customerId,
+          reversalId,
+          reversal
+        );
+    }
+
+    function validUpiConfigurationShape(businessId, data) {
+      return data.keys().hasOnly([
+          'businessId', 'upiId', 'payeeName', 'referencePrefix', 'enabled',
+          'updatedBy', 'lastAuditId', 'createdAt', 'updatedAt'
+        ])
+        && data.businessId == businessId
+        && data.upiId is string
+        && data.upiId.size() <= 193
+        && data.payeeName is string
+        && data.payeeName.size() <= 80
+        && data.referencePrefix is string
+        && data.referencePrefix.size() >= 2
+        && data.referencePrefix.size() <= 20
+        && data.enabled is bool
+        && (
+          data.enabled == false
+          || (
+            data.upiId.matches(
+              '^[A-Za-z0-9._-]{2,128}@[A-Za-z0-9.-]{2,64}$'
+            )
+            && data.payeeName.size() >= 2
+          )
+        )
+        && data.referencePrefix.matches('^[A-Z0-9_-]{2,20}$')
+        && data.updatedBy == request.auth.uid
+        && data.lastAuditId is string
+        && data.lastAuditId.size() > 0
+        && data.updatedAt == request.time;
+    }
+
+    function validUpiConfigurationAuditAfter(businessId, auditId, data) {
+      let audit = getAfter(auditPath(businessId, auditId)).data;
+      return existsAfter(auditPath(businessId, auditId))
+        && audit.keys().hasOnly([
+          'businessId', 'actorId', 'action', 'entityType', 'entityId',
+          'enabled', 'createdAt'
+        ])
+        && audit.businessId == businessId
+        && audit.actorId == request.auth.uid
+        && audit.action == 'upiSettingsUpdated'
+        && audit.entityType == 'configuration'
+        && audit.entityId == 'upi'
+        && audit.enabled == data.enabled
+        && audit.createdAt == request.time;
+    }
+
+    function validUpiConfigurationCreate(businessId) {
+      let data = request.resource.data;
+      return head(businessId)
+        && validUpiConfigurationShape(businessId, data)
+        && validUpiConfigurationAuditAfter(
+          businessId,
+          data.lastAuditId,
+          data
+        )
+        && data.createdAt == request.time;
+    }
+
+    function validUpiConfigurationUpdate(businessId) {
+      let data = request.resource.data;
+      return head(businessId)
+        && validUpiConfigurationShape(businessId, data)
+        && validUpiConfigurationAuditAfter(
+          businessId,
+          data.lastAuditId,
+          data
+        )
+        && data.createdAt == resource.data.createdAt
+        && data.lastAuditId != resource.data.lastAuditId
+        && data.diff(resource.data).affectedKeys().hasOnly([
+          'upiId', 'payeeName', 'referencePrefix', 'enabled', 'updatedBy',
+          'lastAuditId', 'updatedAt'
+        ]);
+    }
+
+    function validBillAuditAfter(
+      businessId,
+      customerId,
+      billingMonth,
+      auditId,
+      data
+    ) {
+      let audit = getAfter(auditPath(businessId, auditId)).data;
+      return existsAfter(auditPath(businessId, auditId))
+        && audit.businessId == businessId
+        && audit.actorId == request.auth.uid
+        && audit.action == 'billFinalized'
+        && audit.entityType == 'bill'
+        && audit.entityId == customerId + ':' + billingMonth
+        && audit.customerId == customerId
+        && audit.billingMonth == billingMonth
+        && audit.lineItemCount == data.lineItemCount
+        && audit.currentChargesPaise == data.currentChargesPaise
+        && audit.priorBalancePaise == data.priorBalancePaise
+        && audit.adjustmentsPaise == data.adjustmentsPaise
+        && audit.totalDuePaise == data.totalDuePaise
+        && audit.createdAt == request.time;
+    }
+
+    function validBillPriorBalance(businessId, customerId, data) {
+      let customer = get(customerPath(businessId, customerId)).data;
+      let statePath = collectionStatePath(businessId, customerId);
+      return (
+          data.previousBillId == ''
+          && !exists(statePath)
+          && data.previousOutstandingPaise == 0
+          && data.priorBalancePaise == customer.openingBalancePaise
+        ) || (
+          validMonth(data.previousBillId)
+          && data.previousBillId < data.billingMonth
+          && exists(statePath)
+          && exists(billPath(businessId, customerId, data.previousBillId))
+          && get(billPath(
+            businessId,
+            customerId,
+            data.previousBillId
+          )).data.status == 'finalized'
+          && data.previousOutstandingPaise
+            == get(statePath).data.outstandingPaise
+          && data.priorBalancePaise == data.previousOutstandingPaise
+        );
+    }
+
+    function billSourceAmount(data) {
+      return data.previousBillId == ''
+        ? data.totalDuePaise
+        : data.currentChargesPaise + data.adjustmentsPaise;
+    }
+
+    function validBillCollectionStateAfter(
+      businessId,
+      customerId,
+      billingMonth,
+      data
+    ) {
+      let path = collectionStatePath(businessId, customerId);
+      let after = getAfter(path).data;
+      return existsAfter(path)
+        && validCollectionStateShape(businessId, customerId, after)
+        && after.lastMutationType == 'billFinalized'
+        && after.lastMutationId == billingMonth
+        && (
+          (
+            !exists(path)
+            && data.previousBillId == ''
+            && after.outstandingPaise == data.totalDuePaise
+            && after.confirmedPaise == 0
+            && after.reversedPaise == 0
+            && after.revision == 1
+            && after.createdAt == request.time
+            && (
+              (
+                after.outstandingPaise > 0
+                && after.oldestOutstandingMonth == billingMonth
+              ) || (
+                after.outstandingPaise <= 0
+                && after.oldestOutstandingMonth == ''
+              )
+            )
+          ) || (
+            exists(path)
+            && data.previousBillId != ''
+            && after.outstandingPaise
+              == get(path).data.outstandingPaise + billSourceAmount(data)
+            && after.outstandingPaise == data.totalDuePaise
+            && after.confirmedPaise == get(path).data.confirmedPaise
+            && after.reversedPaise == get(path).data.reversedPaise
+            && after.revision == get(path).data.revision + 1
+            && after.createdAt == get(path).data.createdAt
+            && (
+              (
+                after.outstandingPaise > 0
+                && get(path).data.outstandingPaise > 0
+                && after.oldestOutstandingMonth
+                  == get(path).data.oldestOutstandingMonth
+              ) || (
+                after.outstandingPaise > 0
+                && get(path).data.outstandingPaise <= 0
+                && after.oldestOutstandingMonth == billingMonth
+              ) || (
+                after.outstandingPaise <= 0
+                && after.oldestOutstandingMonth == ''
+              )
+            )
+          )
+        );
+    }
+
+    function validBillBalanceAfter(
+      businessId,
+      customerId,
+      billingMonth,
+      data
+    ) {
+      let path = billBalancePath(businessId, customerId, billingMonth);
+      let balance = getAfter(path).data;
+      return !exists(path)
+        && existsAfter(path)
+        && validBillBalanceShape(
+          businessId,
+          customerId,
+          billingMonth,
+          balance
+        )
+        && balance.sourceAmountPaise == billSourceAmount(data)
+        && balance.allocatedPaise == 0
+        && balance.reversedPaise == 0
+        && balance.revision == 0
+        && balance.lastMutationType == 'billFinalized'
+        && balance.lastMutationId == billingMonth
+        && balance.createdAt == request.time;
+    }
+
+    function billProjectionsReferenceAfter(
+      businessId,
+      customerId,
+      billingMonth
+    ) {
+      return getAfter(collectionStatePath(
+          businessId,
+          customerId
+        )).data.lastMutationType == 'billFinalized'
+        && getAfter(collectionStatePath(
+          businessId,
+          customerId
+        )).data.lastMutationId == billingMonth
+        && getAfter(billBalancePath(
+          businessId,
+          customerId,
+          billingMonth
+        )).data.lastMutationType == 'billFinalized'
+        && getAfter(billBalancePath(
+          businessId,
+          customerId,
+          billingMonth
+        )).data.lastMutationId == billingMonth;
+    }
+
+    function validBillShape(businessId, customerId, billingMonth, data) {
+      return data.keys().hasOnly([
+          'businessId', 'customerId', 'customerCode', 'customerName',
+          'customerSearchName', 'customerAddress', 'areaId',
+          'assignedEmployeeId', 'customerStatus', 'billingMonth', 'status',
+          'openingBalancePaise', 'previousBillId',
+          'previousOutstandingPaise', 'priorBalancePaise',
+          'currentChargesPaise', 'adjustmentsPaise', 'totalDuePaise',
+          'lineItemCount', 'newspaperSummaries', 'calculationVersion',
+          'finalizedBy', 'createdBy', 'lastAuditId', 'finalizedAt',
+          'createdAt'
+        ])
+        && data.businessId == businessId
+        && data.customerId == customerId
+        && data.customerCode == customerId
+        && data.customerName is string
+        && data.customerName.size() >= 2
+        && data.customerName.size() <= 100
+        && data.customerSearchName is string
+        && data.customerSearchName.size() >= 2
+        && data.customerAddress is string
+        && data.customerAddress.size() <= 700
+        && data.areaId
+          == get(customerPath(businessId, customerId)).data.areaId
+        && data.assignedEmployeeId
+          == get(customerPath(businessId, customerId)).data.assignedEmployeeId
+        && data.customerStatus
+          == get(customerPath(businessId, customerId)).data.status
+        && data.billingMonth == billingMonth
+        && validMonth(data.billingMonth)
+        && data.status == 'finalized'
+        && data.openingBalancePaise == get(
+          customerPath(businessId, customerId)
+        ).data.openingBalancePaise
+        && validSignedMoney(data.previousOutstandingPaise)
+        && validSignedMoney(data.priorBalancePaise)
+        && data.currentChargesPaise is int
+        && data.currentChargesPaise >= 0
+        && validSignedMoney(data.adjustmentsPaise)
+        && validSignedMoney(data.totalDuePaise)
+        && data.totalDuePaise == data.priorBalancePaise
+          + data.currentChargesPaise + data.adjustmentsPaise
+        && data.lineItemCount is int
+        && data.lineItemCount >= 0
+        && data.lineItemCount <= 475
+        && data.newspaperSummaries is list
+        && data.newspaperSummaries.size() <= 475
+        && data.calculationVersion == 'paper-route-monthly-v1'
+        && data.finalizedBy == request.auth.uid
+        && data.createdBy == request.auth.uid
+        && data.lastAuditId is string
+        && data.lastAuditId.size() > 0
+        && data.finalizedAt == request.time
+        && data.createdAt == request.time
+        && validBillPriorBalance(businessId, customerId, data)
+        && validBillAuditAfter(
+          businessId,
+          customerId,
+          billingMonth,
+          data.lastAuditId,
+          data
+        )
+        && billProjectionsReferenceAfter(
+          businessId,
+          customerId,
+          billingMonth
+        );
+    }
+
+    function validBillLineShape(
+      businessId,
+      customerId,
+      billingMonth,
+      lineItemId,
+      data
+    ) {
+      let bill = getAfter(billPath(businessId, customerId, billingMonth)).data;
+      let audit = getAfter(auditPath(businessId, data.lastAuditId)).data;
+      return data.keys().hasOnly([
+          'businessId', 'customerId', 'billId', 'billingMonth', 'chargeKey',
+          'serviceDate', 'subscriptionId', 'versionId', 'newspaperId',
+          'newspaperName', 'unitPricePaise', 'quantity', 'totalPaise',
+          'priceSource', 'priceSourceId', 'priceRuleRevision', 'lastAuditId',
+          'createdAt'
+        ])
+        && data.businessId == businessId
+        && data.customerId == customerId
+        && data.billId == billingMonth
+        && data.billingMonth == billingMonth
+        && data.chargeKey == lineItemId
+        && validDate(data.serviceDate)
+        && data.serviceDate >= billingMonth + '-01'
+        && data.serviceDate <= billingMonth + '-31'
+        && data.subscriptionId is string
+        && data.subscriptionId.size() > 0
+        && data.versionId is string
+        && data.versionId.size() > 0
+        && data.newspaperId is string
+        && data.newspaperId.size() > 0
+        && data.newspaperName is string
+        && data.newspaperName.size() >= 2
+        && validPrice(data.unitPricePaise)
+        && data.quantity is int
+        && data.quantity >= 1
+        && data.quantity <= 50
+        && data.totalPaise == data.unitPricePaise * data.quantity
+        && data.priceSource in [
+          'customerSpecific', 'exactDate', 'effectivePeriod', 'defaultPrice'
+        ]
+        && data.priceSourceId is string
+        && data.priceSourceId.size() > 0
+        && data.priceRuleRevision is int
+        && data.priceRuleRevision >= 0
+        && data.lastAuditId == bill.lastAuditId
+        && bill.status == 'finalized'
+        && audit.action == 'billFinalized'
+        && audit.customerId == customerId
+        && audit.billingMonth == billingMonth
+        && audit.createdAt == request.time
+        && data.createdAt == request.time;
+    }
+
+    function validBillingControlShape(
+      businessId,
+      customerId,
+      billingMonth,
+      data
+    ) {
+      return data.keys().hasOnly([
+          'businessId', 'customerId', 'billingMonth', 'status',
+          'adjustmentRevision', 'finalizedBillId', 'updatedBy', 'lastAuditId',
+          'createdAt', 'updatedAt'
+        ])
+        && data.businessId == businessId
+        && data.customerId == customerId
+        && data.billingMonth == billingMonth
+        && validMonth(data.billingMonth)
+        && data.status in ['open', 'finalized']
+        && data.adjustmentRevision is int
+        && data.adjustmentRevision >= 0
+        && data.finalizedBillId is string
+        && data.updatedBy == request.auth.uid
+        && data.lastAuditId is string
+        && data.lastAuditId.size() > 0
+        && data.updatedAt == request.time;
+    }
+
+    function validAdjustmentShape(
+      businessId,
+      customerId,
+      adjustmentId,
+      data
+    ) {
+      return data.keys().hasOnly([
+          'businessId', 'customerId', 'adjustmentId', 'billingMonth',
+          'amountPaise', 'reason', 'referenceBillMonth', 'createdBy',
+          'lastAuditId', 'createdAt'
+        ])
+        && data.businessId == businessId
+        && data.customerId == customerId
+        && data.adjustmentId == adjustmentId
+        && validMonth(data.billingMonth)
+        && validAdjustmentAmount(data.amountPaise)
+        && data.amountPaise != 0
+        && data.reason is string
+        && data.reason.size() >= 3
+        && data.reason.size() <= 300
+        && data.referenceBillMonth is string
+        && (
+          data.referenceBillMonth == '' || (
+            validMonth(data.referenceBillMonth)
+            && data.referenceBillMonth < data.billingMonth
+            && exists(billPath(
+              businessId,
+              customerId,
+              data.referenceBillMonth
+            ))
+          )
+        )
+        && data.createdBy == request.auth.uid
+        && data.lastAuditId is string
+        && data.lastAuditId.size() > 0
+        && data.createdAt == request.time;
+    }
+
+    function validAdjustmentAuditAfter(
+      businessId,
+      customerId,
+      adjustmentId,
+      data
+    ) {
+      let audit = getAfter(auditPath(businessId, data.lastAuditId)).data;
+      let control = getAfter(billingControlPath(
+        businessId,
+        customerId,
+        data.billingMonth
+      )).data;
+      return audit.businessId == businessId
+        && audit.actorId == request.auth.uid
+        && audit.action == 'billingAdjustmentCreated'
+        && audit.entityType == 'billingAdjustment'
+        && audit.entityId == adjustmentId
+        && audit.customerId == customerId
+        && audit.billingMonth == data.billingMonth
+        && audit.amountPaise == data.amountPaise
+        && audit.referenceBillMonth == data.referenceBillMonth
+        && audit.controlRevision == control.adjustmentRevision
+        && audit.createdAt == request.time
+        && control.status == 'open'
+        && control.lastAuditId == data.lastAuditId;
+    }
+
+    function phase5AuditAction(action) {
+      return action in ['billFinalized', 'billingAdjustmentCreated'];
+    }
+
+    function phase5AuditReferencedAfter(businessId, auditId, data) {
+      return (
+          data.action == 'billFinalized'
+          && data.customerId is string
+          && validMonth(data.billingMonth)
+          && getAfter(billPath(
+            businessId,
+            data.customerId,
+            data.billingMonth
+          )).data.lastAuditId == auditId
+          && getAfter(billingControlPath(
+            businessId,
+            data.customerId,
+            data.billingMonth
+          )).data.lastAuditId == auditId
+        ) || (
+          data.action == 'billingAdjustmentCreated'
+          && data.customerId is string
+          && data.entityId is string
+          && getAfter(adjustmentPath(
+            businessId,
+            data.customerId,
+            data.entityId
+          )).data.lastAuditId == auditId
+          && getAfter(billingControlPath(
+            businessId,
+            data.customerId,
+            data.billingMonth
+          )).data.lastAuditId == auditId
+        );
+    }
+
+    function phase6AuditAction(action) {
+      return action in [
+        'paymentConfirmed', 'paymentReversed', 'upiSettingsUpdated'
+      ];
+    }
+
+    function phase6AuditReferencedAfter(businessId, auditId, data) {
+      return (
+          data.action == 'paymentConfirmed'
+          && data.customerId is string
+          && data.paymentId is string
+          && getAfter(paymentPath(
+            businessId,
+            data.customerId,
+            data.paymentId
+          )).data.lastAuditId == auditId
+        ) || (
+          data.action == 'paymentReversed'
+          && data.customerId is string
+          && data.entityId is string
+          && getAfter(paymentReversalPath(
+            businessId,
+            data.customerId,
+            data.entityId
+          )).data.lastAuditId == auditId
+        ) || (
+          data.action == 'upiSettingsUpdated'
+          && getAfter(upiConfigurationPath(businessId)).data.lastAuditId
+            == auditId
+        );
+    }
+
+    function validDeliveryExceptionShape(
+      businessId,
+      customerId,
+      exceptionId,
+      data
+    ) {
+      return data.keys().hasOnly([
+          'businessId', 'customerId', 'exceptionId', 'subscriptionId',
+          'type', 'serviceDate', 'reason', 'createdBy', 'createdAt'
+        ])
+        && data.businessId == businessId
+        && data.customerId == customerId
+        && data.exceptionId == exceptionId
+        && data.subscriptionId is string
+        && data.subscriptionId.size() > 0
+        && exists(subscriptionPath(
+          businessId,
+          customerId,
+          data.subscriptionId
+        ))
+        && data.type == 'noDelivery'
+        && validDate(data.serviceDate)
+        && data.reason is string
+        && data.reason.size() >= 3
+        && data.reason.size() <= 300
+        && data.createdBy == request.auth.uid
+        && data.createdAt == request.time;
+    }
+
+    function validServiceBillingSourceAdvance(
+      businessId,
+      customerId,
+      mutationType,
+      mutationId
+    ) {
+      let path = serviceBillingSourcePath(businessId, customerId);
+      let next = getAfter(path).data;
+      return existsAfter(path)
+        && next.keys().hasOnly([
+          'businessId', 'customerId', 'sourceId', 'revision',
+          'lastMutationType', 'lastMutationId', 'updatedBy', 'createdAt',
+          'updatedAt'
+        ])
+        && next.businessId == businessId
+        && next.customerId == customerId
+        && next.sourceId == 'service'
+        && next.revision is int
+        && next.revision >= 1
+        && next.lastMutationType == mutationType
+        && next.lastMutationId == mutationId
+        && next.updatedBy == request.auth.uid
+        && next.updatedAt == request.time
+        && (
+          (
+            !exists(path)
+            && next.revision == 1
+            && next.createdAt == request.time
+          ) || (
+            exists(path)
+            && get(path).data.businessId == businessId
+            && get(path).data.customerId == customerId
+            && get(path).data.sourceId == 'service'
+            && get(path).data.revision is int
+            && next.revision == get(path).data.revision + 1
+            && next.createdAt == get(path).data.createdAt
+          )
+        );
+    }
+
+    function serviceBillingSourceReferencesMutationAfter(
+      businessId,
+      customerId,
+      data
+    ) {
+      return (
+          data.lastMutationType == 'subscriptionCreated'
+          && data.lastMutationId is string
+          && !exists(subscriptionPath(
+            businessId,
+            customerId,
+            data.lastMutationId
+          ))
+          && existsAfter(subscriptionPath(
+            businessId,
+            customerId,
+            data.lastMutationId
+          ))
+          && getAfter(subscriptionPath(
+            businessId,
+            customerId,
+            data.lastMutationId
+          )).data.createdAt == request.time
+        ) || (
+          data.lastMutationType == 'deliveryExceptionCreated'
+          && data.lastMutationId is string
+          && !exists(deliveryExceptionPath(
+            businessId,
+            customerId,
+            data.lastMutationId
+          ))
+          && existsAfter(deliveryExceptionPath(
+            businessId,
+            customerId,
+            data.lastMutationId
+          ))
+          && getAfter(deliveryExceptionPath(
+            businessId,
+            customerId,
+            data.lastMutationId
+          )).data.createdAt == request.time
+        );
+    }
+
+    function serviceBillingSourceMatchesAfter(
+      businessId,
+      customerId,
+      mutationType,
+      mutationId
+    ) {
+      let next = getAfter(serviceBillingSourcePath(
+        businessId,
+        customerId
+      )).data;
+      return next.lastMutationType == mutationType
+        && next.lastMutationId == mutationId
+        && next.updatedBy == request.auth.uid
+        && next.updatedAt == request.time;
+    }
+
+    function validOptionalDate(value) {
+      return value == null || validDate(value);
+    }
+
+    function validPrice(value) {
+      return value is int && value >= 0 && value <= 1000000;
+    }
+
+    function validCustomPrice(data) {
+      return (
+          data.customPricePaise == null
+          && data.customPriceReason is string
+          && data.customPriceReason == ''
+        ) || (
+          validPrice(data.customPricePaise)
+          && data.customPriceReason is string
+          && data.customPriceReason.size() >= 3
+          && data.customPriceReason.size() <= 200
+        );
+    }
+
+    function validWeekdays(value) {
+      return value is list
+        && value.size() >= 1
+        && value.size() <= 7
+        && value.toSet().size() == value.size()
+        && value.hasOnly([1, 2, 3, 4, 5, 6, 7]);
+    }
+
+    function validPhase4AuditAfter(
+      businessId,
+      auditId,
+      entityType,
+      entityId,
+      action
+    ) {
+      let audit = getAfter(auditPath(businessId, auditId)).data;
+      return existsAfter(auditPath(businessId, auditId))
+        && audit.businessId == businessId
+        && audit.actorId == request.auth.uid
+        && audit.entityType == entityType
+        && audit.entityId == entityId
+        && audit.action == action
+        && audit.createdAt == request.time;
+    }
+
+    function validNewspaperShape(businessId, newspaperId, data) {
+      return data.keys().hasOnly([
+          'businessId', 'newspaperCode', 'name', 'searchName', 'edition',
+          'language', 'defaultPricePaise', 'status', 'createdBy',
+          'updatedBy', 'lastAuditId', 'createdAt', 'updatedAt'
+        ])
+        && data.businessId == businessId
+        && data.newspaperCode == newspaperId
+        && data.name is string
+        && data.name.size() >= 2
+        && data.name.size() <= 120
+        && data.searchName is string
+        && data.searchName.size() >= 2
+        && data.edition is string
+        && data.edition.size() <= 80
+        && data.language is string
+        && data.language.size() <= 80
+        && validPrice(data.defaultPricePaise)
+        && data.status in ['active', 'archived']
+        && data.createdBy is string
+        && data.updatedBy is string
+        && data.lastAuditId is string
+        && data.lastAuditId.size() > 0;
+    }
+
+    function validNewspaperProfileUpdate(businessId, newspaperId) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'name', 'searchName', 'edition', 'language', 'updatedBy',
+          'lastAuditId', 'updatedAt'
+        ])
+        && request.resource.data.updatedBy == request.auth.uid
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.lastAuditId != resource.data.lastAuditId
+        && validPhase4AuditAfter(
+          businessId,
+          request.resource.data.lastAuditId,
+          'newspaper',
+          newspaperId,
+          'newspaperUpdated'
+        );
+    }
+
+    function validNewspaperStatusUpdate(businessId, newspaperId) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status', 'updatedBy', 'lastAuditId', 'updatedAt'
+        ])
+        && request.resource.data.status != resource.data.status
+        && request.resource.data.updatedBy == request.auth.uid
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.lastAuditId != resource.data.lastAuditId
+        && (
+          (
+            request.resource.data.status == 'archived'
+            && validPhase4AuditAfter(
+              businessId,
+              request.resource.data.lastAuditId,
+              'newspaper',
+              newspaperId,
+              'newspaperArchived'
+            )
+          ) || (
+            request.resource.data.status == 'active'
+            && validPhase4AuditAfter(
+              businessId,
+              request.resource.data.lastAuditId,
+              'newspaper',
+              newspaperId,
+              'newspaperReactivated'
+            )
+          )
+        );
+    }
+
+    function validNewspaperPriceLockUpdate(businessId, newspaperId) {
+      let auditId = request.resource.data.lastAuditId;
+      let audit = getAfter(auditPath(businessId, auditId)).data;
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'updatedBy', 'lastAuditId', 'updatedAt'
+        ])
+        && request.resource.data.updatedBy == request.auth.uid
+        && request.resource.data.updatedAt == request.time
+        && audit.priceRuleId is string
+        && (
+          validPhase4AuditAfter(
+            businessId,
+            auditId,
+            'newspaper',
+            newspaperId,
+            'newspaperPriceRuleCreated'
+          ) || validPhase4AuditAfter(
+            businessId,
+            auditId,
+            'newspaper',
+            newspaperId,
+            'newspaperPriceRuleCorrected'
+          )
+        );
+    }
+
+    function validPriceRuleShape(businessId, newspaperId, ruleId, data) {
+      return data.keys().hasOnly([
+          'businessId', 'newspaperId', 'priceRuleId', 'kind', 'startDate',
+          'endDate', 'pricePaise', 'status', 'supersedesRuleId',
+          'supersededByRuleId', 'revision', 'reason', 'createdBy',
+          'updatedBy', 'lastAuditId', 'createdAt', 'updatedAt'
+        ])
+        && data.businessId == businessId
+        && data.newspaperId == newspaperId
+        && data.priceRuleId == ruleId
+        && data.kind in ['exactDate', 'period']
+        && validDate(data.startDate)
+        && (
+          (data.kind == 'exactDate' && data.endDate == null)
+          || (
+            data.kind == 'period'
+            && validDate(data.endDate)
+            && data.endDate >= data.startDate
+          )
+        )
+        && validPrice(data.pricePaise)
+        && data.status in ['active', 'superseded']
+        && data.supersedesRuleId is string
+        && data.supersededByRuleId is string
+        && data.revision is int
+        && data.revision >= 1
+        && data.reason is string
+        && data.reason.size() >= 3
+        && data.reason.size() <= 300
+        && data.createdBy is string
+        && data.updatedBy is string
+        && data.lastAuditId is string
+        && data.lastAuditId.size() > 0;
+    }
+
+    function validPriceRuleCreate(businessId, newspaperId, ruleId) {
+      let data = request.resource.data;
+      let audit = getAfter(auditPath(businessId, data.lastAuditId)).data;
+      return validPriceRuleShape(businessId, newspaperId, ruleId, data)
+        && data.status == 'active'
+        && data.supersededByRuleId == ''
+        && data.createdBy == request.auth.uid
+        && data.updatedBy == request.auth.uid
+        && data.createdAt == request.time
+        && data.updatedAt == request.time
+        && getAfter(newspaperPath(businessId, newspaperId)).data.lastAuditId
+          == data.lastAuditId
+        && audit.priceRuleId == ruleId
+        && audit.kind == data.kind
+        && audit.startDate == data.startDate
+        && audit.endDate == data.endDate
+        && audit.pricePaise == data.pricePaise
+        && (
+          (
+            data.supersedesRuleId == ''
+            && data.revision == 1
+            && get(newspaperPath(businessId, newspaperId)).data.status
+              == 'active'
+            && validPhase4AuditAfter(
+              businessId,
+              data.lastAuditId,
+              'newspaper',
+              newspaperId,
+              'newspaperPriceRuleCreated'
+            )
+          ) || (
+            data.supersedesRuleId != ''
+            && exists(priceRulePath(
+              businessId,
+              newspaperId,
+              data.supersedesRuleId
+            ))
+            && data.revision == get(priceRulePath(
+              businessId,
+              newspaperId,
+              data.supersedesRuleId
+            )).data.revision + 1
+            && getAfter(priceRulePath(
+              businessId,
+              newspaperId,
+              data.supersedesRuleId
+            )).data.status == 'superseded'
+            && getAfter(priceRulePath(
+              businessId,
+              newspaperId,
+              data.supersedesRuleId
+            )).data.supersededByRuleId == ruleId
+            && audit.replacedPriceRuleId == data.supersedesRuleId
+            && validPhase4AuditAfter(
+              businessId,
+              data.lastAuditId,
+              'newspaper',
+              newspaperId,
+              'newspaperPriceRuleCorrected'
+            )
+          )
+        );
+    }
+
+    function validPriceRuleSupersede(businessId, newspaperId, ruleId) {
+      let nextId = request.resource.data.supersededByRuleId;
+      let next = getAfter(priceRulePath(businessId, newspaperId, nextId)).data;
+      return resource.data.status == 'active'
+        && request.resource.data.status == 'superseded'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status', 'supersededByRuleId', 'updatedBy', 'lastAuditId',
+          'updatedAt'
+        ])
+        && next.supersedesRuleId == ruleId
+        && next.revision == resource.data.revision + 1
+        && next.lastAuditId == request.resource.data.lastAuditId
+        && request.resource.data.updatedBy == request.auth.uid
+        && request.resource.data.updatedAt == request.time;
+    }
+
+    function canManageAssignedSubscription(businessId, customerId) {
+      let member = exists(memberPath(businessId, request.auth.uid))
+        ? get(memberPath(businessId, request.auth.uid)).data
+        : null;
+      let customer = exists(customerPath(businessId, customerId))
+        ? get(customerPath(businessId, customerId)).data
+        : null;
+      return signedIn()
+        && member != null
+        && member.status == 'active'
+        && member.businessId == businessId
+        && customer != null
+        && customer.businessId == businessId
+        && customer.status == 'active'
+        && (
+          member.role == 'head'
+          || (
+            customer.assignedEmployeeId == request.auth.uid
+            && member.areaIds is list
+            && member.areaIds.hasAny([customer.areaId])
+            && member.permissions is list
+            && member.permissions.hasAny(['manageAssignedSubscriptions'])
+          )
+        );
+    }
+
+    function validSubscriptionShape(
+      businessId,
+      customerId,
+      subscriptionId,
+      data
+    ) {
+      return data.keys().hasOnly([
+          'businessId', 'customerId', 'subscriptionId', 'newspaperId',
+          'newspaperName', 'currentVersionId', 'currentPauseId', 'status',
+          'startDate', 'endDate', 'currentEffectiveFrom', 'quantity',
+          'deliveryWeekdays', 'customPricePaise', 'customPriceReason',
+          'createdBy', 'updatedBy', 'lastAuditId', 'createdAt', 'updatedAt'
+        ])
+        && data.businessId == businessId
+        && data.customerId == customerId
+        && data.subscriptionId == subscriptionId
+        && data.newspaperId == subscriptionId
+        && data.newspaperName is string
+        && data.newspaperName.size() >= 2
+        && data.newspaperName.size() <= 120
+        && data.currentVersionId is string
+        && data.currentVersionId.size() > 0
+        && data.currentPauseId is string
+        && data.status in ['active', 'paused', 'ended']
+        && validDate(data.startDate)
+        && validOptionalDate(data.endDate)
+        && (data.endDate == null || data.endDate >= data.startDate)
+        && validDate(data.currentEffectiveFrom)
+        && data.quantity is int
+        && data.quantity >= 1
+        && data.quantity <= 50
+        && validWeekdays(data.deliveryWeekdays)
+        && validCustomPrice(data)
+        && data.createdBy is string
+        && data.updatedBy is string
+        && data.lastAuditId is string
+        && data.lastAuditId.size() > 0;
+    }
+
+    function validVersionShape(
+      businessId,
+      customerId,
+      subscriptionId,
+      versionId,
+      data
+    ) {
+      return data.keys().hasOnly([
+          'businessId', 'customerId', 'subscriptionId', 'versionId',
+          'newspaperId', 'effectiveFrom', 'effectiveTo', 'quantity',
+          'deliveryWeekdays', 'customPricePaise', 'customPriceReason',
+          'predecessorVersionId', 'successorVersionId', 'status', 'createdBy',
+          'updatedBy', 'lastAuditId', 'createdAt', 'updatedAt'
+        ])
+        && data.businessId == businessId
+        && data.customerId == customerId
+        && data.subscriptionId == subscriptionId
+        && data.versionId == versionId
+        && data.newspaperId == subscriptionId
+        && validDate(data.effectiveFrom)
+        && validOptionalDate(data.effectiveTo)
+        && (data.effectiveTo == null || data.effectiveTo >= data.effectiveFrom)
+        && data.quantity is int
+        && data.quantity >= 1
+        && data.quantity <= 50
+        && validWeekdays(data.deliveryWeekdays)
+        && validCustomPrice(data)
+        && data.predecessorVersionId is string
+        && data.successorVersionId is string
+        && data.status in ['current', 'closed']
+        && data.createdBy is string
+        && data.updatedBy is string
+        && data.lastAuditId is string
+        && data.lastAuditId.size() > 0;
+    }
+
+    function validSubscriptionAuditAfter(
+      businessId,
+      customerId,
+      subscriptionId,
+      auditId,
+      action
+    ) {
+      let audit = getAfter(auditPath(businessId, auditId)).data;
+      return validPhase4AuditAfter(
+          businessId,
+          auditId,
+          'subscription',
+          customerId + ':' + subscriptionId,
+          action
+        )
+        && audit.customerId == customerId
+        && audit.subscriptionId == subscriptionId;
+    }
+
+    function versionMatchesSubscriptionAfter(
+      businessId,
+      customerId,
+      subscriptionId,
+      versionId
+    ) {
+      let series = getAfter(subscriptionPath(
+        businessId,
+        customerId,
+        subscriptionId
+      )).data;
+      let version = getAfter(subscriptionVersionPath(
+        businessId,
+        customerId,
+        subscriptionId,
+        versionId
+      )).data;
+      return existsAfter(subscriptionVersionPath(
+          businessId,
+          customerId,
+          subscriptionId,
+          versionId
+        ))
+        && version.status == 'current'
+        && version.effectiveTo == null
+        && version.quantity == series.quantity
+        && version.deliveryWeekdays == series.deliveryWeekdays
+        && version.customPricePaise == series.customPricePaise
+        && version.customPriceReason == series.customPriceReason
+        && version.effectiveFrom == series.currentEffectiveFrom
+        && version.lastAuditId == series.lastAuditId;
+    }
+
+    function validSubscriptionCreate(businessId, customerId, subscriptionId) {
+      let data = request.resource.data;
+      return canManageAssignedSubscription(businessId, customerId)
+        && validSubscriptionShape(
+          businessId,
+          customerId,
+          subscriptionId,
+          data
+        )
+        && data.status == 'active'
+        && data.currentPauseId == ''
+        && data.currentEffectiveFrom == data.startDate
+        && data.createdBy == request.auth.uid
+        && data.updatedBy == request.auth.uid
+        && data.createdAt == request.time
+        && data.updatedAt == request.time
+        && exists(newspaperPath(businessId, subscriptionId))
+        && get(newspaperPath(businessId, subscriptionId)).data.businessId
+          == businessId
+        && get(newspaperPath(businessId, subscriptionId)).data.status
+          == 'active'
+        && (
+          head(businessId) || data.customPricePaise == null
+        )
+        && versionMatchesSubscriptionAfter(
+          businessId,
+          customerId,
+          subscriptionId,
+          data.currentVersionId
+        )
+        && getAfter(subscriptionVersionPath(
+          businessId,
+          customerId,
+          subscriptionId,
+          data.currentVersionId
+        )).data.predecessorVersionId == ''
+        && validSubscriptionAuditAfter(
+          businessId,
+          customerId,
+          subscriptionId,
+          data.lastAuditId,
+          'subscriptionCreated'
+        )
+        && serviceBillingSourceMatchesAfter(
+          businessId,
+          customerId,
+          'subscriptionCreated',
+          subscriptionId
+        );
+    }
+
+    function validTermsChange(businessId, customerId, subscriptionId) {
+      let nextId = request.resource.data.currentVersionId;
+      let oldId = resource.data.currentVersionId;
+      let next = getAfter(subscriptionVersionPath(
+        businessId,
+        customerId,
+        subscriptionId,
+        nextId
+      )).data;
+      let old = getAfter(subscriptionVersionPath(
+        businessId,
+        customerId,
+        subscriptionId,
+        oldId
+      )).data;
+      let restarting = resource.data.status == 'ended';
+      return canManageAssignedSubscription(businessId, customerId)
+        && resource.data.status != 'paused'
+        && nextId != oldId
+        && request.resource.data.status == 'active'
+        && request.resource.data.currentPauseId == ''
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'currentVersionId', 'status', 'startDate', 'endDate',
+          'currentEffectiveFrom', 'quantity', 'deliveryWeekdays',
+          'customPricePaise', 'customPriceReason', 'updatedBy', 'lastAuditId',
+          'updatedAt'
+        ])
+        && request.resource.data.currentEffectiveFrom >
+          resource.data.currentEffectiveFrom
+        && next.predecessorVersionId == oldId
+        && next.effectiveFrom == request.resource.data.currentEffectiveFrom
+        && (
+          (
+            restarting
+            && resource.data.endDate != null
+            && next.effectiveFrom > resource.data.endDate
+            && validSubscriptionAuditAfter(
+              businessId,
+              customerId,
+              subscriptionId,
+              request.resource.data.lastAuditId,
+              'subscriptionRestarted'
+            )
+          ) || (
+            !restarting
+            && old.status == 'closed'
+            && old.effectiveTo < next.effectiveFrom
+            && old.successorVersionId == nextId
+            && validSubscriptionAuditAfter(
+              businessId,
+              customerId,
+              subscriptionId,
+              request.resource.data.lastAuditId,
+              'subscriptionTermsChanged'
+            )
+          )
+        )
+        && versionMatchesSubscriptionAfter(
+          businessId,
+          customerId,
+          subscriptionId,
+          nextId
+        )
+        && (
+          head(businessId) || (
+            request.resource.data.customPricePaise == resource.data.customPricePaise
+            && request.resource.data.customPriceReason == resource.data.customPriceReason
+          )
+        );
+    }
+
+    function validPauseShape(
+      businessId,
+      customerId,
+      subscriptionId,
+      pauseId,
+      data
+    ) {
+      return data.keys().hasOnly([
+          'businessId', 'customerId', 'subscriptionId', 'pauseId', 'startDate',
+          'endDate', 'reason', 'status', 'createdBy', 'updatedBy',
+          'lastAuditId', 'createdAt', 'updatedAt'
+        ])
+        && data.businessId == businessId
+        && data.customerId == customerId
+        && data.subscriptionId == subscriptionId
+        && data.pauseId == pauseId
+        && validDate(data.startDate)
+        && validOptionalDate(data.endDate)
+        && (
+          (data.status == 'open' && data.endDate == null)
+          || (
+            data.status == 'closed'
+            && validDate(data.endDate)
+            && data.endDate >= data.startDate
+          )
+        )
+        && data.reason is string
+        && data.reason.size() >= 2
+        && data.reason.size() <= 200
+        && data.createdBy is string
+        && data.updatedBy is string
+        && data.lastAuditId is string
+        && data.lastAuditId.size() > 0;
+    }
+
+    function validOpenPauseTransition(businessId, customerId, subscriptionId) {
+      let pauseId = request.resource.data.currentPauseId;
+      let pause = getAfter(subscriptionPausePath(
+        businessId,
+        customerId,
+        subscriptionId,
+        pauseId
+      )).data;
+      return resource.data.status == 'active'
+        && request.resource.data.status == 'paused'
+        && resource.data.currentPauseId == ''
+        && pause.status == 'open'
+        && pause.lastAuditId == request.resource.data.lastAuditId
+        && validSubscriptionAuditAfter(
+          businessId,
+          customerId,
+          subscriptionId,
+          request.resource.data.lastAuditId,
+          'subscriptionPauseAdded'
+        );
+    }
+
+    function validResumeTransition(businessId, customerId, subscriptionId) {
+      let pauseId = resource.data.currentPauseId;
+      let pause = getAfter(subscriptionPausePath(
+        businessId,
+        customerId,
+        subscriptionId,
+        pauseId
+      )).data;
+      return resource.data.status == 'paused'
+        && request.resource.data.status == 'active'
+        && pause.status == 'closed'
+        && pause.endDate != null
+        && pause.lastAuditId == request.resource.data.lastAuditId
+        && validSubscriptionAuditAfter(
+          businessId,
+          customerId,
+          subscriptionId,
+          request.resource.data.lastAuditId,
+          'subscriptionResumed'
+        );
+    }
+
+    function validScheduledPauseLock(businessId, customerId, subscriptionId) {
+      let auditId = request.resource.data.lastAuditId;
+      let audit = getAfter(auditPath(businessId, auditId)).data;
+      let pause = getAfter(subscriptionPausePath(
+        businessId,
+        customerId,
+        subscriptionId,
+        audit.pauseId
+      )).data;
+      return request.resource.data.status == resource.data.status
+        && request.resource.data.currentPauseId == resource.data.currentPauseId
+        && audit.pauseId is string
+        && existsAfter(subscriptionPausePath(
+          businessId,
+          customerId,
+          subscriptionId,
+          audit.pauseId
+        ))
+        && pause.status == 'closed'
+        && pause.lastAuditId == auditId
+        && validSubscriptionAuditAfter(
+          businessId,
+          customerId,
+          subscriptionId,
+          auditId,
+          'subscriptionPauseAdded'
+        );
+    }
+
+    function validEndTransition(businessId, customerId, subscriptionId) {
+      let version = getAfter(subscriptionVersionPath(
+        businessId,
+        customerId,
+        subscriptionId,
+        resource.data.currentVersionId
+      )).data;
+      return resource.data.status in ['active', 'paused']
+        && request.resource.data.status == 'ended'
+        && validDate(request.resource.data.endDate)
+        && request.resource.data.endDate >= resource.data.startDate
+        && version.status == 'closed'
+        && version.effectiveTo == request.resource.data.endDate
+        && version.lastAuditId == request.resource.data.lastAuditId
+        && (
+          resource.data.status == 'active'
+          || getAfter(subscriptionPausePath(
+            businessId,
+            customerId,
+            subscriptionId,
+            resource.data.currentPauseId
+          )).data.status == 'closed'
+        )
+        && validSubscriptionAuditAfter(
+          businessId,
+          customerId,
+          subscriptionId,
+          request.resource.data.lastAuditId,
+          'subscriptionEnded'
+        );
+    }
+
+    function validSubscriptionUpdate(businessId, customerId, subscriptionId) {
+      return validSubscriptionShape(
+          businessId,
+          customerId,
+          subscriptionId,
+          request.resource.data
+        )
+        && request.resource.data.updatedBy == request.auth.uid
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.lastAuditId != resource.data.lastAuditId
+        && (
+          (
+            request.resource.data.status == 'ended'
+            && (
+              canManageAssignedSubscription(businessId, customerId)
+              || head(businessId)
+            )
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'status', 'endDate', 'currentPauseId', 'updatedBy',
+              'lastAuditId', 'updatedAt'
+            ])
+            && validEndTransition(businessId, customerId, subscriptionId)
+          ) || (
+            request.resource.data.currentVersionId
+              != resource.data.currentVersionId
+            && validTermsChange(businessId, customerId, subscriptionId)
+          ) || (
+            request.resource.data.currentVersionId
+              == resource.data.currentVersionId
+            &&
+            canManageAssignedSubscription(businessId, customerId)
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'status', 'currentPauseId', 'updatedBy', 'lastAuditId',
+              'updatedAt'
+            ])
+            && (
+              validOpenPauseTransition(businessId, customerId, subscriptionId)
+              || validResumeTransition(businessId, customerId, subscriptionId)
+              || validScheduledPauseLock(
+                businessId,
+                customerId,
+                subscriptionId
+              )
+            )
+          )
+        );
+    }
+
+    function phase4AuditAction(action) {
+      return action in [
+        'newspaperCreated', 'newspaperUpdated', 'newspaperArchived',
+        'newspaperReactivated', 'newspaperPriceRuleCreated',
+        'newspaperPriceRuleCorrected', 'subscriptionCreated',
+        'subscriptionTermsChanged', 'subscriptionRestarted',
+        'subscriptionPauseAdded', 'subscriptionResumed', 'subscriptionEnded'
+      ];
+    }
+
+    function phase4AuditReferencedAfter(businessId, auditId, data) {
+      return (
+          data.entityType == 'newspaper'
+          && getAfter(newspaperPath(businessId, data.entityId)).data.lastAuditId
+            == auditId
+        ) || (
+          data.entityType == 'subscription'
+          && data.customerId is string
+          && data.subscriptionId is string
+          && (
+            getAfter(subscriptionPath(
+              businessId,
+              data.customerId,
+              data.subscriptionId
+            )).data.lastAuditId == auditId
+            || (
+              data.pauseId is string
+              && getAfter(subscriptionPausePath(
+                businessId,
+                data.customerId,
+                data.subscriptionId,
+                data.pauseId
+              )).data.lastAuditId == auditId
+            )
+          )
+        );
+    }
+
+    function acceptedInviteAfter(businessId, invitationId) {
+      let invite = getAfter(
+        /databases/$(database)/documents/businesses/$(businessId)/invitations/$(invitationId)
+      ).data;
+      return invite.status == 'accepted'
+        && invite.role == 'employee'
+        && invite.email == request.auth.token.email
+        && invite.acceptedBy == request.auth.uid;
+    }
+
+    match /userProfiles/{uid} {
+      allow get: if signedIn() && uid == request.auth.uid;
+      allow list: if false;
+
+      allow create: if verifiedEmail()
+        && uid == request.auth.uid
+        && request.resource.data.keys().hasAll([
+          'uid', 'email', 'displayName', 'businessId', 'role', 'status',
+          'permissions', 'acceptedInviteId', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.uid == uid
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.role == 'employee'
+        && request.resource.data.status == 'active'
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && existsAfter(memberPath(request.resource.data.businessId, uid))
+        && acceptedInviteAfter(
+          request.resource.data.businessId,
+          request.resource.data.acceptedInviteId
+        );
+
+      allow update: if signedIn()
+        && uid == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['displayName', 'phone', 'updatedAt'])
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if false;
+    }
+
+    match /businesses/{businessId} {
+      allow read: if activeMember(businessId);
+      // The first business and Head are bootstrapped through the trusted
+      // Firebase Console. The mobile client can never promote itself to Head.
+      allow create, delete: if false;
+      allow update: if head(businessId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'name', 'phone', 'address', 'primaryPricingRegion', 'updatedAt'
+        ])
+        && (
+          !request.resource.data.diff(resource.data).affectedKeys()
+            .hasAny(['primaryPricingRegion'])
+          || (
+            request.resource.data.primaryPricingRegion is map
+            && request.resource.data.primaryPricingRegion.keys().hasAll([
+              'state', 'districtCity', 'editionServiceRegion'
+            ])
+            && request.resource.data.primaryPricingRegion.keys().hasOnly([
+              'state', 'districtCity', 'editionServiceRegion'
+            ])
+            && request.resource.data.primaryPricingRegion.state is string
+            && request.resource.data.primaryPricingRegion.state.size() >= 2
+            && request.resource.data.primaryPricingRegion.state.size() <= 80
+            && request.resource.data.primaryPricingRegion.districtCity
+              is string
+            && request.resource.data.primaryPricingRegion.districtCity
+              .size() >= 2
+            && request.resource.data.primaryPricingRegion.districtCity
+              .size() <= 100
+            && request.resource.data.primaryPricingRegion.editionServiceRegion
+              is string
+            && request.resource.data.primaryPricingRegion.editionServiceRegion
+              .size() <= 100
+          )
+        )
+        && request.resource.data.updatedAt == request.time;
+
+      match /members/{memberId} {
+        // A disabled employee can read only their own membership so the app
+        // can show the disabled-account gate. All other business data still
+        // requires activeMember().
+        allow get: if (
+            signedIn()
+            && memberId == request.auth.uid
+            && resource.data.businessId == businessId
+          )
+          || head(businessId);
+        allow list: if head(businessId);
+
+        allow create: if head(businessId)
+          || (
+            verifiedEmail()
+            && memberId == request.auth.uid
+            && request.resource.data.keys().hasAll([
+              'businessId', 'uid', 'email', 'displayName', 'phone', 'role',
+              'status', 'permissions', 'areaIds', 'acceptedInviteId',
+              'createdAt', 'updatedAt'
+            ])
+            && request.resource.data.businessId == businessId
+            && request.resource.data.uid == request.auth.uid
+            && request.resource.data.email == request.auth.token.email
+            && request.resource.data.role == 'employee'
+            && request.resource.data.status == 'active'
+            && request.resource.data.createdAt == request.time
+            && request.resource.data.updatedAt == request.time
+            && acceptedInviteAfter(
+              businessId,
+              request.resource.data.acceptedInviteId
+            )
+          );
+
+        allow update: if head(businessId)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'displayName', 'phone', 'status', 'permissions', 'areaIds',
+            'notes', 'updatedAt'
+          ])
+          && request.resource.data.updatedAt == request.time;
+        allow delete: if false;
+      }
+
+      match /invitations/{invitationId} {
+        allow get: if head(businessId)
+          || (
+            verifiedEmail()
+            && resource.data.status == 'pending'
+            && resource.data.email == request.auth.token.email
+          );
+        allow list: if head(businessId);
+        allow create: if head(businessId)
+          && request.resource.data.keys().hasAll([
+            'businessId', 'email', 'role', 'status', 'permissions', 'areaIds',
+            'createdBy', 'createdAt', 'expiresAt'
+          ])
+          && request.resource.data.businessId == businessId
+          && request.resource.data.role == 'employee'
+          && request.resource.data.status == 'pending'
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.expiresAt > request.time;
+
+        allow update: if head(businessId)
+          || (
+            verifiedEmail()
+            && resource.data.status == 'pending'
+            && resource.data.role == 'employee'
+            && resource.data.email == request.auth.token.email
+            && resource.data.expiresAt > request.time
+            && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['status', 'acceptedBy', 'acceptedAt'])
+            && request.resource.data.status == 'accepted'
+            && request.resource.data.acceptedBy == request.auth.uid
+            && request.resource.data.acceptedAt == request.time
+          );
+        allow delete: if head(businessId);
+      }
+
+      match /areas/{areaId} {
+        allow read: if activeMember(businessId);
+        allow create: if head(businessId)
+          && request.resource.data.businessId == businessId
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.createdAt == request.time;
+        allow update: if head(businessId)
+          && request.resource.data.businessId == businessId
+          && request.resource.data.updatedAt == request.time;
+        allow delete: if head(businessId);
+      }
+
+      match /customers/{customerId} {
+        allow read: if canReadCustomerData(businessId, resource.data);
+        allow create: if activeMember(businessId)
+          && validCustomerShape(businessId, customerId, request.resource.data)
+          && request.resource.data.status == 'active'
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.updatedBy == request.auth.uid
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time
+          && activeArea(businessId, request.resource.data.areaId)
+          && validCustomerCreateAuditAfter(
+            businessId,
+            customerId,
+            request.resource.data.lastAuditId
+          )
+          && (
+            (
+              memberData(businessId).role == 'head'
+              && activeEmployeeForArea(
+                businessId,
+                request.resource.data.assignedEmployeeId,
+                request.resource.data.areaId
+              )
+            )
+            || (
+              memberData(businessId).role == 'employee'
+              && memberData(businessId).permissions is list
+              && memberData(businessId).permissions.hasAny(['addCustomers'])
+              && request.resource.data.assignedEmployeeId == request.auth.uid
+              && request.resource.data.openingBalancePaise == 0
+              && memberData(businessId).areaIds is list
+              && memberData(businessId).areaIds.hasAny([
+                request.resource.data.areaId
+              ])
+            )
+          );
+        allow update: if validCustomerShape(
+            businessId,
+            customerId,
+            request.resource.data
+          )
+          && (
+            (
+              head(businessId)
+              && (
+                validCustomerProfileUpdate(businessId, customerId)
+                || validCustomerStatusUpdate(businessId, customerId)
+                || validCustomerAssignmentUpdate(businessId, customerId)
+              )
+            ) || (
+              canReadCustomerData(businessId, resource.data)
+              && permission(businessId, 'editAssignedCustomers')
+              && validCustomerProfileUpdate(businessId, customerId)
+            )
+          );
+        allow delete: if false;
+
+        match /subscriptions/{subscriptionId} {
+          allow read: if canReadCustomer(businessId, customerId);
+          allow create: if validSubscriptionCreate(
+            businessId,
+            customerId,
+            subscriptionId
+          );
+          allow update: if validSubscriptionUpdate(
+            businessId,
+            customerId,
+            subscriptionId
+          );
+          allow delete: if false;
+
+          match /versions/{versionId} {
+            allow read: if canReadCustomer(businessId, customerId);
+            allow create: if canManageAssignedSubscription(
+                businessId,
+                customerId
+              )
+              && validVersionShape(
+                businessId,
+                customerId,
+                subscriptionId,
+                versionId,
+                request.resource.data
+              )
+              && request.resource.data.status == 'current'
+              && request.resource.data.effectiveTo == null
+              && request.resource.data.successorVersionId == ''
+              && request.resource.data.createdBy == request.auth.uid
+              && request.resource.data.updatedBy == request.auth.uid
+              && request.resource.data.createdAt == request.time
+              && request.resource.data.updatedAt == request.time
+              && getAfter(subscriptionPath(
+                businessId,
+                customerId,
+                subscriptionId
+              )).data.currentVersionId == versionId
+              && getAfter(subscriptionPath(
+                businessId,
+                customerId,
+                subscriptionId
+              )).data.lastAuditId == request.resource.data.lastAuditId
+              && (
+                head(businessId)
+                || request.resource.data.predecessorVersionId == ''
+                  && request.resource.data.customPricePaise == null
+                || request.resource.data.predecessorVersionId != ''
+                  && request.resource.data.customPricePaise == get(
+                    subscriptionVersionPath(
+                      businessId,
+                      customerId,
+                      subscriptionId,
+                      request.resource.data.predecessorVersionId
+                    )
+                  ).data.customPricePaise
+                  && request.resource.data.customPriceReason == get(
+                    subscriptionVersionPath(
+                      businessId,
+                      customerId,
+                      subscriptionId,
+                      request.resource.data.predecessorVersionId
+                    )
+                  ).data.customPriceReason
+              );
+            allow update: if (
+                canManageAssignedSubscription(businessId, customerId)
+                || head(businessId)
+              )
+              && validVersionShape(
+                businessId,
+                customerId,
+                subscriptionId,
+                versionId,
+                request.resource.data
+              )
+              && resource.data.status == 'current'
+              && request.resource.data.status == 'closed'
+              && request.resource.data.effectiveTo != null
+              && request.resource.data.diff(resource.data).affectedKeys()
+                .hasOnly([
+                  'effectiveTo', 'successorVersionId', 'status', 'updatedBy',
+                  'lastAuditId', 'updatedAt'
+                ])
+              && request.resource.data.updatedBy == request.auth.uid
+              && request.resource.data.updatedAt == request.time
+              && getAfter(subscriptionPath(
+                businessId,
+                customerId,
+                subscriptionId
+              )).data.lastAuditId == request.resource.data.lastAuditId;
+            allow delete: if false;
+          }
+
+          match /pauses/{pauseId} {
+            allow read: if canReadCustomer(businessId, customerId);
+            allow create: if canManageAssignedSubscription(
+                businessId,
+                customerId
+              )
+              && validPauseShape(
+                businessId,
+                customerId,
+                subscriptionId,
+                pauseId,
+                request.resource.data
+              )
+              && request.resource.data.createdBy == request.auth.uid
+              && request.resource.data.updatedBy == request.auth.uid
+              && request.resource.data.createdAt == request.time
+              && request.resource.data.updatedAt == request.time
+              && validSubscriptionAuditAfter(
+                businessId,
+                customerId,
+                subscriptionId,
+                request.resource.data.lastAuditId,
+                'subscriptionPauseAdded'
+              )
+              && getAfter(subscriptionPath(
+                businessId,
+                customerId,
+                subscriptionId
+              )).data.lastAuditId == request.resource.data.lastAuditId
+              && (
+                request.resource.data.status == 'closed'
+                || (
+                  getAfter(subscriptionPath(
+                    businessId,
+                    customerId,
+                    subscriptionId
+                  )).data.status == 'paused'
+                  && getAfter(subscriptionPath(
+                    businessId,
+                    customerId,
+                    subscriptionId
+                  )).data.currentPauseId == pauseId
+                )
+              );
+            allow update: if (
+                canManageAssignedSubscription(businessId, customerId)
+                || head(businessId)
+              )
+              && validPauseShape(
+                businessId,
+                customerId,
+                subscriptionId,
+                pauseId,
+                request.resource.data
+              )
+              && resource.data.status == 'open'
+              && resource.data.endDate == null
+              && request.resource.data.status == 'closed'
+              && request.resource.data.endDate != null
+              && request.resource.data.diff(resource.data).affectedKeys()
+                .hasOnly([
+                  'endDate', 'status', 'updatedBy', 'lastAuditId', 'updatedAt'
+                ])
+              && request.resource.data.updatedBy == request.auth.uid
+              && request.resource.data.updatedAt == request.time
+              && getAfter(subscriptionPath(
+                businessId,
+                customerId,
+                subscriptionId
+              )).data.currentPauseId == ''
+              && getAfter(subscriptionPath(
+                businessId,
+                customerId,
+                subscriptionId
+              )).data.lastAuditId == request.resource.data.lastAuditId;
+            allow delete: if false;
+          }
+        }
+
+        match /deliveryExceptions/{exceptionId} {
+          allow read: if canReadCustomer(businessId, customerId);
+          allow create: if canReadCustomer(businessId, customerId)
+            && (
+              head(businessId)
+              || permission(businessId, 'recordDeliveryExceptions')
+            )
+            && validDeliveryExceptionShape(
+              businessId,
+              customerId,
+              exceptionId,
+              request.resource.data
+            )
+            && serviceBillingSourceMatchesAfter(
+              businessId,
+              customerId,
+              'deliveryExceptionCreated',
+              exceptionId
+            );
+          allow update, delete: if false;
+        }
+
+        match /billingSources/{sourceId} {
+          allow read: if sourceId == 'service'
+            && canReadCustomer(businessId, customerId);
+          allow create, update: if sourceId == 'service'
+            && activeMember(businessId)
+            && validServiceBillingSourceAdvance(
+              businessId,
+              customerId,
+              request.resource.data.lastMutationType,
+              request.resource.data.lastMutationId
+            )
+            && serviceBillingSourceReferencesMutationAfter(
+              businessId,
+              customerId,
+              request.resource.data
+            );
+          allow delete: if false;
+        }
+
+        match /bills/{billId} {
+          allow read: if canReadCustomer(businessId, customerId);
+          allow create: if head(businessId)
+            && get(customerPath(businessId, customerId)).data.status == 'active'
+            && validBillShape(
+              businessId,
+              customerId,
+              billId,
+              request.resource.data
+            )
+            && getAfter(billingControlPath(
+              businessId,
+              customerId,
+              billId
+            )).data.status == 'finalized'
+            && getAfter(billingControlPath(
+              businessId,
+              customerId,
+              billId
+            )).data.finalizedBillId == billId
+            && getAfter(billingControlPath(
+              businessId,
+              customerId,
+              billId
+            )).data.lastAuditId == request.resource.data.lastAuditId;
+          allow update, delete: if false;
+
+          match /lineItems/{lineItemId} {
+            allow read: if canReadCustomer(businessId, customerId);
+            allow create: if head(businessId)
+              && validBillLineShape(
+                businessId,
+                customerId,
+                billId,
+                lineItemId,
+                request.resource.data
+              );
+            allow update, delete: if false;
+          }
+        }
+
+        match /billingControls/{billingMonth} {
+          allow read: if head(businessId);
+          allow create: if head(businessId)
+            && validBillingControlShape(
+              businessId,
+              customerId,
+              billingMonth,
+              request.resource.data
+            )
+            && request.resource.data.createdAt == request.time
+            && (
+              (
+                request.resource.data.status == 'finalized'
+                && request.resource.data.finalizedBillId == billingMonth
+                && getAfter(billPath(
+                  businessId,
+                  customerId,
+                  billingMonth
+                )).data.lastAuditId == request.resource.data.lastAuditId
+              ) || (
+                request.resource.data.status == 'open'
+                && request.resource.data.finalizedBillId == ''
+                && getAfter(auditPath(
+                  businessId,
+                  request.resource.data.lastAuditId
+                )).data.action == 'billingAdjustmentCreated'
+              )
+            );
+          allow update: if head(businessId)
+            && validBillingControlShape(
+              businessId,
+              customerId,
+              billingMonth,
+              request.resource.data
+            )
+            && request.resource.data.createdAt == resource.data.createdAt
+            && resource.data.status == 'open'
+            && (
+              (
+                request.resource.data.status == 'finalized'
+                && request.resource.data.adjustmentRevision
+                  == resource.data.adjustmentRevision
+                && request.resource.data.finalizedBillId == billingMonth
+                && getAfter(billPath(
+                  businessId,
+                  customerId,
+                  billingMonth
+                )).data.lastAuditId == request.resource.data.lastAuditId
+              ) || (
+                request.resource.data.status == 'open'
+                && request.resource.data.adjustmentRevision
+                  == resource.data.adjustmentRevision + 1
+                && request.resource.data.finalizedBillId == ''
+                && getAfter(auditPath(
+                  businessId,
+                  request.resource.data.lastAuditId
+                )).data.action == 'billingAdjustmentCreated'
+              )
+            );
+          allow delete: if false;
+        }
+
+        match /adjustments/{adjustmentId} {
+          allow read: if head(businessId);
+          allow create: if head(businessId)
+            && validAdjustmentShape(
+              businessId,
+              customerId,
+              adjustmentId,
+              request.resource.data
+            )
+            && !exists(billPath(
+              businessId,
+              customerId,
+              request.resource.data.billingMonth
+            ))
+            && validAdjustmentAuditAfter(
+              businessId,
+              customerId,
+              adjustmentId,
+              request.resource.data
+            );
+          allow update, delete: if false;
+        }
+
+        match /payments/{paymentId} {
+          allow read: if canReadPaymentData(
+            businessId,
+            customerId,
+            resource.data
+          );
+          allow create: if validPaymentCreate(
+            businessId,
+            customerId,
+            paymentId
+          );
+          allow update, delete: if false;
+        }
+
+        match /paymentStates/{paymentId} {
+          allow read: if canReadPaymentState(
+            businessId,
+            customerId,
+            paymentId
+          );
+          allow create: if validPaymentStateCreate(
+            businessId,
+            customerId,
+            paymentId
+          );
+          allow update: if head(businessId)
+            && validPaymentStateUpdate(
+              businessId,
+              customerId,
+              paymentId
+            );
+          allow delete: if false;
+        }
+
+        match /paymentReversals/{reversalId} {
+          allow read: if canReadCollectionHistory(businessId, customerId);
+          allow create: if validReversalCreate(
+            businessId,
+            customerId,
+            reversalId
+          );
+          allow update, delete: if false;
+        }
+
+        match /collectionState/{stateId} {
+          allow read: if stateId == 'current'
+            && canReadCollectionHistory(businessId, customerId);
+          allow create: if stateId == 'current'
+            && validCollectionStateShape(
+              businessId,
+              customerId,
+              request.resource.data
+            )
+            && validCollectionStateCreateForBill(businessId, customerId);
+          allow update: if stateId == 'current'
+            && validCollectionStateUpdate(businessId, customerId);
+          allow delete: if false;
+        }
+
+        match /billBalances/{billId} {
+          allow read: if canReadCollectionHistory(businessId, customerId);
+          allow create: if validBillBalanceShape(
+              businessId,
+              customerId,
+              billId,
+              request.resource.data
+            )
+            && validBillBalanceCreateForBill(
+              businessId,
+              customerId,
+              billId
+            );
+          allow update: if validBillBalanceUpdate(
+            businessId,
+            customerId,
+            billId
+          );
+          allow delete: if false;
+        }
+      }
+
+      match /newspapers/{newspaperId} {
+        allow read: if activeMember(businessId);
+        allow create: if head(businessId)
+          && validNewspaperShape(
+            businessId,
+            newspaperId,
+            request.resource.data
+          )
+          && request.resource.data.status == 'active'
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.updatedBy == request.auth.uid
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time
+          && validPhase4AuditAfter(
+            businessId,
+            request.resource.data.lastAuditId,
+            'newspaper',
+            newspaperId,
+            'newspaperCreated'
+          );
+        allow update: if head(businessId)
+          && validNewspaperShape(
+            businessId,
+            newspaperId,
+            request.resource.data
+          )
+          && (
+            validNewspaperProfileUpdate(businessId, newspaperId)
+            || validNewspaperStatusUpdate(businessId, newspaperId)
+            || validNewspaperPriceLockUpdate(businessId, newspaperId)
+          );
+        allow delete: if false;
+
+        match /priceRules/{ruleId} {
+          allow read: if activeMember(businessId);
+          allow create: if head(businessId)
+            && validPriceRuleCreate(businessId, newspaperId, ruleId);
+          allow update: if head(businessId)
+            && validPriceRuleShape(
+              businessId,
+              newspaperId,
+              ruleId,
+              request.resource.data
+            )
+            && validPriceRuleSupersede(businessId, newspaperId, ruleId);
+          allow delete: if false;
+        }
+      }
+
+      match /configuration/{documentId} {
+        allow read: if activeMember(businessId);
+        allow create, update: if documentId != 'upi'
+          && head(businessId)
+          && request.resource.data.businessId == businessId
+          && request.resource.data.updatedAt == request.time;
+        allow create: if documentId == 'upi'
+          && validUpiConfigurationCreate(businessId);
+        allow update: if documentId == 'upi'
+          && validUpiConfigurationUpdate(businessId);
+        allow delete: if false;
+      }
+
+      match /auditRecords/{auditId} {
+        allow read: if head(businessId);
+        allow create: if activeMember(businessId)
+          && request.resource.data.businessId == businessId
+          && request.resource.data.actorId == request.auth.uid
+          && request.resource.data.createdAt == request.time
+          && (
+            (
+              phase4AuditAction(request.resource.data.action)
+              && phase4AuditReferencedAfter(
+                businessId,
+                auditId,
+                request.resource.data
+              )
+            )
+            || (
+              phase5AuditAction(request.resource.data.action)
+              && head(businessId)
+              && phase5AuditReferencedAfter(
+                businessId,
+                auditId,
+                request.resource.data
+              )
+            )
+            || (
+              phase6AuditAction(request.resource.data.action)
+              && (
+                request.resource.data.action == 'paymentConfirmed'
+                || head(businessId)
+              )
+              && phase6AuditReferencedAfter(
+                businessId,
+                auditId,
+                request.resource.data
+              )
+            )
+            || (
+              head(businessId)
+              && !phase4AuditAction(request.resource.data.action)
+              && !phase5AuditAction(request.resource.data.action)
+              && !phase6AuditAction(request.resource.data.action)
+              && request.resource.data.entityType != 'customer'
+            )
+            || (
+              request.resource.data.entityType == 'customer'
+              && request.resource.data.entityId is string
+              && customerReferencesAuditAfter(
+                businessId,
+                request.resource.data.entityId,
+                auditId
+              )
+            )
+          );
+        allow update, delete: if false;
+      }
+
+    }
+
+    // Collection-group payment history is authorized from immutable payment
+    // fields. Firestore therefore requires callers to constrain businessId;
+    // employees must additionally constrain collectorUid to themselves.
+    match /{parentPath=**}/payments/{paymentId} {
+      allow list: if activeMember(resource.data.businessId)
+        && (
+          head(resource.data.businessId)
+          || resource.data.collectorUid == request.auth.uid
+        );
+    }
+
+    // Phase 7 Head reports use immutable financial snapshots. Employee
+    // collection summaries are constrained to their current assignment
+    // projection and cannot query another employee's customers.
+    match /{parentPath=**}/paymentReversals/{reversalId} {
+      allow list: if head(resource.data.businessId);
+    }
+
+    match /{parentPath=**}/bills/{billId} {
+      allow list: if head(resource.data.businessId);
+    }
+
+    match /{parentPath=**}/lineItems/{lineItemId} {
+      allow list: if head(resource.data.businessId);
+    }
+
+    match /{parentPath=**}/subscriptions/{subscriptionId} {
+      allow list: if head(resource.data.businessId);
+    }
+
+    match /{parentPath=**}/collectionState/{stateId} {
+      // Collection-group query authorization is evaluated from document data;
+      // the recursive-match document wildcard is not query-constrained.
+      allow list: if resource.data.stateId == 'current'
+        && activeMember(resource.data.businessId)
+        && (
+          head(resource.data.businessId)
+          || (
+            resource.data.customerStatus == 'active'
+            && resource.data.assignedEmployeeId == request.auth.uid
+            && memberData(resource.data.businessId).areaIds is list
+            && memberData(resource.data.businessId).areaIds.hasAny([
+              resource.data.areaId
+            ])
+          )
+        );
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

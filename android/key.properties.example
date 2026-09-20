@@ -1,0 +1,6 @@
+# Copy to android/key.properties and replace every placeholder locally.
+# Never commit key.properties or the keystore.
+storeFile=/absolute/path/to/paper-route-upload.jks
+storePassword=REPLACE_LOCALLY
+keyAlias=paper-route-upload
+keyPassword=REPLACE_LOCALLY

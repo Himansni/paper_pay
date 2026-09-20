@@ -2841,12 +2841,12 @@ service cloud.firestore {
         // A disabled employee can read only their own membership so the app
         // can show the disabled-account gate. All other business data still
         // requires activeMember().
-        allow get: if head(businessId)
-          || (
+        allow get: if (
             signedIn()
             && memberId == request.auth.uid
             && resource.data.businessId == businessId
-          );
+          )
+          || head(businessId);
         allow list: if head(businessId);
 
         allow create: if head(businessId)

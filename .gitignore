@@ -48,6 +48,7 @@ app.*.map.json
 # Android/Web client configuration contains public app identifiers, not admin
 # credentials, and is intentionally versioned with this development app.
 /ios/Runner/GoogleService-Info.plist
+/android/app/src/production/google-services.json
 /.firebaserc
 
 # Local secrets, admin credentials, and signing material must never be committed.

@@ -5,7 +5,7 @@ import test from 'node:test';
 const data = JSON.parse(readFileSync('firestore.indexes.json', 'utf8'));
 
 test('production index manifest is stable, unique, and complete', () => {
-  assert.equal(data.indexes.length, 61);
+  assert.equal(data.indexes.length, 69);
   const keys = data.indexes.map((index) => JSON.stringify(index));
   assert.equal(new Set(keys).size, keys.length, 'duplicate composite index');
   assert.ok(Array.isArray(data.fieldOverrides));

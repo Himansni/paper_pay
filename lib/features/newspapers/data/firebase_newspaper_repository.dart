@@ -6,6 +6,9 @@ import 'package:paper_route/features/newspapers/domain/newspaper.dart';
 import 'package:paper_route/features/newspapers/domain/newspaper_repository.dart';
 import 'package:uuid/uuid.dart';
 
+// Newspaper data lives below businesses/{businessId}/newspapers. Keeping the
+// tenant in the path and in each document supports both query filtering and
+// Firestore Rules checks; Rules remain the final authorization authority.
 class FirebaseNewspaperRepository implements NewspaperRepository {
   FirebaseNewspaperRepository(this._firestore, {Uuid? uuid})
     : _uuid = uuid ?? const Uuid();
@@ -60,6 +63,8 @@ class FirebaseNewspaperRepository implements NewspaperRepository {
         );
       }
 
+      // The normalized name plus document ID gives stable prefix-search pages.
+      // A cursor belongs to this exact search; the UI resets it on new criteria.
       query = query.orderBy('searchName').orderBy(FieldPath.documentId);
       if (searchToken != null) {
         query =
@@ -146,6 +151,8 @@ class FirebaseNewspaperRepository implements NewspaperRepository {
     final auditRef = _audits(businessId).doc();
 
     try {
+      // The catalog record and audit are one atomic change: neither can be
+      // committed without the other.
       await _firestore.runTransaction((transaction) async {
         final existing = await transaction.get(newspaperRef);
         if (existing.exists) {
@@ -388,6 +395,9 @@ class FirebaseNewspaperRepository implements NewspaperRepository {
       );
     }
 
+    // BEGINNER NOTE:
+    // Active rules of the same kind must not overlap. The preflight gives a
+    // helpful error, while the transaction lock below catches concurrent edits.
     final conflicts = await _conflictingRules(
       businessId: businessId,
       newspaperId: newspaperId,
@@ -436,6 +446,8 @@ class FirebaseNewspaperRepository implements NewspaperRepository {
         }
 
         var revision = 1;
+        // A correction marks the old rule as superseded and creates a linked
+        // revision, preserving the old price and dates for historical context.
         if (replacedRef != null) {
           final replaced = await transaction.get(replacedRef);
           final replacedData = replaced.data();
@@ -552,6 +564,8 @@ class FirebaseNewspaperRepository implements NewspaperRepository {
       final newspaperData = newspaper.data();
       _validateNewspaper(newspaperData, businessId);
       final rules = _priceRules(businessId, newspaperId);
+      // Only potentially applicable rules are fetched. The pure resolver then
+      // applies exact-date > period > default precedence deterministically.
       final snapshots = await Future.wait([
         rules
             .where('businessId', isEqualTo: businessId)
@@ -588,6 +602,8 @@ class FirebaseNewspaperRepository implements NewspaperRepository {
   }
 
   String _headBusinessId(AppUser actor) {
+    // Client checks provide immediate feedback, but Firestore Rules independently
+    // enforce the Head-only catalog and pricing writes on the server.
     final businessId = actor.businessId;
     if (!actor.hasActiveAccess || businessId == null || businessId.isEmpty) {
       throw const AppException('Your business access is no longer active.');

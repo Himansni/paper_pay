@@ -18,6 +18,8 @@ class NewspaperFormRoutePage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Editing watches the tenant-scoped Firestore document through Riverpod;
+    // creation has no existing document to load.
     final id = newspaperId;
     if (id == null) return NewspaperFormPage(user: user);
     final key = (businessId: user.businessId!, newspaperId: id);

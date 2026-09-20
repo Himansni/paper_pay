@@ -25,6 +25,8 @@ class CustomerSubscriptionsSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // A customer can subscribe to multiple catalog newspapers. Each tile is a
+    // stable newspaper series with its own quantity, schedule, pauses, and history.
     final key = (businessId: user.businessId!, customerId: customer.id);
     final subscriptions = ref.watch(customerSubscriptionsProvider(key));
     final canManage = _policy.canManageSubscription(
@@ -223,6 +225,10 @@ class _SubscriptionDetailPageState
       customerId: widget.customer.id,
       subscriptionId: subscription.id,
     );
+    // BEGINNER NOTE:
+    // Current state, term versions, pauses, and audits are separate Firestore
+    // records. Riverpod combines their live streams for one detail screen
+    // without flattening or overwriting the historical records.
     final versions = ref.watch(subscriptionVersionsProvider(key));
     final pauses = ref.watch(subscriptionPausesProvider(key));
     final audits =
@@ -441,6 +447,8 @@ class _SubscriptionDetailPageState
   }
 
   Future<void> _resume() async {
+    // Resume closes the open pause on the day before deliveries restart; it
+    // does not create a new terms version.
     final date = await showDialog<LocalDate>(
       context: context,
       builder:
@@ -465,6 +473,8 @@ class _SubscriptionDetailPageState
   }
 
   Future<void> _end() async {
+    // End is permanent for the current service period. A later restart creates
+    // new terms while retaining the old end date and version history.
     final date = await showDialog<LocalDate>(
       context: context,
       builder:

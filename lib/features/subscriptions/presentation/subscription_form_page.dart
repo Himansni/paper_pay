@@ -27,6 +27,9 @@ class SubscriptionFormRoutePage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // The route loads both sides of the relationship before showing the form:
+    // the customer supplies assignment/access context and the optional
+    // subscription supplies the current delivery terms.
     final customerKey = (businessId: user.businessId!, customerId: customerId);
     final customer = ref.watch(customerProvider(customerKey));
     final id = subscriptionId;
@@ -159,6 +162,8 @@ class _SubscriptionFormPageState extends ConsumerState<SubscriptionFormPage> {
       _loadError = null;
     });
     try {
+      // New agreements may select only active catalog items. An archived item
+      // is loaded only when needed to display an existing historical agreement.
       final page = await ref
           .read(newspaperRepositoryProvider)
           .fetchNewspapers(
@@ -205,6 +210,8 @@ class _SubscriptionFormPageState extends ConsumerState<SubscriptionFormPage> {
 
   @override
   Widget build(BuildContext context) {
+    // This policy determines whether controls should be offered. The repository
+    // and Firestore Rules still validate the same tenant/assignment boundary.
     final allowed = _policy.canManageSubscription(
       member: widget.user,
       customerBusinessId: widget.customer.businessId,

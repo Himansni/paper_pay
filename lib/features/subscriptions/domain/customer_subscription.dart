@@ -16,6 +16,8 @@ enum SubscriptionStatus {
 }
 
 abstract final class DeliveryWeekday {
+  // ISO weekday numbers keep schedules independent of localized labels:
+  // Monday is 1 and Sunday is 7.
   static const all = <int>{1, 2, 3, 4, 5, 6, 7};
 
   static const labels = <int, String>{
@@ -36,6 +38,10 @@ abstract final class DeliveryWeekday {
   }
 }
 
+// BEGINNER NOTE:
+// A newspaper is the catalog item. A subscription is one customer's delivery
+// agreement for that newspaper: active dates, weekdays, quantity, and any
+// Head-authorized customer-specific price.
 class SubscriptionInput {
   const SubscriptionInput({
     required this.newspaperId,
@@ -50,6 +56,7 @@ class SubscriptionInput {
   final String newspaperId;
   final LocalDate startDate;
   final LocalDate? endDate;
+  // Quantity is the number of copies delivered on each selected weekday.
   final int quantity;
   final Set<int> deliveryWeekdays;
   final int? customPricePaise;
@@ -107,6 +114,8 @@ class SubscriptionInput {
   }
 }
 
+// This is the current operational projection used by screens and delivery
+// workflows. Dated SubscriptionVersion records preserve its older terms.
 class CustomerSubscription {
   const CustomerSubscription({
     required this.id,
@@ -191,6 +200,8 @@ class CustomerSubscription {
   );
 }
 
+// Each terms change creates a dated version instead of overwriting the prior
+// schedule or quantity, allowing later billing to explain what applied when.
 class SubscriptionVersion {
   const SubscriptionVersion({
     required this.id,
@@ -249,6 +260,8 @@ class SubscriptionVersion {
   final DateTime? createdAt;
 }
 
+// Pauses are separate dated records because temporarily skipping deliveries is
+// different from changing the agreement or permanently ending it.
 class SubscriptionPause {
   const SubscriptionPause({
     required this.id,
@@ -343,6 +356,8 @@ void validateReplacement({
   }
   _validateDate(effectiveFrom, 'change effective date');
   replacement.validate();
+  // Terms form a non-overlapping timeline: the new version starts after the
+  // current one, and the repository closes the old version the day before.
   if (!effectiveFrom.isAfter(current.currentEffectiveFrom)) {
     throw const AppException(
       'New terms must begin after the current terms became effective.',
@@ -388,6 +403,8 @@ void validatePausePeriod({
   if (normalizedReason.length < 2 || normalizedReason.length > 200) {
     throw const AppException('Enter a short reason for the delivery pause.');
   }
+  // Overlapping pauses would make delivery and billing ambiguous, so every
+  // existing interval is checked before a new one is accepted.
   for (final pause in existingPauses) {
     final leftEndsBefore =
         pause.endDate != null && pause.endDate!.isBefore(startDate);

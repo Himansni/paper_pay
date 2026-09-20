@@ -24,6 +24,8 @@ enum NewspaperSearchField {
   final String label;
 }
 
+// A catalog newspaper is a publication offered by one business. It is not a
+// customer's delivery agreement; that relationship is stored as a subscription.
 class Newspaper {
   const Newspaper({
     required this.id,
@@ -149,6 +151,9 @@ class NewspaperProfileInput {
 }
 
 abstract final class NewspaperSearchIndex {
+  // BEGINNER NOTE:
+  // Firestore does not provide a general "contains" text search. The app stores
+  // this normalized value and performs an indexed prefix query against it.
   static String normalizeText(String value) =>
       value
           .trim()
@@ -174,6 +179,8 @@ abstract final class NewspaperSearchIndex {
 }
 
 abstract final class NewspaperMoney {
+  // Prices use integer paise instead of decimal rupees so calculations do not
+  // acquire floating-point rounding errors (₹125.50 is stored as 12550).
   static const maximumPricePaise = 1000000;
 
   static int parseRupeesToPaise(String value) {
@@ -283,6 +290,8 @@ enum PriceRuleStatus {
       value == superseded.value ? superseded : active;
 }
 
+// Pricing is versioned by effective date. Superseded records remain available
+// so historical delivery and billing decisions can still be explained.
 class NewspaperPriceRule {
   const NewspaperPriceRule({
     required this.id,
@@ -444,6 +453,9 @@ class ResolvedNewspaperPrice {
 }
 
 abstract final class DateSpecificPriceResolver {
+  // Exact-date rules are the most specific, followed by a dated period, then
+  // the catalog default. Multiple matches at one level indicate corrupt or
+  // overlapping data, so resolution fails closed instead of guessing a price.
   static ResolvedNewspaperPrice resolve({
     required int defaultPricePaise,
     required LocalDate date,

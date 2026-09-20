@@ -80,6 +80,8 @@ class _DailyPricingPageState extends ConsumerState<DailyPricingPage> {
     if (_newspaperId.isEmpty) return;
     try {
       final date = LocalDate.parse(_date.text.trim());
+      // The repository resolves all pricing layers; the screen only displays
+      // the effective result and never duplicates billing precedence logic.
       final current = await ref
           .read(newspaperRepositoryProvider)
           .resolvePriceOn(
@@ -120,6 +122,8 @@ class _DailyPricingPageState extends ConsumerState<DailyPricingPage> {
         newspaperId: _newspaperId,
         date: date,
       );
+      // Saving over an existing daily exception is an audited correction. A
+      // new date creates a new exact-date rule instead.
       if (current.source == ResolvedPriceSource.exactDate &&
           current.ruleId != null) {
         await repository.correctPriceRule(

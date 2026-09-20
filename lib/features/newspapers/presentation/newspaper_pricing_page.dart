@@ -23,6 +23,8 @@ class NewspaperPricingPage extends ConsumerStatefulWidget {
       _NewspaperPricingPageState();
 }
 
+// Presents the append-only pricing timeline for one catalog newspaper. A
+// correction creates a replacement revision rather than editing history.
 class _NewspaperPricingPageState extends ConsumerState<NewspaperPricingPage> {
   final List<NewspaperPriceRule> _rules = [];
   PriceRulePageCursor? _cursor;
@@ -186,6 +188,8 @@ class _NewspaperPricingPageState extends ConsumerState<NewspaperPricingPage> {
     setState(() => _isLoading = true);
     try {
       final repository = ref.read(newspaperRepositoryProvider);
+      // Both actions use the same validated input, but correction explicitly
+      // links the new rule to the record it supersedes.
       if (correcting == null) {
         await repository.createPriceRule(
           actor: widget.user,

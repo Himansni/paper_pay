@@ -50,6 +50,10 @@ class _NewspapersPageState extends ConsumerState<NewspapersPage> {
 
   Future<void> _load({bool reset = false}) async {
     if (!reset && (_isLoading || !_hasMore)) return;
+    // BEGINNER NOTE:
+    // A changed search starts a new generation and discards late results from
+    // an older request. Its cursor is reset because Firestore cursors are tied
+    // to the ordering and filters of the query that created them.
     final generation = reset ? ++_loadGeneration : _loadGeneration;
     final user = widget.user;
     final status = user.isHead ? _status : NewspaperStatus.active;
@@ -122,6 +126,8 @@ class _NewspapersPageState extends ConsumerState<NewspapersPage> {
         leading: BackButton(onPressed: () => context.go('/')),
         title: const Text('Newspaper catalog'),
       ),
+      // Employees can browse the active tenant catalog. Catalog mutations are
+      // shown only to the Head and are also enforced by Firestore Rules.
       floatingActionButton:
           widget.user.isHead
               ? FloatingActionButton.extended(

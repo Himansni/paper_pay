@@ -7,6 +7,10 @@ import 'package:paper_route/features/subscriptions/domain/customer_subscription.
 import 'package:paper_route/features/subscriptions/domain/subscription_repository.dart';
 import 'package:uuid/uuid.dart';
 
+// Subscriptions are nested below their customer:
+// businesses/{businessId}/customers/{customerId}/subscriptions/{newspaperId}.
+// Versions and pauses are child collections; business audit records provide a
+// separate append-only explanation of significant actions.
 class FirebaseSubscriptionRepository implements SubscriptionRepository {
   FirebaseSubscriptionRepository(this._firestore, {Uuid? uuid})
     : _uuid = uuid ?? const Uuid();
@@ -60,6 +64,8 @@ class FirebaseSubscriptionRepository implements SubscriptionRepository {
           .doc(businessId)
           .collection('auditRecords');
 
+  // The current projection is streamed for responsive UI, while version and
+  // pause providers independently expose the dated history.
   @override
   Stream<List<CustomerSubscription>> watchCustomerSubscriptions({
     required String businessId,
@@ -165,6 +171,8 @@ class FirebaseSubscriptionRepository implements SubscriptionRepository {
     final businessId = _businessId(actor);
     final value = input.normalized();
     value.validate();
+    // Customer-specific prices bypass normal catalog precedence, so employees
+    // cannot create them. Firestore Rules repeat this security boundary.
     if (!actor.isHead && value.customPricePaise != null) {
       throw const AppException(
         'Only the Head can authorize customer-specific pricing.',
@@ -185,6 +193,8 @@ class FirebaseSubscriptionRepository implements SubscriptionRepository {
     final billingSourceRef = _serviceBillingSource(businessId, customerId);
 
     try {
+      // The current projection, first version, audit, and billing-source
+      // revision commit together so downstream billing never sees half a change.
       await _firestore.runTransaction((transaction) async {
         final customerSnapshot = await transaction.get(
           _customer(businessId, customerId),
@@ -336,6 +346,8 @@ class FirebaseSubscriptionRepository implements SubscriptionRepository {
           subscriptionSnapshot.id,
           _withDartDates(subscriptionData),
         );
+        // Changing active terms closes the current version. Restarting an ended
+        // series opens a new service period while leaving its closed history intact.
         final restarting = current.isEnded;
         if (restarting) {
           value.validate();
@@ -357,6 +369,8 @@ class FirebaseSubscriptionRepository implements SubscriptionRepository {
             'Resume the subscription before changing terms.',
           );
         }
+        // Employees may change permitted delivery terms, but only the Head may
+        // introduce or alter a customer-specific price exception.
         if (!actor.isHead &&
             (value.customPricePaise != current.customPricePaise ||
                 value.customPriceReason != current.customPriceReason)) {
@@ -496,6 +510,8 @@ class FirebaseSubscriptionRepository implements SubscriptionRepository {
       if (!initialSubscription.exists || initialData == null) {
         throw const AppException('Subscription no longer exists.');
       }
+      // The last audit ID acts as an optimistic lock. If another lifecycle
+      // change wins first, this pause is rejected instead of using stale state.
       final expectedLock = initialData['lastAuditId'] as String? ?? '';
       final existingPauses =
           await subscriptionRef.collection('pauses').limit(100).get();
@@ -644,6 +660,8 @@ class FirebaseSubscriptionRepository implements SubscriptionRepository {
             'Resume date must be after the pause start date.',
           );
         }
+        // Deliveries resume on resumeDate, so the inclusive pause ends on the
+        // preceding date.
         final pauseEnd = resumeDate.addDays(-1);
         final now = FieldValue.serverTimestamp();
         transaction.update(pauseRef, {
@@ -739,6 +757,8 @@ class FirebaseSubscriptionRepository implements SubscriptionRepository {
         }
 
         final now = FieldValue.serverTimestamp();
+        // Ending closes both the active terms and any open pause. The records
+        // remain available as history; no subscription data is deleted.
         final currentPauseId = data['currentPauseId'] as String? ?? '';
         if (currentPauseId.isNotEmpty) {
           final pauseRef = subscriptionRef
@@ -889,6 +909,9 @@ class FirebaseSubscriptionRepository implements SubscriptionRepository {
         'Subscriptions cannot be changed for an archived customer.',
       );
     }
+    // BEGINNER NOTE:
+    // The UI and repository check assignment, area, and permission for helpful
+    // feedback. Firestore Rules remain the final server-side authority.
     if (!actor.isHead &&
         (data['assignedEmployeeId'] != actor.uid ||
             !actor.areaIds.contains(data['areaId']) ||

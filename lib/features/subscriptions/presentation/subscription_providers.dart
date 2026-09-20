@@ -3,6 +3,9 @@ import 'package:paper_route/features/subscriptions/data/firebase_subscription_re
 import 'package:paper_route/features/subscriptions/domain/customer_subscription.dart';
 import 'package:paper_route/features/subscriptions/domain/subscription_repository.dart';
 
+// Riverpod keys every stream with its business/customer identity. The detail
+// screen composes separate current, version, pause, and audit streams without
+// merging their different responsibilities.
 typedef CustomerSubscriptionsKey = ({String businessId, String customerId});
 typedef SubscriptionDocumentKey =
     ({String businessId, String customerId, String subscriptionId});

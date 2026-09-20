@@ -2,6 +2,8 @@ import 'package:paper_route/core/domain/local_date.dart';
 import 'package:paper_route/features/auth/domain/app_user.dart';
 import 'package:paper_route/features/newspapers/domain/newspaper.dart';
 
+// This contract keeps screens independent from Firebase. Implementations own
+// tenant paths, transactions, authorization prechecks, and audit persistence.
 abstract interface class NewspaperRepository {
   Future<NewspaperPage> fetchNewspapers(NewspaperListRequest request);
 
@@ -47,6 +49,8 @@ abstract interface class NewspaperRepository {
     required PriceRuleInput replacement,
   });
 
+  // Resolves the price that applies on one business date without asking the UI
+  // to understand precedence between default, period, and exact-date prices.
   Future<ResolvedNewspaperPrice> resolvePriceOn({
     required String businessId,
     required String newspaperId,

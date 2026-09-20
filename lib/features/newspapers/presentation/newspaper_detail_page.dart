@@ -20,6 +20,8 @@ class NewspaperDetailPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // The provider key carries the business ID as well as the record ID. This
+    // mirrors the tenant boundary used in Firestore paths and Rules.
     final key = (businessId: user.businessId!, newspaperId: newspaperId);
     return ref
         .watch(newspaperProvider(key))

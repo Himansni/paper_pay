@@ -2,6 +2,8 @@ import 'package:paper_route/core/domain/local_date.dart';
 import 'package:paper_route/features/auth/domain/app_user.dart';
 import 'package:paper_route/features/subscriptions/domain/customer_subscription.dart';
 
+// Screens depend on this contract while Firebase implements the tenant paths,
+// atomic version/history writes, and authorization-aware validation.
 abstract interface class SubscriptionRepository {
   Stream<List<CustomerSubscription>> watchCustomerSubscriptions({
     required String businessId,

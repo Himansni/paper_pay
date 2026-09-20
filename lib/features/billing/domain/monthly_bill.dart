@@ -5,6 +5,8 @@ const phase5CalculationVersion = 'paper-route-monthly-v1';
 const maximumAtomicBillLineItems = 475;
 
 abstract final class BillingMoney {
+  // Financial values remain integer paise throughout the domain. Formatting is
+  // delayed until display so arithmetic never depends on decimal strings.
   static String formatPaise(int paise) {
     final magnitude = paise.abs();
     final rupees = magnitude ~/ 100;
@@ -29,6 +31,8 @@ abstract final class BillingMoney {
 }
 
 String billingMonthKey(LocalDate month) {
+  // The first day represents a month in memory; its stable YYYY-MM key also
+  // becomes the bill document ID, giving one deterministic bill per month.
   if (!month.isValid || month.day != 1) {
     throw const AppException('Select a valid billing month.');
   }
@@ -60,6 +64,8 @@ enum BillPriceSource {
   );
 }
 
+// A billing term is the dated subscription version used for historical
+// calculation, not merely the subscription's current editable projection.
 class BillingTermSnapshot {
   const BillingTermSnapshot({
     required this.subscriptionId,
@@ -228,6 +234,8 @@ class BillingAdjustmentInput {
   }
 }
 
+// One line is an immutable snapshot of one scheduled delivery date, including
+// the exact quantity and price source used when the bill was finalized.
 class MonthlyBillLineItem {
   const MonthlyBillLineItem({
     required this.chargeKey,
@@ -309,6 +317,8 @@ class BillPreviewIssue {
   final String message;
 }
 
+// A preview combines delivery-derived charges with the applicable prior balance
+// and signed adjustments. It remains read-only until finalization succeeds.
 class MonthlyBillPreview {
   const MonthlyBillPreview({
     required this.businessId,
@@ -353,6 +363,8 @@ class MonthlyBillPreview {
     0,
     (total, adjustment) => total + adjustment.amountPaise,
   );
+  // The original opening balance seeds the first bill. Once a prior bill exists,
+  // its current outstanding projection becomes the carry-forward source.
   int get priorBalancePaise =>
       previousBillId.isEmpty ? openingBalancePaise : previousOutstandingPaise;
   int get totalDuePaise =>
@@ -394,6 +406,8 @@ class MonthlyBillPreview {
   }
 }
 
+// Finalization freezes customer labels, balance inputs, totals, calculation
+// version, and line summaries so later source edits cannot rewrite history.
 class FinalizedMonthlyBill {
   const FinalizedMonthlyBill({
     required this.id,
@@ -556,6 +570,9 @@ class MonthlyBillPlanner {
   }) {
     billingMonthKey(month);
     _validateTermTimelines(terms);
+    // BEGINNER NOTE:
+    // The planner expands each dated subscription version into daily delivery
+    // lines. A stable customer/subscription/date key prevents duplicate charges.
     final seen = <String>{};
     final lines = <MonthlyBillLineItem>[];
     final noDelivery = {
@@ -655,6 +672,8 @@ class MonthlyBillPlanner {
   }
 
   void _validateTermTimelines(List<BillingTermSnapshot> terms) {
+    // Overlapping versions would make quantity or schedule ambiguous for a day,
+    // so billing stops rather than selecting one silently.
     final grouped = <String, List<BillingTermSnapshot>>{};
     for (final term in terms) {
       _validateTerm(term);
@@ -683,6 +702,8 @@ class MonthlyBillPlanner {
     required BillingNewspaperSnapshot paper,
     required LocalDate date,
   }) {
+    // Price precedence is deterministic: customer-specific subscription price,
+    // exact-date rule, effective-period rule, then newspaper default.
     final custom = term.customPricePaise;
     if (custom != null) {
       return (custom, BillPriceSource.customerSpecific, term.versionId, 0);

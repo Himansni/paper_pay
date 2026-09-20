@@ -37,6 +37,8 @@ class _BillingWorkspacePageState extends ConsumerState<BillingWorkspacePage> {
 
   Future<void> _load({required bool reset}) async {
     if (_loading && !reset) return;
+    // A month change starts a fresh paginated request. Late results from an
+    // older month are ignored so bill status cannot appear under the wrong month.
     final version = ++_requestVersion;
     if (reset) _cursor = null;
     setState(() {
@@ -83,6 +85,8 @@ class _BillingWorkspacePageState extends ConsumerState<BillingWorkspacePage> {
 
   Future<void> _open(BillingWorkspaceRow row) async {
     final month = billingMonthKey(_month);
+    // Heads may calculate an unfinalized month; employees can only open an
+    // existing finalized snapshot allowed by their membership and assignment.
     final location =
         row.finalizedBill == null && widget.user.isHead
             ? '/billing/${row.customerId}/$month/preview'

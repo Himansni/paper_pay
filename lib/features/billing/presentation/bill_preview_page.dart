@@ -40,6 +40,8 @@ class _BillPreviewPageState extends ConsumerState<BillPreviewPage> {
       _error = null;
     });
     try {
+      // The repository assembles current source data and calculates daily lines
+      // without writing. A finalized month redirects to its immutable detail.
       final value = await ref
           .read(billingRepositoryProvider)
           .previewBill(
@@ -100,6 +102,8 @@ class _BillPreviewPageState extends ConsumerState<BillPreviewPage> {
   }
 
   Future<void> _finalize() async {
+    // Finalization is deliberately explicit because it freezes the financial
+    // snapshot; later corrections are separate audited adjustments.
     final confirmed = await showDialog<bool>(
       context: context,
       builder:
@@ -431,6 +435,8 @@ class _AdjustmentDialogState extends State<_AdjustmentDialog> {
 }
 
 class _TotalsCard extends StatelessWidget {
+  // This separates the balance brought into the month from delivery-derived
+  // current charges and signed adjustments before showing their total.
   const _TotalsCard({
     required this.openingBalancePaise,
     required this.previousBillId,

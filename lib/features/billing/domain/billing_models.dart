@@ -1,5 +1,7 @@
 import 'package:paper_route/core/domain/local_date.dart';
 
+// These transport-free models describe the inputs and outputs of the pure
+// billing engine. They let calculations be tested without Firebase or widgets.
 class NewspaperSubscription {
   const NewspaperSubscription({
     required this.id,
@@ -63,6 +65,8 @@ class NewspaperPriceSchedule {
   final List<NewspaperPricePeriod> effectivePeriods;
 
   int priceOn(LocalDate date) {
+    // The most specific catalog price wins: exact date, then effective period,
+    // then the newspaper default. Conflicting periods fail instead of guessing.
     final exactPrice = dateOverrides[date];
     if (exactPrice != null) return exactPrice;
 
@@ -110,6 +114,9 @@ class BillingRequest {
 
   /// subscriptionId -> date -> price in paise.
   final Map<String, Map<LocalDate, int>> customerDatePrices;
+  // BEGINNER NOTE:
+  // A monthly total is not only this month's delivery charge. It can include
+  // an earlier unpaid balance and signed adjustments (credits may be negative).
   final int previousBalancePaise;
   final int adjustmentsPaise;
 }
@@ -131,6 +138,8 @@ class BillCharge {
   final int unitPricePaise;
   final int quantity;
 
+  // Money is stored as integer paise: ₹450.75 is 45075. Integers avoid the
+  // rounding errors that binary floating-point decimals can introduce.
   int get totalPaise => unitPricePaise * quantity;
 }
 

@@ -20,6 +20,8 @@ class BillDetailPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Riverpod watches the exact tenant/customer/month bill document so a newly
+    // finalized record appears without mixing it with another account or month.
     final key = (
       businessId: user.businessId!,
       customerId: customerId,
@@ -104,6 +106,8 @@ class _FinalizedBillViewState extends ConsumerState<_FinalizedBillView> {
       if (reset) _lines.clear();
     });
     try {
+      // Daily snapshots can be numerous, so the immutable line-item collection
+      // is read in stable service-date/document-ID pages.
       final page = await ref
           .read(billingRepositoryProvider)
           .fetchBillLines(

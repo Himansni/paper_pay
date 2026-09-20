@@ -9,6 +9,9 @@ import 'package:paper_route/features/customers/data/firebase_customer_repository
 import 'package:paper_route/features/customers/domain/customer.dart';
 import 'package:uuid/uuid.dart';
 
+// Billing records are tenant- and customer-scoped under
+// businesses/{businessId}/customers/{customerId}. Firestore Rules remain the
+// final authority even though repository checks provide earlier feedback.
 class FirebaseBillingRepository implements BillingRepository {
   FirebaseBillingRepository(
     this._firestore, {
@@ -92,6 +95,8 @@ class FirebaseBillingRepository implements BillingRepository {
       throw const AppException('Billing page size must be between 1 and 50.');
     }
     try {
+      // The workspace paginates accessible customers first, then reads the
+      // deterministic YYYY-MM bill document for each visible customer.
       final customerPage = await FirebaseCustomerRepository(
         _firestore,
       ).fetchCustomers(
@@ -151,6 +156,7 @@ class FirebaseBillingRepository implements BillingRepository {
     if (!actor.isHead) {
       throw const AppException('Only the Head can preview monthly bills.');
     }
+    // Preparation reads and calculates only; it does not create a bill or line.
     return (await _prepare(
       actor: actor,
       customerId: customerId,
@@ -173,6 +179,9 @@ class FirebaseBillingRepository implements BillingRepository {
       month: month,
     );
     final preview = prepared.preview;
+    // BEGINNER NOTE:
+    // Bill generation may be retried. Because the document ID is the month key,
+    // an already finalized customer/month returns the same bill without charging twice.
     final existing = preview.alreadyFinalizedBill;
     if (existing != null) return existing;
     if (preview.issues.isNotEmpty) {
@@ -191,6 +200,8 @@ class FirebaseBillingRepository implements BillingRepository {
     final auditRef = _audits(businessId).doc();
 
     try {
+      // Source locks, bill, daily lines, balance projections, control, and audit
+      // commit atomically. No reader can observe a partially finalized bill.
       return await _firestore.runTransaction((transaction) async {
         final currentBill = await transaction.get(billRef);
         if (currentBill.exists) return _billFromSnapshot(currentBill);
@@ -206,6 +217,8 @@ class FirebaseBillingRepository implements BillingRepository {
             code: 'billing-source-changed',
           );
         }
+        // The preview records source revisions. If customer, subscription,
+        // pricing, or balance data changed, the transaction requires a new preview.
         for (final lock in prepared.locks) {
           final snapshot = await transaction.get(lock.reference);
           if (!lock.matches(snapshot)) {
@@ -260,6 +273,8 @@ class FirebaseBillingRepository implements BillingRepository {
           'finalizedAt': now,
           'createdAt': now,
         });
+        // Each line stores the resolved price source, quantity, and service date;
+        // future subscription or catalog changes cannot alter this snapshot.
         for (final line in preview.lineItems) {
           transaction.set(billRef.collection('lineItems').doc(line.chargeKey), {
             'businessId': businessId,
@@ -298,6 +313,9 @@ class FirebaseBillingRepository implements BillingRepository {
         } else {
           transaction.set(controlRef, {...control, 'createdAt': now});
         }
+        // An existing collection projection already contains carried balance.
+        // Only this bill's new charges/adjustments become its balance component;
+        // the first bill includes the opening balance in that component.
         final componentAmountPaise =
             prepared.collectionStateExists
                 ? preview.currentChargesPaise + preview.adjustmentsPaise
@@ -431,6 +449,8 @@ class FirebaseBillingRepository implements BillingRepository {
         .doc(adjustmentId);
     final auditRef = _audits(businessId).doc();
     try {
+      // Adjustments are append-only signed records. The control revision lets
+      // finalization detect an adjustment added after its preview was calculated.
       await _firestore.runTransaction((transaction) async {
         final snapshots = await Future.wait([
           transaction.get(customerRef),
@@ -621,6 +641,8 @@ class FirebaseBillingRepository implements BillingRepository {
         customerSnapshot.id,
         _withDartDates(rawCustomer),
       );
+      // The deterministic month document is checked first, making preview and
+      // finalize retries converge on the same historical result.
       final currentBill = await _bill(businessId, customerId, monthKey).get();
       if (currentBill.exists) {
         return _PreparedBillingPreview(
@@ -650,6 +672,8 @@ class FirebaseBillingRepository implements BillingRepository {
         );
       }
 
+      // Earlier and later finalized bills establish ordering and carry-forward
+      // safety; billing older months after a later bill would corrupt the chain.
       final previousFuture =
           customerRef
               .collection('bills')
@@ -709,6 +733,8 @@ class FirebaseBillingRepository implements BillingRepository {
           exists: collectionStateSnapshot.exists,
         ),
       ];
+      // Billing reads version and pause history, not only current subscription
+      // fields, because different terms may apply to different days in the month.
       for (final subscription in subscriptions.docs) {
         final series = subscription.data();
         locks.add(
@@ -798,6 +824,8 @@ class FirebaseBillingRepository implements BillingRepository {
         if (data == null || data['businessId'] != businessId) continue;
         locks.add(_SourceLock(paperRef, 'lastAuditId', data['lastAuditId']));
         final rules = paperRef.collection('priceRules');
+        // Fetch only active rules intersecting this month. The pure planner
+        // validates ambiguity and records the winning rule on every daily line.
         final exactFuture =
             rules
                 .where('businessId', isEqualTo: businessId)
@@ -1020,6 +1048,8 @@ class FirebaseBillingRepository implements BillingRepository {
           ),
         );
       }
+      // Once a prior bill exists, the live outstanding projection includes
+      // payments/reversals and is therefore the correct carry-forward amount.
       final previousOutstanding =
           previousBill == null
               ? 0
@@ -1095,6 +1125,8 @@ class FirebaseBillingRepository implements BillingRepository {
   }
 
   String _headBusinessId(AppUser actor) {
+    // Head-only checks here improve errors; server-side Rules independently
+    // enforce authorization and tenant isolation for every write.
     final businessId = _activeBusinessId(actor);
     if (!actor.isHead) {
       throw const AppException('Only the Head can manage monthly billing.');
@@ -1139,6 +1171,8 @@ class FirebaseBillingRepository implements BillingRepository {
 }
 
 class _SourceLock {
+  // A source lock stores the existence and revision marker observed during
+  // preview, providing optimistic concurrency protection at finalization.
   const _SourceLock(this.reference, this.field, this.value) : exists = true;
 
   const _SourceLock.optional(

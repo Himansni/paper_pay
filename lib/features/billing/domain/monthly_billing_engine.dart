@@ -19,6 +19,8 @@ class MonthlyBillingEngine {
       schedules[schedule.newspaperId] = schedule;
     }
 
+    // Delivery exceptions and charge keys are normalized into sets so each
+    // subscription/date is either skipped or charged exactly once.
     final noDeliveryKeys = {
       for (final exception in request.deliveryExceptions)
         '${exception.subscriptionId}:${exception.date}',
@@ -48,6 +50,8 @@ class MonthlyBillingEngine {
           throw BillingException('Duplicate daily charge detected: $chargeKey');
         }
 
+        // A dated customer price is most specific, followed by the authorized
+        // subscription price, then the newspaper's catalog schedule.
         final unitPrice =
             request.customerDatePrices[subscription.id]?[date] ??
             subscription.fixedPricePaise ??

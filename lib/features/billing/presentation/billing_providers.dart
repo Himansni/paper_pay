@@ -3,6 +3,8 @@ import 'package:paper_route/features/billing/data/firebase_billing_repository.da
 import 'package:paper_route/features/billing/domain/billing_repository.dart';
 import 'package:paper_route/features/billing/domain/monthly_bill.dart';
 
+// Including business, customer, and month in the Riverpod key keeps live bill
+// state tenant-scoped and prevents one month's data from being reused for another.
 typedef BillDocumentKey =
     ({String businessId, String customerId, String billingMonth});
 

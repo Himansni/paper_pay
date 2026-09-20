@@ -2,6 +2,8 @@ import 'package:paper_route/core/domain/local_date.dart';
 import 'package:paper_route/features/auth/domain/app_user.dart';
 import 'package:paper_route/features/billing/domain/monthly_bill.dart';
 
+// The UI depends on this contract while the Firebase implementation owns
+// tenant paths, source validation, transactions, and audit persistence.
 abstract interface class BillingRepository {
   Future<BillingWorkspaceResult> fetchWorkspace({
     required AppUser actor,
@@ -16,6 +18,8 @@ abstract interface class BillingRepository {
     required LocalDate month,
   });
 
+  // Finalization must be safe to retry: the same customer/month returns the
+  // existing deterministic bill instead of creating another financial record.
   Future<FinalizedMonthlyBill> finalizeBill({
     required AppUser actor,
     required String customerId,

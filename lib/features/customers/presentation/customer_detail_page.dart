@@ -15,6 +15,7 @@ import 'package:paper_route/features/employees/domain/employee_member.dart';
 import 'package:paper_route/features/employees/presentation/employee_providers.dart';
 import 'package:paper_route/features/subscriptions/presentation/subscription_detail_page.dart';
 
+/// Watches one customer using both business and customer IDs as the stream key.
 class CustomerDetailPage extends ConsumerWidget {
   const CustomerDetailPage({
     required this.user,
@@ -27,6 +28,8 @@ class CustomerDetailPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Including businessId keeps the listener inside the authenticated tenant;
+    // Firestore Rules make the final read decision.
     final key = (businessId: user.businessId!, customerId: customerId);
     final customer = ref.watch(customerProvider(key));
     return customer.when(
@@ -115,6 +118,8 @@ class _CustomerDetailViewState extends ConsumerState<_CustomerDetailView> {
       assignedEmployeeId: customer.assignedEmployeeId,
       isArchived: customer.isArchived,
     );
+    // canEdit controls visible actions only. Repository checks and Firestore
+    // Rules independently enforce assignment, status, and permission limits.
 
     return Scaffold(
       appBar: AppBar(
@@ -277,6 +282,8 @@ class _CustomerDetailViewState extends ConsumerState<_CustomerDetailView> {
             const SizedBox(height: 14),
             CustomerCollectionSummary(user: user, customer: customer),
             if (customer.locationConsent && customer.coordinates != null) ...[
+              // Coordinates are shown only when both stored consent and data
+              // are present.
               const SizedBox(height: 14),
               _DetailCard(
                 title: 'Consented GPS location',
@@ -306,6 +313,7 @@ class _CustomerDetailViewState extends ConsumerState<_CustomerDetailView> {
               _DetailCard(
                 title: 'Financial opening',
                 rows: [
+                  // Convert integer paise to rupees only for display.
                   _DetailRow(
                     'Opening balance',
                     NumberFormat.currency(
@@ -346,6 +354,8 @@ class _CustomerDetailViewState extends ConsumerState<_CustomerDetailView> {
     List<DeliveryArea> areas,
     List<EmployeeMember> members,
   ) async {
+    // The dialog only selects a proposal. The repository transaction rechecks
+    // tenant, area, employee status, and area membership before saving it.
     final customer = widget.customer;
     final draft = await showCustomerAssignmentDialog(
       context: context,
@@ -379,6 +389,7 @@ class _CustomerDetailViewState extends ConsumerState<_CustomerDetailView> {
   }
 
   Future<void> _toggleArchived() async {
+    // Archiving is reversible status management, never physical deletion.
     final customer = widget.customer;
     final shouldChange = await showDialog<bool>(
       context: context,
@@ -525,6 +536,8 @@ class _CustomerHistory extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // History is a separate append-only stream so profile updates cannot erase
+    // who created, edited, archived, reactivated, or transferred the customer.
     final history = ref.watch(
       customerAuditProvider((businessId: businessId, customerId: customerId)),
     );

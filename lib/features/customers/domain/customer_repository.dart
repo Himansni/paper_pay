@@ -1,6 +1,8 @@
 import 'package:paper_route/features/auth/domain/app_user.dart';
 import 'package:paper_route/features/customers/domain/customer.dart';
 
+/// Boundary for tenant-scoped customer reads and audited lifecycle writes.
+/// Widgets use this contract instead of constructing Firestore paths directly.
 abstract interface class CustomerRepository {
   Future<CustomerPage> fetchCustomers(CustomerListRequest request);
 

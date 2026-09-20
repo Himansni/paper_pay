@@ -6,6 +6,8 @@ import 'package:paper_route/features/customers/domain/customer.dart';
 import 'package:paper_route/features/customers/domain/customer_repository.dart';
 import 'package:uuid/uuid.dart';
 
+/// Firestore implementation for customers stored below one business tenant.
+/// Client policy checks improve UX; Firestore Rules remain authoritative.
 class FirebaseCustomerRepository implements CustomerRepository {
   FirebaseCustomerRepository(this._firestore, {Uuid? uuid})
     : _uuid = uuid ?? const Uuid();
@@ -20,6 +22,9 @@ class FirebaseCustomerRepository implements CustomerRepository {
   CollectionReference<Map<String, dynamic>> _collection(
     String businessId,
     String name,
+    // BEGINNER NOTE:
+    // Customer, area, member, and audit paths all share this business parent.
+    // That path shape is the foundation of PaperRoute's tenant isolation.
   ) => _firestore.collection('businesses').doc(businessId).collection(name);
 
   @override
@@ -32,6 +37,8 @@ class FirebaseCustomerRepository implements CustomerRepository {
     }
 
     try {
+      // Every directory query starts with tenant and lifecycle status. Employee
+      // queries add their own UID, so they never request all business customers.
       Query<Map<String, dynamic>> query = _collection(
             request.businessId,
             'customers',
@@ -50,6 +57,8 @@ class FirebaseCustomerRepository implements CustomerRepository {
 
       final searchToken = request.searchToken;
       if (request.isCodeSearch) {
+        // A permanent customer code is unique and uses an exact lookup rather
+        // than the prefix-token index used by names, phones, and landmarks.
         query = query.where('customerCode', isEqualTo: searchToken);
         final snapshot = await query.limit(2).get();
         final customers = snapshot.docs.map(_fromDocument).toList();
@@ -64,6 +73,8 @@ class FirebaseCustomerRepository implements CustomerRepository {
       }
 
       query = query
+          // Stable two-field ordering makes cursor pagination deterministic
+          // even when several customers have the same normalized name.
           .orderBy('searchName')
           .orderBy(FieldPath.documentId)
           .limit(request.pageSize + 1);
@@ -73,6 +84,8 @@ class FirebaseCustomerRepository implements CustomerRepository {
       }
 
       final snapshot = await query.get();
+      // Fetching one extra document tells the UI whether another page exists
+      // without loading the rest of a large customer directory.
       final hasMore = snapshot.docs.length > request.pageSize;
       final visibleDocs = snapshot.docs.take(request.pageSize).toList();
       final customers = visibleDocs.map(_fromDocument).toList();
@@ -110,6 +123,8 @@ class FirebaseCustomerRepository implements CustomerRepository {
     required String businessId,
     required String customerId,
   }) => _collection(businessId, 'auditRecords')
+      // Audit records live beside customers under the same business and are
+      // filtered to this entity rather than embedded in the mutable profile.
       .where('entityType', isEqualTo: 'customer')
       .where('entityId', isEqualTo: customerId)
       .orderBy('createdAt', descending: true)
@@ -145,6 +160,8 @@ class FirebaseCustomerRepository implements CustomerRepository {
       );
     }
 
+    // The generated code is both the permanent customer identifier and the
+    // Firestore document ID, avoiding a second uniqueness lookup.
     final customerCode = 'C-${_uuid.v4().replaceAll('-', '').toUpperCase()}';
     final customerRef = _collection(businessId, 'customers').doc(customerCode);
     final auditRef = _collection(businessId, 'auditRecords').doc();
@@ -152,6 +169,8 @@ class FirebaseCustomerRepository implements CustomerRepository {
 
     try {
       await _firestore.runTransaction((transaction) async {
+        // The area and optional employee are validated in the same transaction
+        // as creation so an invalid cross-tenant assignment cannot slip in.
         final areaSnapshot = await transaction.get(
           _collection(businessId, 'areas').doc(value.areaId),
         );
@@ -180,6 +199,8 @@ class FirebaseCustomerRepository implements CustomerRepository {
           'assignedEmployeeId': employeeId,
           'status': CustomerStatus.active.value,
           'subscriptionStatus': 'notConfigured',
+          // Only a Head can introduce financial opening data. Employee-created
+          // customers always start at zero, even if a client submits otherwise.
           'openingBalancePaise': actor.isHead ? value.openingBalancePaise : 0,
           'createdBy': actor.uid,
           'updatedBy': actor.uid,
@@ -243,11 +264,15 @@ class FirebaseCustomerRepository implements CustomerRepository {
         }
         if (value.areaId != customer.areaId ||
             value.assignedEmployeeId != customer.assignedEmployeeId) {
+          // Assignment has its own transaction and audit shape, so a profile
+          // edit cannot silently transfer operational responsibility.
           throw const AppException(
             'Use the assignment action to change area or employee.',
           );
         }
         if (value.openingBalancePaise != customer.openingBalancePaise) {
+          // The opening balance is a historical starting fact. Later financial
+          // corrections belong in audited adjustments, not profile edits.
           throw const AppException(
             'Opening balance is immutable. Record future corrections as financial adjustments.',
           );
@@ -263,6 +288,8 @@ class FirebaseCustomerRepository implements CustomerRepository {
         ];
         if (changedFields.isEmpty) return;
 
+        // Store only the field names in history: the customer document keeps
+        // current values while the audit explains who changed it and when.
         final now = FieldValue.serverTimestamp();
         transaction.update(customerRef, {
           ...profile,
@@ -321,6 +348,8 @@ class FirebaseCustomerRepository implements CustomerRepository {
 
     try {
       await _firestore.runTransaction((transaction) async {
+        // Archive/reactivate changes status in place. The customer, financial
+        // history, and related records retain their stable document references.
         final snapshot = await transaction.get(customerRef);
         final collectionState = await transaction.get(
           customerRef.collection('collectionState').doc('current'),
@@ -388,6 +417,9 @@ class FirebaseCustomerRepository implements CustomerRepository {
 
     try {
       await _firestore.runTransaction((transaction) async {
+        // BEGINNER NOTE:
+        // A transfer verifies the customer, active destination area, and the
+        // employee's membership/area scope before changing either assignment.
         final customer = await transaction.get(customerRef);
         final area = await transaction.get(
           _collection(businessId, 'areas').doc(areaId),
@@ -445,6 +477,8 @@ class FirebaseCustomerRepository implements CustomerRepository {
           },
         );
         transaction.set(auditRef, {
+          // Both sides of the transfer are recorded so history is not silently
+          // rewritten when a customer moves between routes.
           'businessId': businessId,
           'actorId': actor.uid,
           'action': 'customerAssignmentUpdated',
@@ -465,6 +499,8 @@ class FirebaseCustomerRepository implements CustomerRepository {
   }
 
   String _businessId(AppUser actor) {
+    // Missing, pending, or inactive membership fails closed before a path is
+    // constructed. Firestore Rules repeat this authorization server-side.
     final businessId = actor.businessId;
     if (!actor.hasActiveAccess || businessId == null || businessId.isEmpty) {
       throw const AppException('Your business access is no longer active.');
@@ -476,6 +512,8 @@ class FirebaseCustomerRepository implements CustomerRepository {
     CustomerInput input, {
     required String customerCode,
   }) => {
+    // Normalized fields and tokens are stored with the profile because
+    // Firestore does not provide general full-text search.
     'name': input.name,
     'searchName': CustomerSearchIndex.normalizeText(input.name),
     'phone': input.phone,
@@ -495,6 +533,7 @@ class FirebaseCustomerRepository implements CustomerRepository {
     'buildingInfo': input.buildingInfo,
     'locationNotes': input.locationNotes,
     'locationConsent': input.locationConsent,
+    // CustomerInput.normalized() guarantees this is null without consent.
     'coordinates': input.coordinates?.toMap(),
     'deliveryPreferences': {'placement': input.deliveryPlacement.value},
     'billingPreferences': {'cycle': input.billingCycle.value},
@@ -544,6 +583,8 @@ class FirebaseCustomerRepository implements CustomerRepository {
         rawAreaIds is List
             ? rawAreaIds.whereType<String>().toSet()
             : <String>{};
+    // Role, status, tenant, UID, and area membership must all agree before an
+    // employee can become responsible for the customer.
     if (!snapshot.exists ||
         data == null ||
         data['businessId'] != businessId ||
@@ -588,6 +629,8 @@ class FirebaseCustomerRepository implements CustomerRepository {
   }) {
     final data = snapshot.data();
     if (!snapshot.exists || data == null) return;
+    // Existing derived collection state is updated in the same transaction so
+    // later operational summaries do not retain stale customer metadata.
     transaction.update(snapshot.reference, {
       ...fields,
       'revision': (data['revision'] as int? ?? 0) + 1,
@@ -599,6 +642,8 @@ class FirebaseCustomerRepository implements CustomerRepository {
   }
 
   AppException _translate(FirebaseException error, String fallback) {
+    // A permission denial here is the backend enforcing Firestore Rules, even
+    // if a stale UI previously displayed the action.
     final message = switch (error.code) {
       'permission-denied' =>
         'Your current membership does not permit this customer action.',

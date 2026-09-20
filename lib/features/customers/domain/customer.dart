@@ -11,6 +11,8 @@ enum CustomerStatus {
   final String value;
   final String label;
 
+  // Unknown legacy values remain operational rather than being treated as an
+  // instruction to hide or delete the customer.
   static CustomerStatus fromValue(Object? value) =>
       value == archived.value ? archived : active;
 }
@@ -71,6 +73,8 @@ class CustomerCoordinates {
   Map<String, Object> toMap() => {'latitude': latitude, 'longitude': longitude};
 }
 
+/// Tenant-owned customer document stored at
+/// businesses/{businessId}/customers/{customerCode}.
 class Customer {
   const Customer({
     required this.id,
@@ -143,7 +147,10 @@ class Customer {
     );
   }
 
+  /// Firestore document ID. New records use the same stable value as the code.
   final String id;
+
+  /// Human-visible permanent ID generated once when the customer is created.
   final String customerCode;
   final String businessId;
   final String name;
@@ -155,6 +162,8 @@ class Customer {
   final String houseNumber;
   final String buildingInfo;
   final String locationNotes;
+
+  /// Coordinates are meaningful only when this explicit consent flag is true.
   final bool locationConsent;
   final CustomerCoordinates? coordinates;
   final String assignedEmployeeId;
@@ -162,6 +171,9 @@ class Customer {
   final DeliveryPlacement deliveryPlacement;
   final BillingCyclePreference billingCycle;
   final String subscriptionStatus;
+
+  /// Money is stored as integer paise instead of decimal rupees.
+  /// For example, ₹125.50 is stored as 12550 to avoid rounding errors.
   final int openingBalancePaise;
   final String notes;
   final String createdBy;
@@ -238,6 +250,8 @@ class CustomerInput {
   final int openingBalancePaise;
   final String notes;
 
+  // Normalization makes validation and search indexing deterministic. Turning
+  // consent off also removes coordinates instead of retaining hidden GPS data.
   CustomerInput normalized() => CustomerInput(
     name: name.trim(),
     phone: phone.trim(),
@@ -300,6 +314,7 @@ class CustomerInput {
       );
     }
     if (value.locationConsent != (value.coordinates != null)) {
+      // Consent and coordinates must move together: neither can exist alone.
       throw const AppException(
         'GPS coordinates require explicit customer consent.',
       );
@@ -326,6 +341,8 @@ class CustomerInput {
   }
 }
 
+/// Builds bounded prefix tokens so Firestore can search without downloading the
+/// full customer collection. Tokens are created during every create/update.
 abstract final class CustomerSearchIndex {
   static String normalizeText(String value) =>
       value
@@ -346,6 +363,8 @@ abstract final class CustomerSearchIndex {
     required String landmark,
   }) {
     final tokens = <String>{};
+    // Prefixes support practical starts-with searches for normalized fields.
+    // The cap keeps each Firestore document within a predictable index size.
     _addTextTokens(tokens, 'name', normalizeText(name), minimum: 2);
     _addPhoneTokens(tokens, normalizePhone(phone));
     _addPhoneTokens(tokens, normalizePhone(alternatePhone));
@@ -356,6 +375,8 @@ abstract final class CustomerSearchIndex {
   }
 
   static String tokenFor(CustomerSearchField field, String term) {
+    // Customer codes are stored as exact uppercase identifiers; the other
+    // fields use the same normalization and prefix format as buildTokens().
     if (field == CustomerSearchField.customerCode) {
       return term.trim().toUpperCase();
     }
@@ -401,6 +422,8 @@ abstract final class CustomerSearchIndex {
   }
 }
 
+/// Converts user-facing rupees to the integer-paise representation used by
+/// customer and ledger data.
 abstract final class CustomerMoney {
   static int parseRupeesToPaise(String value) {
     final normalized = value.trim().replaceAll(',', '');
@@ -437,6 +460,8 @@ class CustomerPageCursor {
   final String customerId;
 }
 
+/// Complete server query description for one page of the customer directory.
+/// requesterId and isHead let the repository constrain employee results.
 class CustomerListRequest {
   const CustomerListRequest({
     required this.businessId,
@@ -483,6 +508,8 @@ class CustomerPage {
   final bool hasMore;
 }
 
+/// Read model for an append-only customer audit record. Assignment entries keep
+/// both previous and new values so transfers remain explainable later.
 class CustomerAuditEntry {
   const CustomerAuditEntry({
     required this.id,

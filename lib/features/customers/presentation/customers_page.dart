@@ -11,6 +11,7 @@ import 'package:paper_route/features/customers/presentation/customer_providers.d
 import 'package:paper_route/features/employees/domain/employee_member.dart';
 import 'package:paper_route/features/employees/presentation/employee_providers.dart';
 
+/// Paginated, server-filtered customer directory for the active business.
 class CustomersPage extends ConsumerStatefulWidget {
   const CustomersPage({required this.user, this.initialSearch = '', super.key});
 
@@ -53,8 +54,11 @@ class _CustomersPageState extends ConsumerState<CustomersPage> {
 
   Future<void> _load({bool reset = false}) async {
     if (_isLoading && !reset) return;
+    // A version number prevents a slower old search from overwriting results
+    // after the user has already changed filters and started a new request.
     final requestVersion = ++_requestVersion;
     if (reset) {
+      // Search, area, and status changes always restart cursor pagination.
       _cursor = null;
       _hasMore = false;
     }
@@ -70,6 +74,8 @@ class _CustomersPageState extends ConsumerState<CustomersPage> {
           .read(customerRepositoryProvider)
           .fetchCustomers(
             CustomerListRequest(
+              // The repository uses identity and role to add tenant and
+              // employee-assignment constraints to the Firestore query.
               businessId: businessId,
               requesterId: widget.user.uid,
               isHead: widget.user.isHead,
@@ -118,6 +124,8 @@ class _CustomersPageState extends ConsumerState<CustomersPage> {
     final businessId = widget.user.businessId!;
     final areas = ref.watch(deliveryAreasProvider(businessId));
     final members =
+        // Employees do not need the full team directory to display their own
+        // assigned customers, so only Heads subscribe to member names here.
         widget.user.isHead
             ? ref.watch(employeeMembersProvider(businessId))
             : const AsyncData<List<EmployeeMember>>([]);
@@ -130,6 +138,8 @@ class _CustomersPageState extends ConsumerState<CustomersPage> {
         title: Text(widget.user.isHead ? 'Customers' : 'My customers'),
       ),
       floatingActionButton:
+          // This is a presentation guard. Repository checks and Firestore Rules
+          // still reject unauthorized creation attempts.
           _accessPolicy.canCreateCustomer(widget.user)
               ? FloatingActionButton.extended(
                 onPressed: () => _open('/customers/new'),

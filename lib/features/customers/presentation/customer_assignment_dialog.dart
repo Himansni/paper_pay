@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:paper_route/features/areas/domain/delivery_area.dart';
 import 'package:paper_route/features/employees/domain/employee_member.dart';
 
+/// Selection returned to the repository's audited transfer transaction.
 class CustomerAssignmentDraft {
   const CustomerAssignmentDraft({
     required this.employeeId,
@@ -26,6 +27,7 @@ Future<CustomerAssignmentDraft?> showCustomerAssignmentDialog({
         customerName: customerName,
         initialEmployeeId: initialEmployeeId,
         initialAreaId: initialAreaId,
+        // Archived areas and inactive employees cannot receive new work.
         employees:
             employees
                 .where((item) => item.isEmployee && item.isActive)
@@ -58,6 +60,8 @@ class _CustomerAssignmentDialogState extends State<_CustomerAssignmentDialog> {
   late String _areaId;
   late String _employeeId;
 
+  // Area IDs on membership documents determine which active employees may be
+  // selected for the currently chosen route.
   List<EmployeeMember> get _availableEmployees =>
       widget.employees
           .where((employee) => employee.areaIds.contains(_areaId))
@@ -103,6 +107,8 @@ class _CustomerAssignmentDialogState extends State<_CustomerAssignmentDialog> {
               onChanged:
                   (value) => setState(() {
                     _areaId = value ?? '';
+                    // Moving to another area clears an employee who is not
+                    // authorized for that destination.
                     if (!_availableEmployees.any(
                       (employee) => employee.uid == _employeeId,
                     )) {

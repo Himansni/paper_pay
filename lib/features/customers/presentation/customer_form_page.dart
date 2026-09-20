@@ -11,6 +11,8 @@ import 'package:paper_route/features/customers/presentation/customer_providers.d
 import 'package:paper_route/features/employees/domain/employee_member.dart';
 import 'package:paper_route/features/employees/presentation/employee_providers.dart';
 
+/// Resolves create immediately and edit through the tenant-scoped customer
+/// stream before constructing the shared form.
 class CustomerFormRoutePage extends ConsumerWidget {
   const CustomerFormRoutePage({required this.user, this.customerId, super.key});
 
@@ -160,6 +162,8 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
               assignedEmployeeId: existing.assignedEmployeeId,
               isArchived: existing.isArchived,
             );
+    // This guard avoids presenting an unusable form. The repository and
+    // Firestore Rules still enforce authorization when data is submitted.
     if (!allowed) {
       return Scaffold(
         appBar: AppBar(
@@ -191,6 +195,8 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
                   (widget.user.isHead || widget.user.areaIds.contains(area.id)),
             )
             .toList();
+    // Employees see only area IDs granted by their membership. Heads can use
+    // every active area and may select an eligible employee during creation.
     final memberItems =
         (members.asData?.value ?? const <EmployeeMember>[])
             .where((member) => member.isEmployee && member.isActive)
@@ -311,6 +317,8 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
                 title: 'Area and assignment',
                 children: [
                   if (_isEditing) ...[
+                    // Assignment is intentionally read-only during profile
+                    // edits because transfers have a separate audited action.
                     _ReadOnlyValue(
                       label: 'Delivery area ID',
                       value: existing!.areaId,
@@ -486,6 +494,8 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
                         (value) => setState(() {
                           _locationConsent = value;
                           if (!value) {
+                            // Withdrawing consent clears the coordinate inputs
+                            // so they cannot be persisted accidentally.
                             _latitude.clear();
                             _longitude.clear();
                           }
@@ -532,6 +542,8 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
                 title: 'Financial opening and notes',
                 children: [
                   if (!_isEditing && widget.user.isHead)
+                    // Opening balance is collected only once by a Head. It is
+                    // displayed but immutable on every later edit.
                     TextFormField(
                       controller: _openingBalance,
                       keyboardType: const TextInputType.numberWithOptions(
@@ -601,6 +613,7 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isBusy = true);
     try {
+      // Coordinates are constructed only while explicit consent is enabled.
       final coordinates =
           _locationConsent
               ? CustomerCoordinates(
@@ -609,6 +622,8 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
               )
               : null;
       final existing = widget.customer;
+      // Existing paise is preserved exactly; only a new Head-created customer
+      // parses a rupee input into integer paise.
       final openingBalance =
           existing?.openingBalancePaise ??
           (widget.user.isHead
@@ -619,6 +634,7 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
         phone: _phone.text,
         alternatePhone: _alternatePhone.text,
         address: _address.text,
+        // Editing preserves assignment fields; transfers use the detail action.
         areaId: existing?.areaId ?? _areaId,
         landmark: _landmark.text,
         houseNumber: _houseNumber.text,

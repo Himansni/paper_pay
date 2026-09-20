@@ -1,0 +1,682 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "customers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "searchName", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "customers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "areaId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "searchName", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "customers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "assignedEmployeeId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "searchName", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "customers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "assignedEmployeeId", "order": "ASCENDING" },
+        { "fieldPath": "areaId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "searchName", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "customers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "searchTokens", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "searchName", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "customers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "areaId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "searchTokens", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "searchName", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "customers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "assignedEmployeeId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "searchTokens", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "searchName", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "customers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "assignedEmployeeId", "order": "ASCENDING" },
+        { "fieldPath": "areaId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "searchTokens", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "searchName", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "auditRecords",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "entityType", "order": "ASCENDING" },
+        { "fieldPath": "entityId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "newspapers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "searchName", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "priceRules",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "newspaperId", "order": "ASCENDING" },
+        { "fieldPath": "startDate", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "priceRules",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "newspaperId", "order": "ASCENDING" },
+        { "fieldPath": "kind", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "startDate", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "priceRules",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "newspaperId", "order": "ASCENDING" },
+        { "fieldPath": "kind", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "endDate", "order": "ASCENDING" },
+        { "fieldPath": "startDate", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "payments",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "collectorUid", "order": "ASCENDING" },
+        { "fieldPath": "confirmedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "payments",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "confirmedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "auditRecords",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "entityType", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "members",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "role", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "displayName", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "areas",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "name", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "bills",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "finalizedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "bills",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "billingMonth", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "customerStatus", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "bills",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "billingMonth", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "customerSearchName", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "bills",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "billingMonth", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "customerId", "order": "ASCENDING" },
+        { "fieldPath": "customerSearchName", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "bills",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "billingMonth", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "areaId", "order": "ASCENDING" },
+        { "fieldPath": "customerSearchName", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "bills",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "billingMonth", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "assignedEmployeeId", "order": "ASCENDING" },
+        { "fieldPath": "customerSearchName", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "payments",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "areaId", "order": "ASCENDING" },
+        { "fieldPath": "confirmedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "payments",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "customerId", "order": "ASCENDING" },
+        { "fieldPath": "confirmedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "payments",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "method", "order": "ASCENDING" },
+        { "fieldPath": "confirmedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "payments",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "collectorUid", "order": "ASCENDING" },
+        { "fieldPath": "method", "order": "ASCENDING" },
+        { "fieldPath": "confirmedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "payments",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "areaId", "order": "ASCENDING" },
+        { "fieldPath": "method", "order": "ASCENDING" },
+        { "fieldPath": "confirmedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "payments",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "customerId", "order": "ASCENDING" },
+        { "fieldPath": "method", "order": "ASCENDING" },
+        { "fieldPath": "confirmedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "paymentReversals",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "reversedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "paymentReversals",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "collectorUid", "order": "ASCENDING" },
+        { "fieldPath": "reversedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "paymentReversals",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "areaId", "order": "ASCENDING" },
+        { "fieldPath": "reversedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "paymentReversals",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "customerId", "order": "ASCENDING" },
+        { "fieldPath": "reversedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "paymentReversals",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "method", "order": "ASCENDING" },
+        { "fieldPath": "reversedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "paymentReversals",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "collectorUid", "order": "ASCENDING" },
+        { "fieldPath": "method", "order": "ASCENDING" },
+        { "fieldPath": "reversedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "paymentReversals",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "areaId", "order": "ASCENDING" },
+        { "fieldPath": "method", "order": "ASCENDING" },
+        { "fieldPath": "reversedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "paymentReversals",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "customerId", "order": "ASCENDING" },
+        { "fieldPath": "method", "order": "ASCENDING" },
+        { "fieldPath": "reversedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "collectionState",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "areaId", "order": "ASCENDING" },
+        { "fieldPath": "assignedEmployeeId", "order": "ASCENDING" },
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "customerStatus", "order": "ASCENDING" },
+        { "fieldPath": "stateId", "order": "ASCENDING" },
+        { "fieldPath": "outstandingPaise", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "collectionState",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "stateId", "order": "ASCENDING" },
+        { "fieldPath": "customerStatus", "order": "ASCENDING" },
+        { "fieldPath": "outstandingPaise", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "collectionState",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "stateId", "order": "ASCENDING" },
+        { "fieldPath": "customerStatus", "order": "ASCENDING" },
+        { "fieldPath": "reportingStatus", "order": "ASCENDING" },
+        { "fieldPath": "outstandingPaise", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "collectionState",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "stateId", "order": "ASCENDING" },
+        { "fieldPath": "assignedEmployeeId", "order": "ASCENDING" },
+        { "fieldPath": "customerStatus", "order": "ASCENDING" },
+        { "fieldPath": "outstandingPaise", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "collectionState",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "stateId", "order": "ASCENDING" },
+        { "fieldPath": "assignedEmployeeId", "order": "ASCENDING" },
+        { "fieldPath": "customerStatus", "order": "ASCENDING" },
+        { "fieldPath": "reportingStatus", "order": "ASCENDING" },
+        { "fieldPath": "outstandingPaise", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "collectionState",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "stateId", "order": "ASCENDING" },
+        { "fieldPath": "areaId", "order": "ASCENDING" },
+        { "fieldPath": "customerStatus", "order": "ASCENDING" },
+        { "fieldPath": "outstandingPaise", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "collectionState",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "stateId", "order": "ASCENDING" },
+        { "fieldPath": "areaId", "order": "ASCENDING" },
+        { "fieldPath": "customerStatus", "order": "ASCENDING" },
+        { "fieldPath": "reportingStatus", "order": "ASCENDING" },
+        { "fieldPath": "outstandingPaise", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "collectionState",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "stateId", "order": "ASCENDING" },
+        { "fieldPath": "customerId", "order": "ASCENDING" },
+        { "fieldPath": "customerStatus", "order": "ASCENDING" },
+        { "fieldPath": "outstandingPaise", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "collectionState",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "stateId", "order": "ASCENDING" },
+        { "fieldPath": "customerId", "order": "ASCENDING" },
+        { "fieldPath": "customerStatus", "order": "ASCENDING" },
+        { "fieldPath": "reportingStatus", "order": "ASCENDING" },
+        { "fieldPath": "outstandingPaise", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "collectionState",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "stateId", "order": "ASCENDING" },
+        { "fieldPath": "assignedEmployeeId", "order": "ASCENDING" },
+        { "fieldPath": "customerStatus", "order": "ASCENDING" },
+        { "fieldPath": "areaId", "order": "ASCENDING" },
+        { "fieldPath": "reportingStatus", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "collectionState",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "stateId", "order": "ASCENDING" },
+        { "fieldPath": "reportingStatus", "order": "ASCENDING" },
+        { "fieldPath": "oldestOutstandingMonth", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "customers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "customerCode", "order": "ASCENDING" },
+        { "fieldPath": "searchName", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "customers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "customers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "assignedEmployeeId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "customers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "areaId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "customers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "customerCode", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "subscriptions",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "updatedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "subscriptions",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "updatedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "subscriptions",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "customerId", "order": "ASCENDING" },
+        { "fieldPath": "updatedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "subscriptions",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "customerId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "updatedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "subscriptions",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "newspaperId", "order": "ASCENDING" },
+        { "fieldPath": "updatedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "subscriptions",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "newspaperId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "updatedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "lineItems",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "billingMonth", "order": "ASCENDING" },
+        { "fieldPath": "newspaperId", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "bills",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "billingMonth", "order": "ASCENDING" },
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "currentChargesPaise", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "payments",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "confirmedAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "payments",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "confirmedAt", "order": "ASCENDING" },
+        { "fieldPath": "amountPaise", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "paymentReversals",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "reversedAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "paymentReversals",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "reversedAt", "order": "ASCENDING" },
+        { "fieldPath": "amountPaise", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "collectionState",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "stateId", "order": "ASCENDING" },
+        { "fieldPath": "outstandingPaise", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "collectionState",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "reportingStatus", "order": "ASCENDING" },
+        { "fieldPath": "stateId", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "collectionState",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "areaId", "order": "ASCENDING" },
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "stateId", "order": "ASCENDING" },
+        { "fieldPath": "outstandingPaise", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

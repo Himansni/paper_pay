@@ -26,6 +26,11 @@ class FirebaseAuthRepository implements AuthRepository {
 
   @override
   Stream<AppUser?> watchCurrentUser() {
+    // BEGINNER NOTE:
+    // The session is assembled in three layers:
+    // 1. Firebase Auth supplies identity and email-verification state.
+    // 2. userProfiles supplies the business ID used to locate membership.
+    // 3. businesses/{businessId}/members/{uid} supplies trusted authorization.
     late StreamController<AppUser?> controller;
     StreamSubscription<User?>? authSubscription;
     StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>?
@@ -34,6 +39,8 @@ class FirebaseAuthRepository implements AuthRepository {
     memberSubscription;
 
     Future<void> cancelAccountSubscriptions() async {
+      // A sign-out or account switch must stop the old tenant listeners before
+      // any new user documents are observed.
       await profileSubscription?.cancel();
       await memberSubscription?.cancel();
       profileSubscription = null;
@@ -55,6 +62,8 @@ class FirebaseAuthRepository implements AuthRepository {
         final profileData = profile.data();
         final businessId = profileData?['businessId'] as String?;
         if (businessId == null || businessId.isEmpty) {
+          // Authentication alone is not business access. Emitting an AppUser
+          // without membership keeps the UI in its pending/setup state.
           if (!controller.isClosed) {
             controller.add(_toAppUser(firebaseUser, profileData, null));
           }
@@ -70,6 +79,8 @@ class FirebaseAuthRepository implements AuthRepository {
         }
 
         memberSubscription = _firestore
+            // Membership is read from the business named by the profile, then
+            // constrained to the authenticated UID.
             .collection('businesses')
             .doc(businessId)
             .collection('members')
@@ -285,6 +296,9 @@ class FirebaseAuthRepository implements AuthRepository {
     Map<String, Object?>? profile,
     Map<String, Object?>? member,
   ) {
+    // BEGINNER NOTE:
+    // A profile helps find and display an account, but only the membership can
+    // grant a role, active status, permissions, or assigned areas.
     // Memberships are the sole authority for role, status, and permissions.
     // A profile can locate the tenant and supply presentation details, but a
     // missing membership must never inherit privileges from profile data.

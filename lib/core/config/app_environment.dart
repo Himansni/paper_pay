@@ -55,6 +55,8 @@ abstract final class AppEnvironmentConfig {
 
   static FirebaseOptions currentOptions() {
     final environment = current;
+    // Validate before returning credentials so a production binary cannot
+    // silently point at the development project (or the reverse).
     validateSelection(
       environment: environment,
       flavor: appFlavor,
@@ -84,6 +86,10 @@ abstract final class AppEnvironmentConfig {
     required String projectId,
     bool requireFlavorMatch = true,
   }) {
+    // BEGINNER NOTE:
+    // APP_ENV selects configuration in Dart, while the Android flavor selects
+    // native build files. Requiring them to agree prevents cross-environment
+    // data access caused by an accidentally mixed build command.
     final expectedFlavor = environment.name;
     if (requireFlavorMatch && flavor != expectedFlavor) {
       throw StateError(

@@ -8,6 +8,8 @@ import 'package:paper_route/features/auth/presentation/forgot_password_page.dart
 import 'package:paper_route/features/auth/presentation/invite_registration_page.dart';
 import 'package:paper_route/features/auth/presentation/setup_required_page.dart';
 
+/// Root widget that owns app-wide theme and URL-to-screen configuration.
+/// Protected destinations are resolved through [AuthGate], not built directly.
 class PaperRouteApp extends StatefulWidget {
   const PaperRouteApp({required this.startup, super.key});
 
@@ -18,12 +20,18 @@ class PaperRouteApp extends StatefulWidget {
 }
 
 class _PaperRouteAppState extends State<PaperRouteApp> {
+  // BEGINNER NOTE:
+  // GoRouter decides which destination a URL represents. AuthGate then decides
+  // whether the current Firebase session and Firestore membership may see it.
+  // Keeping those responsibilities separate prevents URL parameters from being
+  // treated as proof of authorization.
   late final GoRouter _router = GoRouter(
     routes: [
       GoRoute(
         path: '/',
         builder:
             (context, state) =>
+                // A failed Firebase bootstrap never enters the auth flow.
                 widget.startup.isReady
                     ? const AuthGate()
                     : SetupRequiredPage(message: widget.startup.message),
@@ -77,6 +85,8 @@ class _PaperRouteAppState extends State<PaperRouteApp> {
                 widget.startup.isReady
                     ? AuthGate(
                       destination: AuthenticatedDestination.customers,
+                      // Query/path values select content only; AuthGate and
+                      // Firestore Rules still decide whether it can be read.
                       resourceId: state.uri.queryParameters['q'],
                     )
                     : SetupRequiredPage(message: widget.startup.message),
@@ -321,6 +331,7 @@ class _PaperRouteAppState extends State<PaperRouteApp> {
 
   @override
   void dispose() {
+    // The router owns listeners, so the widget that created it also disposes it.
     _router.dispose();
     super.dispose();
   }

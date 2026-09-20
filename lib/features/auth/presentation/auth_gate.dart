@@ -71,6 +71,9 @@ class AuthGate extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // BEGINNER NOTE:
+    // Firebase Auth tells us who the user is. Firestore membership data tells
+    // us which PaperRoute business and role that authenticated user belongs to.
     final session = ref.watch(authSessionProvider);
     return session.when(
       loading:
@@ -89,9 +92,14 @@ class AuthGate extends ConsumerWidget {
             ),
           ),
       data: (user) {
+        // These checks intentionally progress from identity to verification to
+        // business access. Missing information never grants access by default.
         if (user == null) return const LoginPage();
         if (!user.isEmailVerified) return EmailVerificationPage(user: user);
         if (!user.hasActiveAccess) return AccessPendingPage(user: user);
+
+        // This guard keeps Head-only screens out of an employee's UI. Firestore
+        // Rules remain the final authority for every backend read and write.
         final headOnly = switch (destination) {
           AuthenticatedDestination.businessSettings ||
           AuthenticatedDestination.employees ||
@@ -105,6 +113,8 @@ class AuthGate extends ConsumerWidget {
           _ => false,
         };
         if (headOnly && !user.isHead) return DashboardPage(user: user);
+
+        // Only after all shared checks pass is the requested screen created.
         return switch (destination) {
           AuthenticatedDestination.dashboard => DashboardPage(user: user),
           AuthenticatedDestination.businessSettings => BusinessSettingsPage(

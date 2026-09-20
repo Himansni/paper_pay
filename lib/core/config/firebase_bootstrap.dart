@@ -23,6 +23,8 @@ class FirebaseStartup {
 /// local demo project. Development is the safe default; production fails
 /// closed unless its distinct build flavor and public client options agree.
 abstract final class FirebaseBootstrap {
+  // This is a compile-time flag, so emulator use must be chosen deliberately
+  // when launching the app rather than toggled by an end user at runtime.
   static const bool _useEmulators = bool.fromEnvironment(
     'USE_FIREBASE_EMULATORS',
   );
@@ -37,6 +39,9 @@ abstract final class FirebaseBootstrap {
     @visibleForTesting bool? shouldActivateAppCheckOverride,
   }) async {
     try {
+      // BEGINNER NOTE:
+      // Emulator mode and live-project mode share the same repositories. The
+      // only difference is which Firebase endpoints are selected here.
       if (_useEmulators) {
         await Firebase.initializeApp(
           options: const FirebaseOptions(
@@ -51,6 +56,8 @@ abstract final class FirebaseBootstrap {
         );
         await _connectToEmulators();
       } else {
+        // AppEnvironmentConfig validates the flavor/project pairing before a
+        // live Firebase connection is allowed.
         final options = AppEnvironmentConfig.currentOptions();
         if (initializeFirebase != null) {
           await initializeFirebase(options: options);
@@ -64,6 +71,8 @@ abstract final class FirebaseBootstrap {
       }
       return const FirebaseStartup.ready();
     } on Object catch (error) {
+      // Configuration failures become an explicit startup state. This avoids
+      // continuing with partially initialized security-sensitive services.
       return FirebaseStartup.configurationRequired(
         'Firebase is not configured for this build. Complete the steps in '
         'docs/FIREBASE_SETUP.md, then restart the app.\n\nDetails: $error',
@@ -72,6 +81,8 @@ abstract final class FirebaseBootstrap {
   }
 
   static Future<void> _connectToEmulators() async {
+    // Android emulators reach the host computer through 10.0.2.2; desktop and
+    // browser tests can use the ordinary loopback address.
     final host =
         defaultTargetPlatform == TargetPlatform.android
             ? '10.0.2.2'
@@ -100,6 +111,9 @@ abstract final class FirebaseBootstrap {
       return;
     }
 
+    // BEGINNER NOTE:
+    // Firebase Auth identifies the signed-in user. App Check is separate: it
+    // helps Firebase recognize requests coming from a genuine app installation.
     try {
       if (activateAppCheck != null) {
         await activateAppCheck(androidProvider: AndroidProvider.playIntegrity);

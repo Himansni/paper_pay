@@ -1,5 +1,8 @@
 import 'package:paper_route/features/auth/domain/app_user.dart';
 
+/// Boundary used by Riverpod and the UI instead of depending directly on the
+/// Firebase SDK. Production supplies FirebaseAuthRepository; tests can supply a
+/// controlled implementation without contacting a real project.
 abstract interface class AuthRepository {
   Stream<AppUser?> watchCurrentUser();
 

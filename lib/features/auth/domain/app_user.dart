@@ -28,6 +28,8 @@ class AppUser {
   final Set<String> permissions;
   final Set<String> areaIds;
 
+  /// Requires every part of tenant authorization to be present and active.
+  /// Missing or pending membership data therefore fails closed.
   bool get hasActiveAccess =>
       businessId != null && role != null && status == AccountStatus.active;
 

@@ -11,11 +11,15 @@ import 'package:paper_route/features/employees/domain/employee_invitation.dart';
 import 'package:paper_route/features/employees/domain/employee_member.dart';
 import 'package:paper_route/features/employees/presentation/employee_providers.dart';
 
+/// Head-only workspace for employee onboarding and access administration.
+/// The screen exposes permitted actions; Firestore Rules enforce them.
 class EmployeesPage extends ConsumerWidget {
   const EmployeesPage({required this.user, super.key});
 
   final AppUser user;
 
+  // Heads inherently administer the business. These granular keys describe
+  // only which operational actions an employee membership may perform.
   static const Map<String, String> _permissionLabels = {
     PermissionKey.addCustomers: 'Add customers',
     PermissionKey.editAssignedCustomers: 'Edit assigned customers',
@@ -27,6 +31,7 @@ class EmployeesPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // The active Head membership supplies the tenant ID for all three streams.
     final businessId = user.businessId!;
     final members = ref.watch(employeeMembersProvider(businessId));
     final invitations = ref.watch(employeeInvitationsProvider(businessId));
@@ -117,6 +122,8 @@ class EmployeesPage extends ConsumerWidget {
       context: context,
       builder:
           (context) => _InvitationDialog(
+            // Inactive areas remain historical but cannot be granted as new
+            // employee scope through an invitation.
             areas: areas.where((area) => area.isActive).toList(),
             permissionLabels: _permissionLabels,
           ),
@@ -184,6 +191,8 @@ class EmployeesPage extends ConsumerWidget {
     WidgetRef ref,
     EmployeeMember member,
   ) async {
+    // The owner is displayed with the team but cannot be edited through the
+    // narrower employee-access workflow.
     if (member.isHead) return;
     final draft = await showDialog<_MemberDraft>(
       context: context,
@@ -565,6 +574,8 @@ class _MemberDialogState extends State<_MemberDialog> {
                   subtitle: const Text(
                     'Inactive employees cannot access business data.',
                   ),
+                  // Status suspends or restores access without removing the
+                  // membership document or its audit history.
                   onChanged: (value) => setState(() => _isActive = value),
                 ),
                 const Divider(),

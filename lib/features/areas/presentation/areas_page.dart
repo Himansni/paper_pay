@@ -8,6 +8,8 @@ import 'package:paper_route/features/auth/domain/app_user.dart';
 import 'package:paper_route/features/employees/domain/employee_member.dart';
 import 'package:paper_route/features/employees/presentation/employee_providers.dart';
 
+/// Head workspace for area lifecycle and employee coverage assignments.
+/// AuthGate limits navigation here, while Firestore Rules protect every write.
 class AreasPage extends ConsumerWidget {
   const AreasPage({required this.user, super.key});
 
@@ -15,6 +17,8 @@ class AreasPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // AuthGate only provides this page an active member, so its business ID is
+    // the tenant key shared by the area and member streams.
     final businessId = user.businessId!;
     final areas = ref.watch(deliveryAreasProvider(businessId));
     final members = ref.watch(employeeMembersProvider(businessId));
@@ -147,6 +151,8 @@ class AreasPage extends ConsumerWidget {
     List<EmployeeMember> allMembers,
   ) async {
     final employees = allMembers.where((member) => member.isEmployee).toList();
+    // Member.areaIds is the authorization-facing side of the assignment. It is
+    // used as the current source here before both sides are updated together.
     final current =
         employees
             .where((member) => member.areaIds.contains(area.id))
@@ -325,6 +331,8 @@ class _AreaDialogState extends State<_AreaDialog> {
                             : null,
               ),
               if (widget.area != null)
+                // Archiving is represented by inactive status, not deletion.
+                // This keeps the area available to older operational records.
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   value: _isActive,
@@ -399,6 +407,8 @@ class _EmployeeAssignmentDialogState extends State<_EmployeeAssignmentDialog> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       for (final employee in widget.employees)
+                        // An inactive employee may be removed from an existing
+                        // assignment, but cannot receive new operational scope.
                         CheckboxListTile(
                           contentPadding: EdgeInsets.zero,
                           value: _selected.contains(employee.uid),

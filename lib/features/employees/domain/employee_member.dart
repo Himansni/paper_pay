@@ -1,5 +1,7 @@
 import 'package:paper_route/features/auth/domain/app_user.dart';
 
+/// View model for a businesses/{businessId}/members/{uid} document.
+/// Role, status, permissions, and area IDs together describe business access.
 class EmployeeMember {
   const EmployeeMember({
     required this.uid,
@@ -46,6 +48,8 @@ class EmployeeMember {
 
   bool get isHead => role == UserRole.head;
   bool get isEmployee => role == UserRole.employee;
+
+  /// Inactive members remain in history but cannot use protected business data.
   bool get isActive => status == AccountStatus.active;
 
   static Set<String> _stringSet(Object? value) =>

@@ -4,6 +4,8 @@ import 'package:paper_route/features/employees/domain/employee_invitation.dart';
 import 'package:paper_route/features/employees/domain/employee_member.dart';
 import 'package:paper_route/features/employees/domain/employee_repository.dart';
 
+/// Manages invitations and authoritative member access inside one business.
+/// Paths are businesses/{businessId}/members and /invitations.
 class FirebaseEmployeeRepository implements EmployeeRepository {
   FirebaseEmployeeRepository(this._firestore);
 
@@ -15,6 +17,8 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
   CollectionReference<Map<String, dynamic>> _businessCollection(
     String businessId,
     String collection,
+    // Keeping the tenant ID in every path prevents accidental global member or
+    // invitation queries; Firestore Rules verify the same boundary server-side.
   ) => _firestore
       .collection('businesses')
       .doc(businessId)
@@ -83,6 +87,10 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     final auditRef = _businessCollection(businessId, 'auditRecords').doc();
     final now = FieldValue.serverTimestamp();
     final batch = _firestore.batch();
+    // BEGINNER NOTE:
+    // An invitation is not yet a member account. It carries the Head-approved
+    // employee role, permissions, and initial areas until the matching verified
+    // email accepts it and the auth flow creates the membership document.
     batch.set(inviteRef, {
       'businessId': businessId,
       'email': normalizedEmail,
@@ -122,6 +130,8 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     required bool isActive,
     required Set<String> permissions,
   }) async {
+    // The signed-in Head cannot edit its own membership through the narrower
+    // employee workflow; the UI also presents Head members as read-only.
     if (memberId == actorId) {
       throw const AppException(
         'The signed-in Head account cannot edit itself.',
@@ -134,10 +144,14 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     final auditRef = _businessCollection(businessId, 'auditRecords').doc();
     final now = FieldValue.serverTimestamp();
     final batch = _firestore.batch();
+    // Role, tenant ownership, UID, and area assignments are absent on purpose.
+    // This operation changes only the employee fields the Head may manage;
+    // area scope is synchronized separately by FirebaseAreaRepository.
     batch.update(memberRef, {
       'displayName': displayName.trim(),
       'phone': phone.trim(),
       'notes': notes.trim(),
+      // Inactive status suspends access without deleting membership history.
       'status': isActive ? 'active' : 'inactive',
       'permissions': permissions.toList()..sort(),
       'updatedAt': now,
@@ -172,6 +186,8 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
     ).doc(invitationId);
     final batch = _firestore.batch();
     final now = FieldValue.serverTimestamp();
+    // Revocation is a state transition rather than deletion, preserving which
+    // invitation existed and the accompanying append-only audit record.
     batch.update(inviteRef, {
       'status': 'revoked',
       'revokedAt': now,
@@ -194,6 +210,8 @@ class FirebaseEmployeeRepository implements EmployeeRepository {
   }
 
   AppException _translate(FirebaseException error, String fallback) {
+    // Client controls never replace Firestore Rules; a stale or unauthorized
+    // Head session is still rejected by the backend.
     return AppException(
       error.code == 'permission-denied'
           ? 'Your Head access no longer permits this action.'

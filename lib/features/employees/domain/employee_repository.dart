@@ -1,6 +1,8 @@
 import 'package:paper_route/features/employees/domain/employee_invitation.dart';
 import 'package:paper_route/features/employees/domain/employee_member.dart';
 
+/// Repository contract for Head-managed invitations and member access.
+/// Every operation requires an explicit business ID to preserve tenant scope.
 abstract interface class EmployeeRepository {
   Stream<List<EmployeeMember>> watchMembers(String businessId);
 

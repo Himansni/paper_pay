@@ -1,5 +1,7 @@
 import 'package:paper_route/features/areas/domain/delivery_area.dart';
 
+/// Tenant-scoped boundary for area storage. Presentation code depends on this
+/// contract rather than constructing Firestore paths itself.
 abstract interface class AreaRepository {
   Stream<List<DeliveryArea>> watchAreas(String businessId);
 

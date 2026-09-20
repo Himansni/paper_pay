@@ -3,6 +3,8 @@ import 'package:paper_route/core/errors/app_exception.dart';
 import 'package:paper_route/features/areas/domain/area_repository.dart';
 import 'package:paper_route/features/areas/domain/delivery_area.dart';
 
+/// Stores delivery areas inside one business tenant and records every change
+/// beside that tenant's audit history.
 class FirebaseAreaRepository implements AreaRepository {
   FirebaseAreaRepository(this._firestore);
 
@@ -14,6 +16,9 @@ class FirebaseAreaRepository implements AreaRepository {
   CollectionReference<Map<String, dynamic>> _collection(
     String businessId,
     String name,
+    // Every operational collection lives below businesses/{businessId}. The
+    // authenticated member supplies this ID, and Firestore Rules enforce that
+    // the member cannot cross into another tenant.
   ) => _firestore.collection('businesses').doc(businessId).collection(name);
 
   @override
@@ -44,6 +49,8 @@ class FirebaseAreaRepository implements AreaRepository {
     final areaRef = _collection(businessId, 'areas').doc();
     final now = FieldValue.serverTimestamp();
     final batch = _firestore.batch();
+    // New areas start active and unassigned. Assignments are added through the
+    // dedicated synchronization method below rather than inferred from names.
     batch.set(areaRef, {
       'businessId': businessId,
       'name': normalizedName,
@@ -78,6 +85,8 @@ class FirebaseAreaRepository implements AreaRepository {
     }
     final now = FieldValue.serverTimestamp();
     final batch = _firestore.batch();
+    // Areas are made inactive instead of deleted so historical assignments and
+    // records can continue referring to the same stable area ID.
     batch.update(_collection(businessId, 'areas').doc(areaId), {
       'businessId': businessId,
       'name': normalizedName,
@@ -108,6 +117,10 @@ class FirebaseAreaRepository implements AreaRepository {
     final removed = previousEmployeeIds.difference(employeeIds);
     final now = FieldValue.serverTimestamp();
     final batch = _firestore.batch();
+    // BEGINNER NOTE:
+    // Assignment is stored in both directions: an area lists employee UIDs,
+    // while each member lists area IDs. One batch keeps both projections and
+    // the audit record synchronized, or writes none of them if any write fails.
     batch.update(_collection(businessId, 'areas').doc(areaId), {
       'businessId': businessId,
       'assignedEmployeeIds': employeeIds.toList()..sort(),
@@ -142,6 +155,8 @@ class FirebaseAreaRepository implements AreaRepository {
     try {
       await batch.commit();
     } on FirebaseException catch (error) {
+      // UI checks improve usability, but Firestore Rules make the final Head
+      // authorization decision at commit time.
       throw AppException(
         error.code == 'permission-denied'
             ? 'Your Head access no longer permits this action.'

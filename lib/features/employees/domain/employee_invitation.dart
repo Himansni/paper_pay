@@ -1,3 +1,5 @@
+/// Pending onboarding offer created by a Head for one business and email.
+/// Its permissions and areas become the employee's initial access on acceptance.
 class EmployeeInvitation {
   const EmployeeInvitation({
     required this.id,

@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:paper_route/core/config/firebase_bootstrap.dart';
 import 'package:paper_route/core/theme/app_theme.dart';
+import 'package:paper_route/features/agency_registration/presentation/create_agency_account_page.dart';
+import 'package:paper_route/features/agency_registration/presentation/agency_registration_providers.dart';
 import 'package:paper_route/features/auth/presentation/access_pending_page.dart';
 import 'package:paper_route/features/auth/presentation/auth_gate.dart';
 import 'package:paper_route/features/auth/presentation/forgot_password_page.dart';
@@ -35,6 +38,14 @@ class _PaperRouteAppState extends State<PaperRouteApp> {
       GoRoute(
         path: '/join',
         builder: (context, state) => const InviteRegistrationPage(),
+      ),
+      GoRoute(
+        path: '/create-agency',
+        builder:
+            (context, state) =>
+                widget.startup.isReady
+                    ? const _AgencyRegistrationRoute()
+                    : SetupRequiredPage(message: widget.startup.message),
       ),
       GoRoute(
         path: '/activate',
@@ -333,5 +344,17 @@ class _PaperRouteAppState extends State<PaperRouteApp> {
       theme: AppTheme.light,
       routerConfig: _router,
     );
+  }
+}
+
+class _AgencyRegistrationRoute extends ConsumerWidget {
+  const _AgencyRegistrationRoute();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (!ref.watch(agencyRegistrationEnabledProvider)) {
+      return const AuthGate();
+    }
+    return const CreateAgencyAccountPage();
   }
 }

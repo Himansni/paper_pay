@@ -1,0 +1,16 @@
+DRAFT — NOT APPROVED FOR PUBLIC RELEASE
+
+PaperRoute Privacy Notice — Version 1
+
+PaperRoute stores the account, agency, employee, customer, delivery, billing,
+and collection information entered by an agency. The agency owner controls who
+may access that agency's tenant data. Access is limited by membership, role,
+permissions, and area or customer assignment.
+
+Account email comes from Firebase Authentication. Owner and agency contact
+details are stored to operate the service. Consent acceptance is versioned and
+timestamped. Customer GPS coordinates are optional and must only be recorded
+with the customer's consent.
+
+Do not enter information that is unnecessary for newspaper delivery, billing,
+or collection. Contact the agency owner to correct operational personal data.

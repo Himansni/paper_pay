@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:paper_route/core/config/app_environment.dart';
@@ -78,6 +79,9 @@ abstract final class FirebaseBootstrap {
             : '127.0.0.1';
     await FirebaseAuth.instance.useAuthEmulator(host, 9099);
     FirebaseFirestore.instance.useFirestoreEmulator(host, 8080);
+    FirebaseFunctions.instanceFor(
+      region: 'asia-south1',
+    ).useFunctionsEmulator(host, 5001);
     FirebaseFirestore.instance.settings = const Settings(
       persistenceEnabled: false,
     );

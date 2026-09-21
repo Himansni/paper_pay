@@ -3,6 +3,14 @@
 This is an operational baseline, not legal advice or a claim of compliance.
 The business owner should obtain advice appropriate to their location and use.
 
+Owner registration drafts are held only in application memory before trusted
+provisioning; unfinished names, phones, addresses, and consent selections are
+not stored in Firestore. A successful registration stores the operational
+contact fields in the business/member/profile records and an immutable consent
+record containing legal versions, document hashes, locale/platform, request ID,
+and server time. Backend logs must never contain names, email, phone, address,
+passwords, tokens, legal content, or callable payloads.
+
 ## Data handling and retention
 
 - Collect only information needed for delivery, billing, and collection. Limit

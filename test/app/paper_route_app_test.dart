@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:paper_route/app/paper_route_app.dart';
 import 'package:paper_route/core/config/firebase_bootstrap.dart';
+import 'package:paper_route/features/agency_registration/presentation/agency_registration_providers.dart';
 import 'package:paper_route/features/auth/domain/app_user.dart';
 import 'package:paper_route/features/auth/domain/auth_repository.dart';
 import 'package:paper_route/features/auth/presentation/auth_providers.dart';
@@ -40,6 +41,110 @@ void main() {
     expect(find.text('Welcome back'), findsOneWidget);
     expect(find.text('Sign in'), findsOneWidget);
     expect(find.text('I have an employee invitation'), findsOneWidget);
+    expect(find.text('Create agency account'), findsNothing);
+  });
+
+  testWidgets(
+    'employee invitation entry remains available while registration is disabled',
+    (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            authRepositoryProvider.overrideWithValue(_FakeAuthRepository()),
+          ],
+          child: const PaperRouteApp(startup: FirebaseStartup.ready()),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('I have an employee invitation'));
+      await tester.pumpAndSettle();
+      expect(find.text('Create employee login'), findsOneWidget);
+    },
+  );
+
+  testWidgets('disabled direct agency route fails closed', (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authRepositoryProvider.overrideWithValue(_FakeAuthRepository()),
+        ],
+        child: const PaperRouteApp(startup: FirebaseStartup.ready()),
+      ),
+    );
+    await tester.pumpAndSettle();
+    GoRouter.of(tester.element(find.text('Welcome back'))).go('/create-agency');
+    await tester.pumpAndSettle();
+    expect(find.text('Welcome back'), findsOneWidget);
+    expect(find.text('Set up your agency'), findsNothing);
+  });
+
+  testWidgets(
+    'verified unprovisioned user stays on employee activation when disabled',
+    (tester) async {
+      const pending = AppUser(
+        uid: 'pending-1',
+        email: 'pending@example.com',
+        displayName: 'Pending User',
+        isEmailVerified: true,
+      );
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            authRepositoryProvider.overrideWithValue(
+              _FakeAuthRepository(currentUser: pending),
+            ),
+          ],
+          child: const PaperRouteApp(startup: FirebaseStartup.ready()),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Activate your access'), findsOneWidget);
+    },
+  );
+
+  testWidgets('disabled employee still sees the inactive-account screen', (
+    tester,
+  ) async {
+    const disabledEmployee = AppUser(
+      uid: 'disabled-1',
+      email: 'disabled@example.com',
+      displayName: 'Disabled Employee',
+      isEmailVerified: true,
+      businessId: 'business-a',
+      role: UserRole.employee,
+      status: AccountStatus.inactive,
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authRepositoryProvider.overrideWithValue(
+            _FakeAuthRepository(currentUser: disabledEmployee),
+          ),
+        ],
+        child: const PaperRouteApp(startup: FirebaseStartup.ready()),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Account inactive'), findsOneWidget);
+  });
+
+  testWidgets('explicit registration enablement exposes login and route', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authRepositoryProvider.overrideWithValue(_FakeAuthRepository()),
+          agencyRegistrationEnabledProvider.overrideWithValue(true),
+        ],
+        child: const PaperRouteApp(startup: FirebaseStartup.ready()),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Create agency account'), findsOneWidget);
+    await tester.tap(find.text('Create agency account'));
+    await tester.pumpAndSettle();
+    expect(find.text('Create agency account'), findsOneWidget);
   });
 
   testWidgets('verified Head sees connected role-gated dashboard actions', (

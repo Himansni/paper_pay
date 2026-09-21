@@ -1200,6 +1200,128 @@ describe('privilege and financial integrity', () => {
 });
 
 describe('verified employee invitation', () => {
+  test('client applications cannot create Head memberships', async () => {
+    const headDb = auth('head-a', 'head-a@example.com');
+    await assertFails(
+      setDoc(doc(headDb, 'businesses/business-a/members/second-head'), {
+        businessId: 'business-a',
+        uid: 'second-head',
+        email: 'second@example.com',
+        displayName: 'Second Head',
+        phone: '9999999999',
+        role: 'head',
+        status: 'active',
+        permissions: [],
+        areaIds: [],
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      }),
+    );
+  });
+
+  test('Head can revoke but cannot forge employee invitation acceptance', async () => {
+    await environment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(
+        doc(context.firestore(), 'businesses/business-a/invitations/invite-head-update'),
+        {
+          businessId: 'business-a',
+          email: 'employee@example.com',
+          role: 'employee',
+          status: 'pending',
+          permissions: [],
+          areaIds: [],
+          createdBy: 'head-a',
+          createdAt: new Date(),
+          expiresAt: new Date(Date.now() + 86_400_000),
+        },
+      );
+    });
+    const headDb = auth('head-a', 'head-a@example.com');
+    await assertFails(
+      updateDoc(
+        doc(headDb, 'businesses/business-a/invitations/invite-head-update'),
+        {
+          status: 'accepted',
+          acceptedBy: 'forged-employee',
+          acceptedAt: serverTimestamp(),
+        },
+      ),
+    );
+    await assertSucceeds(
+      updateDoc(
+        doc(headDb, 'businesses/business-a/invitations/invite-head-update'),
+        {
+          status: 'revoked',
+          revokedAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        },
+      ),
+    );
+  });
+
+  test('Head cannot delete pending, accepted, or revoked invitation history', async () => {
+    await environment.withSecurityRulesDisabled(async (context) => {
+      const admin = context.firestore();
+      for (const [id, status] of [
+        ['pending-history', 'pending'],
+        ['accepted-history', 'accepted'],
+        ['revoked-history', 'revoked'],
+      ]) {
+        await setDoc(
+          doc(admin, `businesses/business-a/invitations/${id}`),
+          {
+            businessId: 'business-a',
+            email: 'employee@example.com',
+            role: 'employee',
+            status,
+            permissions: [],
+            areaIds: [],
+            createdBy: 'head-a',
+            createdAt: new Date(),
+            expiresAt: new Date(Date.now() + 86_400_000),
+            ...(status === 'accepted'
+              ? {
+                  acceptedBy: 'employee-a',
+                  acceptedAt: new Date(),
+                }
+              : {}),
+            ...(status === 'revoked'
+              ? {revokedAt: new Date(), updatedAt: new Date()}
+              : {}),
+          },
+        );
+      }
+    });
+    const headDb = auth('head-a', 'head-a@example.com');
+    for (const id of [
+      'pending-history',
+      'accepted-history',
+      'revoked-history',
+    ]) {
+      await assertFails(
+        deleteDoc(doc(headDb, `businesses/business-a/invitations/${id}`)),
+      );
+    }
+  });
+
+  test('owner registries and provisioning controls reject all client writes', async () => {
+    const db = auth('head-a', 'head-a@example.com');
+    await assertFails(
+      setDoc(doc(db, 'agencyOwners/head-a'), {
+        uid: 'head-a',
+        businessId: 'business-a',
+      }),
+    );
+    await assertFails(
+      setDoc(doc(db, 'agencyProvisioningControls/head-a'), {uid: 'head-a'}),
+    );
+    await assertFails(
+      setDoc(doc(db, 'userConsents/head-a/acceptances/forged'), {
+        uid: 'head-a',
+      }),
+    );
+  });
+
   test('atomically consumes a matching invite without choosing a Head role', async () => {
     await environment.withSecurityRulesDisabled(async (context) => {
       await setDoc(
@@ -1272,6 +1394,61 @@ describe('verified employee invitation', () => {
         status: 'accepted',
         acceptedBy: 'attacker',
         acceptedAt: serverTimestamp(),
+      }),
+    );
+  });
+
+  test('expired and revoked invitations cannot be accepted', async () => {
+    await environment.withSecurityRulesDisabled(async (context) => {
+      const admin = context.firestore();
+      for (const [id, status, expiresAt] of [
+        ['expired-invite', 'pending', new Date(Date.now() - 60_000)],
+        ['revoked-invite', 'revoked', new Date(Date.now() + 86_400_000)],
+      ]) {
+        await setDoc(doc(admin, `businesses/business-a/invitations/${id}`), {
+          businessId: 'business-a',
+          email: 'blocked@example.com',
+          role: 'employee',
+          status,
+          permissions: [],
+          areaIds: [],
+          createdBy: 'head-a',
+          createdAt: new Date(),
+          expiresAt,
+          ...(status === 'revoked'
+            ? {revokedAt: new Date(), updatedAt: new Date()}
+            : {}),
+        });
+      }
+    });
+    const db = auth('blocked-employee', 'blocked@example.com');
+    for (const id of ['expired-invite', 'revoked-invite']) {
+      await assertFails(
+        updateDoc(doc(db, `businesses/business-a/invitations/${id}`), {
+          status: 'accepted',
+          acceptedBy: 'blocked-employee',
+          acceptedAt: serverTimestamp(),
+        }),
+      );
+    }
+  });
+
+  test('wrong invitation code cannot create an employee membership', async () => {
+    const db = auth('wrong-code-employee', 'new@example.com');
+    await assertFails(
+      setDoc(doc(db, 'businesses/business-a/members/wrong-code-employee'), {
+        businessId: 'business-a',
+        uid: 'wrong-code-employee',
+        email: 'new@example.com',
+        displayName: 'Wrong Code',
+        phone: '9000000002',
+        role: 'employee',
+        status: 'active',
+        permissions: [],
+        areaIds: [],
+        acceptedInviteId: 'does-not-exist',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
       }),
     );
   });

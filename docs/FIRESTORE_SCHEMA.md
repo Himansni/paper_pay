@@ -4,6 +4,9 @@ All monetary values are integer paise. Timestamps are server timestamps. Deliver
 
 ```text
 userProfiles/{uid}
+agencyOwners/{uid}
+agencyProvisioningControls/{uid}
+userConsents/{uid}/acceptances/{versionPair}
 businesses/{businessId}
   members/{uid}
   invitations/{invitationId}
@@ -36,6 +39,15 @@ businesses/{businessId}
 `businesses/{businessId}/members/{uid}` is the authorization source used by Security Rules. It also stores assigned area IDs and notes. A role is immutable after creation. Disabling a member changes status; the historical member is not deleted.
 
 `invitations/{invitationId}` stores exact normalized email, fixed employee role, permissions, area IDs, pending/accepted/revoked status, creator, expiry, and acceptance metadata. The document ID is the one-time invitation code. Only the exact verified email can accept it.
+
+For newly self-registered owners only, `agencyOwners/{uid}` is a private
+trusted-backend ownership/idempotency registry. It never grants operational
+authority; the business membership remains the only authority. An immutable
+`userConsents/{uid}/acceptances/{termsVersion}__{privacyVersion}` record stores
+the exact legal versions, asset paths, SHA-256 hashes, locale, platform,
+request ID, and server acceptance time. `agencyProvisioningControls/{uid}` is
+backend-private throttle state. Manually bootstrapped legacy Heads need none of
+these documents and are not migrated.
 
 The business document may also store `primaryPricingRegion`, a strict map containing `state`, `districtCity`, and `editionServiceRegion` strings; the last field may be empty. Only a Head can set or edit it, and each change is paired with an append-only business audit. It is presentation and catalog-entry context only; it cannot alter historical prices, bills, or line snapshots.
 
@@ -122,4 +134,4 @@ Phase 7 deliberately does not introduce a duplicate monthly summary source. Dash
 
 Phase 6 replaced the two unused provisional payment-history definitions with the connected query fields `collectorUid` and `confirmedAt`. Customer-specific history stays under one customer path; tenant-wide Head and collector-specific employee history use collection-group indexes and cursor pagination.
 
-All 61 indexes are deployed and `READY` in `paperroutedev`. The employee balance aggregate has a dedicated collection-group index containing its tenant, assignment, active-customer, permitted-area, state, and `outstandingPaise` sum fields. Add indexes only for implemented queries; unused composite indexes increase storage and write fan-out.
+The 69 composite indexes remain unchanged by owner registration. The employee balance aggregate has a dedicated collection-group index containing its tenant, assignment, active-customer, permitted-area, state, and `outstandingPaise` sum fields. Owner provisioning adds two local single-field `COLLECTION_GROUP` overrides: `members.uid` for fail-closed legacy membership discovery and `invitations.email` for verified-email invitation choice/conflict discovery. These overrides are not deployed and must be ready before the callable backend is made available. Add indexes only for implemented queries; unused indexes increase storage and write fan-out.

@@ -1,6 +1,22 @@
 # PaperRoute implementation checklist
 
-Updated: 16 September 2026
+Updated: 21 September 2026
+
+## P0 — Create Agency Account (local implementation)
+
+- [x] Owner and agency details collected before Auth identity creation
+- [x] Email verification required before trusted provisioning
+- [x] Membership remains the only operational authorization source
+- [x] Random server-selected business ID and atomic owner provisioning
+- [x] Private ownership/idempotency registry and immutable versioned consent
+- [x] Pending employee invitation shown as an explicit employee/owner choice
+- [x] Existing profile, membership, accepted invite, and inconsistent state fail closed
+- [x] Per-UID options/provision throttling with sanitized logs
+- [x] Client Head-membership creation denied and Head invitation updates narrowed to revocation
+- [x] Two required collection-group single-field index overrides declared locally
+- [x] Unit, widget, Rules, backend, and connected emulator coverage
+- [ ] Founder approval for index/Rules deployment, Blaze enablement, and Functions deployment
+- [ ] Live non-production compatibility inventory and controlled smoke test
 
 ## Phase 0 — Environment and architecture
 
@@ -160,3 +176,7 @@ Updated: 16 September 2026
 - [x] 231 versionable files scanned; repository hygiene passed
 - [x] 127 Dart files formatted (0 changed); `flutter analyze` reported 0 issues
 - [x] Branch `production-launch`; working tree clean except intentional untracked `android/app/src/production/google-services.json`
+
+# Agency registration release gate
+
+- [ ] Final Terms and Privacy copy requires founder/legal approval before enabling agency registration in any shipped release.

@@ -7,6 +7,8 @@ const productionPackage = 'in.paperroute.paper_route.prod';
 const production = process.argv.includes('--production');
 
 const firebase = JSON.parse(readFileSync('firebase.json', 'utf8'));
+assert.equal(firebase.functions?.source, 'functions');
+assert.equal(firebase.emulators?.functions?.port, 5001);
 const devPath =
   firebase.flutter?.platforms?.android?.development?.fileOutput;
 assert.equal(
@@ -40,8 +42,26 @@ for (const guard of [
   "'PROD_FIREBASE_PROJECT_ID'",
   'projectId == developmentProjectId',
   'projectId == emulatorProjectId',
+  "'PAPERROUTE_ENABLE_AGENCY_REGISTRATION'",
+  'defaultValue: false',
 ]) {
   assert.ok(source.includes(guard), `environment guard missing: ${guard}`);
+}
+
+const functionsEnvironment = readFileSync(
+  'functions/src/environment.ts',
+  'utf8',
+);
+for (const guard of [
+  'functionRegion = "asia-south1"',
+  'minInstances: 0',
+  'maxInstances: 2',
+  'enforceAppCheck: false',
+]) {
+  assert.ok(
+    functionsEnvironment.includes(guard),
+    `owner provisioning runtime guard missing: ${guard}`,
+  );
 }
 
 if (production) {

@@ -29,16 +29,22 @@ jobs:
           node-version: "22"
           cache: npm
       - run: npm ci
+      - run: npm ci --prefix functions
       - run: flutter pub get
       - run: dart format --output=none --set-exit-if-changed lib test integration_test test_driver
       - run: flutter analyze
       - run: flutter test
       - run: npm run test:rules
+      - run: npm run test:registration:functions
       - run: npm run validate:indexes
       - run: npm run validate:release
       - run: npm run validate:hygiene
       - run: git diff --check
       - name: Run emulator integration smoke tests
         run: xvfb-run --auto-servernum npm run test:integration
+      - name: Run owner-registration emulator workflow
+        run: xvfb-run --auto-servernum npm run test:registration:integration
+      - name: Run employee-invitation emulator workflow
+        run: xvfb-run --auto-servernum npm run test:employee-invitation:integration
       - name: Build unsigned development release APK
         run: flutter build apk --release --flavor development --dart-define=APP_ENV=development

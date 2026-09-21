@@ -103,3 +103,16 @@ Firestore may cache non-financial reads. Financial transactions fail offline and
 ## Trusted-backend boundary
 
 Spark Phase 1 deliberately has no Cloud Functions dependency. Operations that require secret credentials, bank/payment verification, cross-document server aggregation, or privileged Auth administration must wait for an approved trusted backend. Cloud Functions deployment requires Blaze; it will not be enabled implicitly.
+
+Create Agency Account is the first locally implemented trusted-backend feature.
+After Auth email verification, `getAgencyRegistrationOptions` checks legacy
+identity conflicts and presents a pending employee invitation as a choice, not
+as authority. `provisionAgencyOwner` derives UID/email from Admin Auth and uses
+one Firestore transaction to create a random-ID business, the sole authoritative
+Head membership, routing profile, private ownership registry, immutable consent,
+and append-only provisioning audit. Existing Heads require no registry or
+historical consent, and existing employee activation remains client-side,
+invitation-backed, and Rules constrained. Both callables have per-UID bounded
+throttles; App Check enforcement remains unchanged. See
+`docs/HEAD_SELF_REGISTRATION.md`. No Functions deployment is authorized by the
+presence of this source.

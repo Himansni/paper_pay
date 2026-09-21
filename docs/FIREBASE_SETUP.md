@@ -2,6 +2,13 @@
 
 Android and Web are connected to the Spark project **PaperRouteDev** (`paperroutedev`). FlutterFire generated the platform configuration on 7 September 2026. The reviewed Phase 7 Firestore Rules and all 61 composite indexes are deployed and verified; every index is `READY`. No paid service or billing account was enabled.
 
+Create Agency Account now has local Functions source and emulator coverage. It
+has not been deployed or enabled in `paperroutedev` or Production. Run its local
+gate with `npm install --prefix functions`, then
+`npm run test:registration:functions` and
+`npm run test:registration:integration`. Before any real deployment, follow the
+approval sequence in `docs/HEAD_SELF_REGISTRATION.md`.
+
 The project creation, Email/Password provider, Firestore database, CLI login, FlutterFire configuration, first-Head bootstrap, and verified login are complete. Keep these steps as a recovery/reference guide.
 
 ## 1. Create the Spark project — complete

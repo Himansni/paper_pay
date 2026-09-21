@@ -13,6 +13,13 @@ abstract final class AppEnvironmentConfig {
   static const developmentProjectId = 'paperroutedev';
   static const emulatorProjectId = 'demo-paper-route';
 
+  /// Release/exposure gate only. Firebase Rules and the trusted callable remain
+  /// responsible for authorization when this UI is explicitly enabled.
+  static const agencyRegistrationEnabled = bool.fromEnvironment(
+    'PAPERROUTE_ENABLE_AGENCY_REGISTRATION',
+    defaultValue: false,
+  );
+
   static const _environmentName = String.fromEnvironment(
     'APP_ENV',
     defaultValue: 'development',

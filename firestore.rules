@@ -2800,6 +2800,21 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Owner provisioning is performed only by the trusted callable backend.
+    // Existing manually bootstrapped Heads do not need either registry.
+    match /agencyOwners/{uid} {
+      allow read, write: if false;
+    }
+
+    match /agencyProvisioningControls/{uid} {
+      allow read, write: if false;
+    }
+
+    match /userConsents/{uid}/acceptances/{acceptanceId} {
+      allow get: if signedIn() && uid == request.auth.uid;
+      allow list, create, update, delete: if false;
+    }
+
     match /businesses/{businessId} {
       allow read: if activeMember(businessId);
       // The first business and Head are bootstrapped through the trusted
@@ -2849,9 +2864,9 @@ service cloud.firestore {
           || head(businessId);
         allow list: if head(businessId);
 
-        allow create: if head(businessId)
-          || (
-            verifiedEmail()
+        // A client may create only its own invite-backed employee membership.
+        // Head memberships are created exclusively by trusted provisioning.
+        allow create: if verifiedEmail()
             && memberId == request.auth.uid
             && request.resource.data.keys().hasAll([
               'businessId', 'uid', 'email', 'displayName', 'phone', 'role',
@@ -2868,8 +2883,7 @@ service cloud.firestore {
             && acceptedInviteAfter(
               businessId,
               request.resource.data.acceptedInviteId
-            )
-          );
+            );
 
         allow update: if head(businessId)
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
@@ -2900,7 +2914,16 @@ service cloud.firestore {
           && request.resource.data.createdAt == request.time
           && request.resource.data.expiresAt > request.time;
 
-        allow update: if head(businessId)
+        allow update: if (
+            head(businessId)
+            && resource.data.status == 'pending'
+            && resource.data.role == 'employee'
+            && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['status', 'revokedAt', 'updatedAt'])
+            && request.resource.data.status == 'revoked'
+            && request.resource.data.revokedAt == request.time
+            && request.resource.data.updatedAt == request.time
+          )
           || (
             verifiedEmail()
             && resource.data.status == 'pending'
@@ -2913,7 +2936,9 @@ service cloud.firestore {
             && request.resource.data.acceptedBy == request.auth.uid
             && request.resource.data.acceptedAt == request.time
           );
-        allow delete: if head(businessId);
+        // Invitation history is immutable. Heads revoke pending invitations;
+        // accepted/revoked documents remain available for traceability.
+        allow delete: if false;
       }
 
       match /areas/{areaId} {

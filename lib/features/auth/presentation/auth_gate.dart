@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:paper_route/features/auth/presentation/access_pending_page.dart';
+import 'package:paper_route/features/auth/domain/app_user.dart';
+import 'package:paper_route/features/agency_registration/presentation/agency_registration_gate.dart';
+import 'package:paper_route/features/agency_registration/presentation/agency_registration_providers.dart';
 import 'package:paper_route/features/auth/presentation/auth_providers.dart';
 import 'package:paper_route/features/auth/presentation/email_verification_page.dart';
 import 'package:paper_route/features/auth/presentation/login_page.dart';
@@ -91,7 +94,14 @@ class AuthGate extends ConsumerWidget {
       data: (user) {
         if (user == null) return const LoginPage();
         if (!user.isEmailVerified) return EmailVerificationPage(user: user);
-        if (!user.hasActiveAccess) return AccessPendingPage(user: user);
+        if (user.status == AccountStatus.inactive) {
+          return AccessPendingPage(user: user);
+        }
+        if (!user.hasActiveAccess) {
+          return ref.watch(agencyRegistrationEnabledProvider)
+              ? AgencyRegistrationGate(user: user)
+              : AccessPendingPage(user: user);
+        }
         final headOnly = switch (destination) {
           AuthenticatedDestination.businessSettings ||
           AuthenticatedDestination.employees ||

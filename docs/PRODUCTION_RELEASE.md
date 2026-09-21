@@ -5,6 +5,13 @@ production project, deploying Firebase resources, enabling App Check
 enforcement, publishing an app, or writing production data requires explicit
 owner approval.
 
+Create Agency Account adds a separate release gate. Do not make the entry point
+operational against a live project until the two single-field collection-group
+indexes are ready, the reviewed Rules are active, Blaze/Functions has explicit
+founder approval, both callable Functions are deployed, and a synthetic
+non-production smoke test passes. Existing manually bootstrapped Heads and
+invited Employees require no migration.
+
 ## Environment boundary
 
 | Environment | Firebase | Android application ID | App label |
@@ -119,3 +126,7 @@ or unexplained read/write surge.
 
 iOS release remains blocked until Xcode, Apple signing, bundle registration, and
 the iOS FlutterFire configuration are completed and verified on macOS.
+
+# Agency-registration legal approval
+
+Final Terms and Privacy copy requires founder/legal approval before enabling agency registration in any shipped release.

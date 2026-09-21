@@ -4,6 +4,10 @@ import 'package:paper_route/core/config/app_environment.dart';
 
 void main() {
   group('AppEnvironmentConfig', () {
+    test('agency registration is disabled by default', () {
+      expect(AppEnvironmentConfig.agencyRegistrationEnabled, isFalse);
+    });
+
     test('accepts only explicit known environment names', () {
       expect(
         AppEnvironmentConfig.parseEnvironment('development'),

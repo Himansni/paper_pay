@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:paper_route/core/errors/app_exception.dart';
+import 'package:paper_route/features/agency_registration/presentation/agency_registration_providers.dart';
 import 'package:paper_route/features/auth/presentation/auth_providers.dart';
 import 'package:paper_route/features/auth/presentation/widgets/auth_fields.dart';
 import 'package:paper_route/features/auth/presentation/widgets/auth_scaffold.dart';
@@ -50,6 +51,9 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 
   @override
   Widget build(BuildContext context) {
+    final agencyRegistrationEnabled = ref.watch(
+      agencyRegistrationEnabledProvider,
+    );
     return AuthScaffold(
       title: 'Welcome back',
       subtitle:
@@ -119,6 +123,13 @@ class _LoginPageState extends ConsumerState<LoginPage> {
               onPressed: _isBusy ? null : () => context.go('/join'),
               child: const Text('I have an employee invitation'),
             ),
+            if (agencyRegistrationEnabled) ...[
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: _isBusy ? null : () => context.go('/create-agency'),
+                child: const Text('Create agency account'),
+              ),
+            ],
           ],
         ),
       ),

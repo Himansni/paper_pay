@@ -163,7 +163,9 @@ class FirebaseAuthRepository implements AuthRepository {
 
   @override
   Future<void> reloadCurrentUser() async {
-    await _requireCurrentUser().reload();
+    final user = _requireCurrentUser();
+    await user.reload();
+    await _requireCurrentUser().getIdToken(true);
   }
 
   @override
@@ -182,6 +184,7 @@ class FirebaseAuthRepository implements AuthRepository {
         code: 'email-not-verified',
       );
     }
+    await refreshedUser.getIdToken(true);
 
     final inviteRef = _firestore
         .collection('businesses')

@@ -72,3 +72,5 @@ firebase-tools.json
 /firestore-debug.log
 /ui-debug.log
 /node_modules/
+/functions/node_modules/
+/functions/lib/

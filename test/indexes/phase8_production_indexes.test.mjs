@@ -9,6 +9,23 @@ test('production index manifest is stable, unique, and complete', () => {
   const keys = data.indexes.map((index) => JSON.stringify(index));
   assert.equal(new Set(keys).size, keys.length, 'duplicate composite index');
   assert.ok(Array.isArray(data.fieldOverrides));
+  assert.equal(data.fieldOverrides.length, 2);
+  const overrides = new Set(
+    data.fieldOverrides.map(
+      (override) =>
+        `${override.collectionGroup}.${override.fieldPath}:${JSON.stringify(override.indexes)}`,
+    ),
+  );
+  assert.ok(
+    overrides.has(
+      'members.uid:[{"order":"ASCENDING","queryScope":"COLLECTION_GROUP"}]',
+    ),
+  );
+  assert.ok(
+    overrides.has(
+      'invitations.email:[{"order":"ASCENDING","queryScope":"COLLECTION_GROUP"}]',
+    ),
+  );
 });
 
 test('employee outstanding aggregate keeps the six-field index', () => {

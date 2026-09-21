@@ -1,0 +1,20 @@
+{
+  "name": "paper-route-functions",
+  "private": true,
+  "main": "lib/index.js",
+  "engines": {
+    "node": "22"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "npm run build && node --test lib/test/*.test.js",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "firebase-admin": "^14.4.0",
+    "firebase-functions": "^7.4.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3"
+  }
+}

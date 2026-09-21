@@ -1,5 +1,18 @@
 # Phase 8 focused security review
 
+## Owner registration boundary
+
+Create Agency Account cannot write privileged records through client Rules.
+The client supplies only owner/agency presentation fields, legal versions,
+locale/platform, and a UUID request ID. A trusted callable derives verified UID
+and email from Admin Auth and creates the business, authoritative Head member,
+profile, private registry, immutable consent, and audit atomically. Client
+member creation remains limited to the exact verified invite-backed employee;
+even an existing Head cannot create another Head membership. Pending employee
+invitations are choices rather than authority, while accepted employee state or
+legacy identity conflicts fail closed. This source is emulator-only until
+Blaze/Functions, indexes, and Rules receive separate approval.
+
 Reviewed against the final local architecture and Firestore Rules:
 
 - Tenant access requires active membership under the requested business; the

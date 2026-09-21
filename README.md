@@ -1,6 +1,6 @@
 # PaperRoute
 
-PaperRoute is an Android-first Flutter application for Indian newspaper agents. It is designed to manage multi-tenant businesses, employees, areas, customers, date-sensitive newspaper billing, and manual payment collection without requiring paid backend infrastructure for the first release.
+PaperRoute is an Android-first Flutter application for Indian newspaper agents. It is designed to manage multi-tenant businesses, employees, areas, customers, date-sensitive newspaper billing, and manual payment collection. The operational application remains usable without paid backend infrastructure; the locally implemented owner self-registration feature requires a separately approved trusted Functions deployment.
 
 ## Current status
 
@@ -11,6 +11,8 @@ Phases 0 through 7 are complete in the development project. Safe local Phase 8 p
 - feature-first clean architecture with Riverpod and GoRouter
 - Firebase startup with a safe configuration-required screen
 - email/password login, password reset, and email verification
+- locally implemented Create Agency Account flow with verified-email, trusted,
+  idempotent owner provisioning (not deployed)
 - secure invitation-based employee activation
 - Head/Employee routing from trusted Firestore membership data
 - tenant-aware Firestore schema, indexes, and deny-by-default Security Rules
@@ -56,6 +58,7 @@ lib/
   core/                   configuration, dates, errors, and theme
   features/
     auth/                 auth data, domain policy, and UI
+    agency_registration/  owner signup, recovery, consent, and provisioning UI
     business/             Head business settings
     employees/            invitations and member access management
     areas/                delivery areas and employee coverage
@@ -73,6 +76,7 @@ test/
 docs/                     architecture, schema, and setup guides
 integration_test/         emulator-backed customer, catalog, and billing workflows
 tool/                     local-demo emulator seed utilities
+functions/                trusted owner provisioning source and backend tests
 ```
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/FIRESTORE_SCHEMA.md](docs/FIRESTORE_SCHEMA.md) for the design rationale.
@@ -89,7 +93,8 @@ For local Firebase-only development:
 
 ```sh
 npm install
-npx firebase emulators:start --project demo-paper-route --only auth,firestore
+npm install --prefix functions
+npx firebase emulators:start --project demo-paper-route --only auth,firestore,functions
 flutter run --flavor development \
   --dart-define=APP_ENV=development \
   --dart-define=USE_FIREBASE_EMULATORS=true
@@ -104,6 +109,8 @@ dart format --output=none --set-exit-if-changed \
   lib test integration_test test_driver
 flutter analyze
 flutter test
+npm run test:registration:functions
+npm run test:registration:integration
 env JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" \
   PATH="/Applications/Android Studio.app/Contents/jbr/Contents/Home/bin:$PATH" \
   npm run test:rules
@@ -173,7 +180,9 @@ It never connects to or modifies `paperroutedev`.
 - All tenant data lives under `businesses/{businessId}`.
 - Membership is checked from `businesses/{businessId}/members/{uid}` on every tenant request.
 - Member documents are the client session's sole authority for role, status, and permissions; user profiles cannot grant access.
-- A client cannot create a Head account or business.
+- A client cannot create a Head membership or business directly. The optional
+  owner-registration path uses a verified callable backend and one trusted
+  transaction; its source is local only until separate Blaze/deployment approval.
 - The first Head is bootstrapped by a trusted Firebase project administrator.
 - Employee self-registration is useful only with a pending invite for the exact verified email.
 - Invite consumption, membership creation, and user-profile creation happen in one transaction and are validated using `getAfter()`.
@@ -211,7 +220,7 @@ Firestore transactions fail while offline. The collection screen keeps the actio
 
 As of 7 September 2026, Standard edition Firestore's free quota includes one free database, 1 GiB stored data, 50,000 document reads/day, 20,000 writes/day, 20,000 deletes/day, and 10 GiB/month outbound transfer. Firebase Authentication on Spark documents a 3,000 daily-active-user limit for most providers, which is more than enough for the initial employee count. See the official [Firestore pricing guide](https://firebase.google.com/docs/firestore/pricing), [Firebase pricing page](https://firebase.google.com/pricing), and [Authentication limits](https://firebase.google.com/docs/auth/limits).
 
-Cloud Functions deployment requires Blaze, even though usage has a free allowance. PaperRoute therefore does not depend on Functions in the Spark release. Secure employee onboarding uses verified email invitations and Firestore Rules. See the official [Functions quotas guidance](https://firebase.google.com/docs/functions/quotas).
+Cloud Functions deployment requires Blaze, even though usage has a free allowance. Existing Head and employee workflows do not depend on Functions, and secure employee onboarding remains verified-email invitation based. Create Agency Account is implemented and emulator-verified locally, but it must remain unavailable in a real release until the founder separately approves Blaze, the two single-field collection-group indexes, reviewed Rules, and the two callable Functions. See [docs/HEAD_SELF_REGISTRATION.md](docs/HEAD_SELF_REGISTRATION.md) and the official [Functions quotas guidance](https://firebase.google.com/docs/functions/quotas).
 
 Current cost controls include:
 

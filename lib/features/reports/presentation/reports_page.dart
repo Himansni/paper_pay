@@ -17,6 +17,11 @@ import 'package:paper_route/features/reports/domain/report_models.dart';
 import 'package:paper_route/features/reports/presentation/csv_downloader.dart';
 import 'package:paper_route/features/reports/presentation/reporting_providers.dart';
 
+// BEGINNER NOTE:
+// [ReportsPage] provides interactive querying and data export across business
+// operations: Collections, Monthly Billing, Outstanding Balances, Customers,
+// and Subscriptions. It combines server-side aggregated metrics with cursor-based
+// paginated list views and instant CSV file downloads.
 class ReportsPage extends ConsumerStatefulWidget {
   const ReportsPage({required this.user, this.initialTab = '', super.key});
 
@@ -323,6 +328,9 @@ class _ReportsPageState extends ConsumerState<ReportsPage> {
       DateFormat('yyyy-MM-dd').format(date.toLocal());
 }
 
+// BEGINNER NOTE:
+// Segmented selector that switches the operational domain of the report.
+// Switching kind triggers a complete query reload with cursor reset.
 class _ReportKindSelector extends StatelessWidget {
   const _ReportKindSelector({required this.value, required this.onChanged});
 
@@ -343,6 +351,11 @@ class _ReportKindSelector extends StatelessWidget {
   );
 }
 
+// BEGINNER NOTE:
+// Dynamic filter card providing date pickers, billing month selectors, employee
+// assignments, delivery areas, and status drop-downs relevant to the chosen report kind.
+// Note that filtering by Customer ID takes precedence and clears other entity dimensions
+// to avoid conflicting multi-property index requirements.
 class _FiltersCard extends StatelessWidget {
   const _FiltersCard({
     required this.filter,
@@ -657,6 +670,9 @@ class _FiltersCard extends StatelessWidget {
   );
 }
 
+// BEGINNER NOTE:
+// Displays top-level summary metrics (aggregate totals and status breakdowns)
+// computed directly on the backend database or aggregated from filtered rows.
 class _SummaryPanel extends StatelessWidget {
   const _SummaryPanel({required this.kind, required this.summary});
 
@@ -734,6 +750,9 @@ class _SummaryPanel extends StatelessWidget {
   }
 }
 
+// BEGINNER NOTE:
+// Renders an individual report result row card with title, metadata fields, amount,
+// and navigation action (e.g. clicking a customer or bill opens the entity page).
 class _ReportRowCard extends StatelessWidget {
   const _ReportRowCard({required this.row});
 

@@ -10,6 +10,10 @@ import 'package:paper_route/features/billing/domain/monthly_bill.dart';
 import 'package:paper_route/features/reports/domain/report_models.dart';
 import 'package:paper_route/features/reports/presentation/reporting_providers.dart';
 
+/// Central landing workspace displaying live operational metrics and quick actions.
+///
+/// Automatically branches between the business-wide Head view and the scoped
+/// assigned-area Employee view based on the authenticated [user.role].
 class DashboardPage extends ConsumerWidget {
   const DashboardPage({required this.user, super.key});
 
@@ -93,6 +97,8 @@ class DashboardPage extends ConsumerWidget {
   }
 }
 
+/// Head distributor view aggregating tenant-wide financial totals, catalog counts,
+/// area balances, and recent timeline activity.
 class _HeadDashboard extends StatelessWidget {
   const _HeadDashboard({required this.metrics});
 
@@ -225,6 +231,10 @@ class _HeadDashboard extends StatelessWidget {
   );
 }
 
+// BEGINNER NOTE:
+// The Employee dashboard restricts operational focus to the employee's assigned
+// route areas and customers. Metrics such as assigned outstanding, today's collections,
+// and pending customers are scoped to what this collector is responsible for.
 class _EmployeeDashboard extends StatelessWidget {
   const _EmployeeDashboard({required this.metrics});
 
@@ -323,6 +333,10 @@ class _EmployeeDashboard extends StatelessWidget {
   );
 }
 
+// BEGINNER NOTE:
+// Primary metric cards provide top-level KPI highlights (outstanding paise, daily/monthly
+// collections, and bill totals). Tapping a card deep-links the user directly to the
+// corresponding detailed report tab or customer list using GoRouter.
 class _PrimaryMetrics extends StatelessWidget {
   const _PrimaryMetrics({required this.items});
 
@@ -377,6 +391,9 @@ class _PrimaryMetrics extends StatelessWidget {
   );
 }
 
+// BEGINNER NOTE:
+// Quick actions provide 1-tap navigation shortcuts for daily distribution tasks
+// like setting daily newspaper prices, adding customers/areas, and running monthly billing.
 class _QuickActions extends StatelessWidget {
   const _QuickActions({required this.actions});
 
@@ -439,6 +456,9 @@ class _QuickActions extends StatelessWidget {
   );
 }
 
+// BEGINNER NOTE:
+// Displays discrete operational counters (active entities, payment tallies, payment statuses)
+// as compact material chips for quick status assessment.
 class _CompactMetrics extends StatelessWidget {
   const _CompactMetrics({required this.values});
 
@@ -464,6 +484,9 @@ class _CompactMetrics extends StatelessWidget {
   );
 }
 
+// BEGINNER NOTE:
+// Shows side-by-side breakdown cards (e.g. employee collections vs area outstanding).
+// On narrower screens, it gracefully stacks them vertically.
 class _SummaryPair extends StatelessWidget {
   const _SummaryPair({
     required this.leftTitle,
@@ -541,6 +564,9 @@ class _NamedMetricCard extends StatelessWidget {
   );
 }
 
+// BEGINNER NOTE:
+// Activity grid renders recent operational audit and event logs (recent payments,
+// billing events, and newly added customers) to give the head distributor immediate visibility.
 class _ActivityGrid extends StatelessWidget {
   const _ActivityGrid({
     required this.payments,
@@ -632,6 +658,9 @@ class _ActivityCard extends StatelessWidget {
   );
 }
 
+// BEGINNER NOTE:
+// Quick search bar on employee dashboard allows immediate lookup of customers
+// by name, phone number, customer code, or landmark, routing directly to the customer list.
 class _QuickCustomerSearch extends StatefulWidget {
   const _QuickCustomerSearch();
 

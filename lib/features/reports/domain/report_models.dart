@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:paper_route/core/errors/app_exception.dart';
 import 'package:paper_route/features/collections/domain/collection_models.dart';
 
+/// The five primary operational report types available in PaperRoute.
 enum ReportKind {
   collections('Collections'),
   billing('Billing'),
@@ -15,6 +16,7 @@ enum ReportKind {
   final String label;
 }
 
+/// Derived collection payment state for a customer.
 enum OutstandingStatus {
   unpaid('unpaid', 'Unpaid'),
   partiallyPaid('partiallyPaid', 'Partially paid'),
@@ -32,6 +34,7 @@ enum OutstandingStatus {
   );
 }
 
+/// Age classification for customer debt, measured against the oldest unpaid month.
 enum OutstandingAge {
   current('current', 'Current month'),
   oneMonth('oneMonth', '1 month old'),
@@ -44,6 +47,7 @@ enum OutstandingAge {
   final String label;
 }
 
+/// Half-open date interval `[start, endExclusive)` in UTC for bounded queries.
 class ReportingPeriod {
   const ReportingPeriod({required this.start, required this.endExclusive});
 
@@ -78,6 +82,7 @@ class ReportingPeriod {
   }
 }
 
+/// Single labeled financial summary item with amount in integer paise and count.
 class NamedMetric {
   const NamedMetric({
     required this.id,
@@ -92,6 +97,7 @@ class NamedMetric {
   final int count;
 }
 
+/// Timeline activity item on the dashboard (e.g., recent payment or finalization).
 class DashboardActivity {
   const DashboardActivity({
     required this.id,
@@ -110,6 +116,9 @@ class DashboardActivity {
   final int? amountPaise;
 }
 
+/// Real-time operational snapshot combining server-side aggregates and recent activity.
+///
+/// Amounts are stored in integer paise to avoid rounding discrepancies.
 class OperationalDashboard {
   const OperationalDashboard({
     required this.monthKey,
@@ -165,6 +174,7 @@ class OperationalDashboard {
       currentMonthCollectionsPaise - currentMonthReversedPaise;
 }
 
+/// Filter parameters selecting report category, date range, entity IDs, and statuses.
 class ReportFilter {
   const ReportFilter({
     required this.kind,
@@ -275,6 +285,10 @@ class ReportFilter {
   );
 }
 
+/// Opaque pagination token holding the last-seen sort value and document key.
+///
+/// Firestore `startAfter` uses these fields to fetch the subsequent page without
+/// relying on slow offset skips or race-condition-prone indices.
 class ReportCursor {
   const ReportCursor({required this.sortValue, required this.documentPath});
 
@@ -282,6 +296,7 @@ class ReportCursor {
   final String documentPath;
 }
 
+/// Generic presentation row displayed in report tables and exported to CSV.
 class ReportRow {
   const ReportRow({
     required this.id,
@@ -304,6 +319,7 @@ class ReportRow {
   final String route;
 }
 
+/// Aggregate totals across all matching records in the filtered dataset.
 class ReportSummary {
   const ReportSummary({
     required this.totalCount,
@@ -322,6 +338,7 @@ class ReportSummary {
   int get netPaise => totalPaise - secondaryPaise;
 }
 
+/// Result of a single paginated report query containing rows, totals, and the next cursor.
 class ReportPage {
   const ReportPage({
     required this.rows,
@@ -336,6 +353,7 @@ class ReportPage {
   final bool hasMore;
 }
 
+/// Pure helper functions for categorizing customer payment and aging status.
 abstract final class ReportMath {
   static OutstandingStatus outstandingStatus({
     required int outstandingPaise,

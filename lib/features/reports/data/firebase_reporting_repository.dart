@@ -5,6 +5,11 @@ import 'package:paper_route/features/collections/domain/collection_models.dart';
 import 'package:paper_route/features/reports/domain/report_models.dart';
 import 'package:paper_route/features/reports/domain/reporting_repository.dart';
 
+// BEGINNER NOTE:
+// [FirebaseReportingRepository] is the data engine powering both operational dashboards
+// and multi-dimensional business reports. It leverages Firestore server-side aggregations
+// (count and sum), collection-group queries, and deterministic cursor pagination to
+// deliver high-performance reporting without streaming unnecessary documents to the client.
 class FirebaseReportingRepository implements ReportingRepository {
   FirebaseReportingRepository(this._firestore);
 
@@ -21,6 +26,10 @@ class FirebaseReportingRepository implements ReportingRepository {
       .doc(businessId)
       .collection(collection);
 
+  // BEGINNER NOTE:
+  // Dispatches dashboard metric calculation based on the user's role.
+  // Head distributors receive business-wide totals, whereas Employees receive
+  // metrics scoped to their assigned delivery routes and collected payments.
   @override
   Future<OperationalDashboard> fetchDashboard({
     required AppUser actor,
@@ -53,6 +62,10 @@ class FirebaseReportingRepository implements ReportingRepository {
     }
   }
 
+  // BEGINNER NOTE:
+  // Executes parallel server-side aggregate queries (count and sum) across
+  // customers, employees, areas, newspapers, bills, payments, reversals, and
+  // collection balances to assemble a real-time health summary of the distributor business.
   Future<OperationalDashboard> _headDashboard({
     required AppUser actor,
     required String businessId,
@@ -153,6 +166,9 @@ class FirebaseReportingRepository implements ReportingRepository {
     );
   }
 
+  // BEGINNER NOTE:
+  // Scopes dashboard queries strictly to the employee's assigned customers and route areas.
+  // Aggregates calculate only this employee's collections and their customer balances.
   Future<OperationalDashboard> _employeeDashboard({
     required AppUser actor,
     required String businessId,
@@ -218,6 +234,10 @@ class FirebaseReportingRepository implements ReportingRepository {
     );
   }
 
+  // BEGINNER NOTE:
+  // Firestore limits `whereIn` queries to at most 30 values.
+  // If an employee is assigned to more than 30 route areas, we chunk the area list
+  // into batches of 30, query each batch concurrently, and sum the resulting aggregates.
   Future<List<int>> _employeeBalanceValues(
     AppUser actor,
     String businessId,
@@ -259,6 +279,10 @@ class FirebaseReportingRepository implements ReportingRepository {
     ]);
   }
 
+  // BEGINNER NOTE:
+  // Central dispatcher for multi-dimensional business reports.
+  // Access is strictly restricted to the Head role. The filter is canonicalized
+  // to avoid contradictory criteria and match required composite index definitions.
   @override
   Future<ReportPage> fetchReport({
     required AppUser actor,
@@ -315,6 +339,9 @@ class FirebaseReportingRepository implements ReportingRepository {
     }
   }
 
+  // BEGINNER NOTE:
+  // Iterates through paginated report results using cursors to assemble up to 5,000
+  // rows for offline CSV spreadsheet export.
   @override
   Future<List<ReportRow>> fetchExportRows({
     required AppUser actor,
@@ -347,6 +374,12 @@ class FirebaseReportingRepository implements ReportingRepository {
     return List.unmodifiable(rows);
   }
 
+  // BEGINNER NOTE:
+  // Builds collection and payment reporting data. Queries the `payments` collectionGroup
+  // filtered by tenant (`businessId`), date range (`confirmedAt`), and optional dimensions
+  // (collector, area, customer, or payment method).
+  // Composite indexes defined in `firestore.indexes.json` support these multi-field filters
+  // and descending `confirmedAt` ordering.
   Future<ReportPage> _collectionReport(
     AppUser actor,
     ReportFilter filter,
@@ -474,6 +507,10 @@ class FirebaseReportingRepository implements ReportingRepository {
     );
   }
 
+  // BEGINNER NOTE:
+  // Aggregates and paginates monthly bills across the distributor business.
+  // Computes server-side charges, total due, and tracks active customers without
+  // finalized bills to highlight missing bill runs.
   Future<ReportPage> _billingReport(
     AppUser actor,
     ReportFilter filter,
@@ -560,6 +597,10 @@ class FirebaseReportingRepository implements ReportingRepository {
     );
   }
 
+  // BEGINNER NOTE:
+  // Aggregates and paginates outstanding balances across the distributor's customers.
+  // Computes debt aging buckets (current month, 1 month old, 2+ months old) based on
+  // the `oldestOutstandingMonth` snapshot property.
   Future<ReportPage> _outstandingReport(
     AppUser actor,
     ReportFilter filter,
@@ -651,6 +692,9 @@ class FirebaseReportingRepository implements ReportingRepository {
     );
   }
 
+  // BEGINNER NOTE:
+  // Aggregates and paginates customer profiles. Calculates total customer base,
+  // new signups created within the filter period, and distribution by area and collector.
   Future<ReportPage> _customerReport(
     AppUser actor,
     ReportFilter filter,
@@ -736,6 +780,10 @@ class FirebaseReportingRepository implements ReportingRepository {
     );
   }
 
+  // BEGINNER NOTE:
+  // Aggregates newspaper subscriptions across the distributor business.
+  // Breaks down total subscriptions by status and displays per-newspaper
+  // subscriber counts alongside line-item monthly billing volume.
   Future<ReportPage> _subscriptionReport(
     AppUser actor,
     ReportFilter filter,
@@ -816,6 +864,10 @@ class FirebaseReportingRepository implements ReportingRepository {
     );
   }
 
+  // BEGINNER NOTE:
+  // Constructs collectionGroup query for payments bounded by tenant and date range.
+  // Additional filters for collector, area, customer, or payment method narrow the scope.
+  // All combinations in use have corresponding entries in `firestore.indexes.json`.
   Query<Map<String, dynamic>> _paymentQuery(
     String businessId,
     ReportingPeriod period, {
@@ -850,6 +902,8 @@ class FirebaseReportingRepository implements ReportingRepository {
     return query;
   }
 
+  // BEGINNER NOTE:
+  // Constructs collectionGroup query for payment reversals bounded by tenant and reversal date.
   Query<Map<String, dynamic>> _reversalQuery(
     String businessId,
     ReportingPeriod period, {
@@ -1258,6 +1312,10 @@ class FirebaseReportingRepository implements ReportingRepository {
     _ => 'Customer updated',
   };
 
+  // BEGINNER NOTE:
+  // Maps Firestore exceptions to friendly, actionable application errors.
+  // For instance, a 'failed-precondition' indicates an unregistered composite index in Firestore,
+  // while 'permission-denied' signals rules rejections.
   AppException _translate(FirebaseException error, String fallback) {
     final message = switch (error.code) {
       'permission-denied' =>

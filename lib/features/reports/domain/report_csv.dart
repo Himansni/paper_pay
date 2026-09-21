@@ -1,7 +1,11 @@
 import 'package:paper_route/features/billing/domain/monthly_bill.dart';
 import 'package:paper_route/features/reports/domain/report_models.dart';
 
+/// Utility for generating RFC 4180-compliant CSV files from structured report rows.
+///
+/// Exports represent point-in-time read-only snapshots and never modify Firestore data.
 abstract final class ReportCsv {
+  /// Converts [rows] into comma-separated lines with safe escaping.
   static String build({
     required ReportKind kind,
     required ReportFilter filter,

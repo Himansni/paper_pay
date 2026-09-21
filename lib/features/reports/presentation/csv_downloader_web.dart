@@ -2,6 +2,7 @@
 
 import 'dart:html' as html;
 
+/// Browser file-saver creating an ephemeral object URL and auto-clicking a hidden anchor.
 Future<String> saveCsv(String filename, String content) async {
   final blob = html.Blob([content], 'text/csv;charset=utf-8');
   final url = html.Url.createObjectUrlFromBlob(blob);

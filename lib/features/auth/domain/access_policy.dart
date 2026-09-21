@@ -1,5 +1,8 @@
 import 'package:paper_route/features/auth/domain/app_user.dart';
 
+// BEGINNER NOTE:
+// Granular permission tokens assigned to employee members by the Head distributor.
+// These flags allow selective delegation of daily operations without granting full admin rights.
 abstract final class PermissionKey {
   static const addCustomers = 'addCustomers';
   static const editAssignedCustomers = 'editAssignedCustomers';
@@ -8,6 +11,14 @@ abstract final class PermissionKey {
   static const recordDeliveryExceptions = 'recordDeliveryExceptions';
 }
 
+// BEGINNER NOTE:
+// [AccessPolicy] provides client-side UI authorization checks.
+// IMPORTANT ARCHITECTURAL PRINCIPLE:
+// Client code is NEVER the security authority! An attacker can modify client code
+// or call Firebase APIs directly.
+// The purpose of [AccessPolicy] is purely for user experience (e.g. hiding disabled buttons,
+// showing read-only views, preventing dead-end form submissions).
+// The TRUE security boundary is enforced on the server by `firestore.rules`.
 /// Mirrors important client-side visibility checks. Firestore Rules remain the
 /// authority; this policy only prevents presenting actions that will be denied.
 class AccessPolicy {

@@ -6,6 +6,10 @@ import 'package:paper_route/features/auth/domain/app_user.dart';
 import 'package:paper_route/features/business/domain/business_profile.dart';
 import 'package:paper_route/features/business/presentation/business_providers.dart';
 
+// BEGINNER NOTE:
+// [BusinessSettingsPage] provides an administrative control center for the Head distributor
+// to configure agency identity (name, phone, address), default pricing territory (region),
+// and payment acceptance details (UPI ID and payee name).
 class BusinessSettingsPage extends ConsumerWidget {
   const BusinessSettingsPage({required this.user, super.key});
 

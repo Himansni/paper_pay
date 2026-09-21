@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 
+// BEGINNER NOTE:
+// [AsyncErrorCard] renders a uniform failure state across all Riverpod AsyncValue views.
+// It displays the translated [AppException] error message and provides a standardized
+// retry button that triggers `ref.invalidate(...)` on the failing provider.
 class AsyncErrorCard extends StatelessWidget {
   const AsyncErrorCard({
     required this.message,
@@ -33,6 +37,9 @@ class AsyncErrorCard extends StatelessWidget {
   }
 }
 
+// BEGINNER NOTE:
+// [EmptyStateCard] provides consistent visual feedback when a Firestore query succeeds
+// but returns zero records (e.g., no matching customers, empty routes, or zero payments).
 class EmptyStateCard extends StatelessWidget {
   const EmptyStateCard({
     required this.icon,

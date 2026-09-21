@@ -1,3 +1,11 @@
+// BEGINNER NOTE:
+// [LocalDate] represents a pure calendar date (year, month, day) without hours, minutes,
+// or timezone offsets.
+// Standard Dart `DateTime` and Firestore `Timestamp` store instant-in-time epoch milliseconds.
+// When converted across different time zones (e.g., UTC on a server vs. Indian Standard Time on
+// a collector's phone), midnight UTC can shift to 05:30 AM local time, causing off-by-one errors.
+// By strictly storing dates as formatted strings ("YYYY-MM-DD") via [LocalDate], delivery
+// schedules and billing cycles remain completely deterministic regardless of device timezone.
 /// Calendar-only date used by billing. It deliberately excludes time zones so
 /// one delivery day cannot move to another day during serialization.
 class LocalDate implements Comparable<LocalDate> {
@@ -90,6 +98,10 @@ class LocalDate implements Comparable<LocalDate> {
       day <= _daysInMonth(year, month);
 }
 
+// BEGINNER NOTE:
+// [LocalDateRange] models continuous calendar spans (inclusive of start and end dates).
+// Used throughout subscription lifecycles to detect holiday pauses, active windows,
+// and overlapping price rule periods.
 class LocalDateRange {
   const LocalDateRange({required this.start, required this.end});
 

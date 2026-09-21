@@ -1,3 +1,7 @@
+// BEGINNER NOTE:
+// [BusinessProfile] represents the distributor agency (the multi-tenant boundary root).
+// Every customer, employee, newspaper, delivery area, bill, and payment lives under
+// a specific `businessId`.
 class BusinessProfile {
   const BusinessProfile({
     required this.id,
@@ -24,6 +28,10 @@ class BusinessProfile {
   final PricingRegion primaryPricingRegion;
 }
 
+// BEGINNER NOTE:
+// [PricingRegion] specifies the state, district/city, and edition territory for newspaper pricing.
+// Newspapers often have different cover prices in different states or districts.
+// Normalizing these fields prevents whitespace or casing discrepancies when matching pricing rules.
 class PricingRegion {
   const PricingRegion({
     required this.state,

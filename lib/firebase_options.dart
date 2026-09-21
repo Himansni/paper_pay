@@ -4,6 +4,12 @@ import 'package:firebase_core/firebase_core.dart' show FirebaseOptions;
 import 'package:flutter/foundation.dart'
     show defaultTargetPlatform, kIsWeb, TargetPlatform;
 
+// BEGINNER NOTE:
+// [DefaultFirebaseOptions] contains platform-specific Firebase configuration keys
+// (API keys, project ID, messaging sender ID, storage bucket).
+// When the app starts up in `main.dart`, `Firebase.initializeApp(...)` calls
+// `DefaultFirebaseOptions.currentPlatform` to select the right configuration for
+// Android, iOS, or Web without manual platform branching in app code.
 /// Default [FirebaseOptions] for use with your Firebase apps.
 ///
 /// Example:

@@ -3,6 +3,11 @@ import 'package:paper_route/core/errors/app_exception.dart';
 import 'package:paper_route/features/business/domain/business_profile.dart';
 import 'package:paper_route/features/business/domain/business_repository.dart';
 
+// BEGINNER NOTE:
+// [FirebaseBusinessRepository] manages the root tenant document in Firestore:
+// `businesses/{businessId}`.
+// It also records an append-only audit trail in `businesses/{businessId}/auditRecords`
+// for every critical business profile change.
 class FirebaseBusinessRepository implements BusinessRepository {
   FirebaseBusinessRepository(this._firestore);
 
@@ -14,6 +19,9 @@ class FirebaseBusinessRepository implements BusinessRepository {
   DocumentReference<Map<String, dynamic>> _business(String businessId) =>
       _firestore.collection('businesses').doc(businessId);
 
+  // BEGINNER NOTE:
+  // Listens to real-time snapshot changes on the tenant document, emitting updated
+  // [BusinessProfile] objects whenever business details change.
   @override
   Stream<BusinessProfile> watchBusiness(String businessId) {
     return _business(businessId).snapshots().map((snapshot) {
@@ -25,6 +33,11 @@ class FirebaseBusinessRepository implements BusinessRepository {
     });
   }
 
+  // BEGINNER NOTE:
+  // Performs an atomic batch update:
+  // 1. Updates the `businesses/{businessId}` profile document.
+  // 2. Writes an append-only event into `businesses/{businessId}/auditRecords`.
+  // If either operation fails, neither is committed to Firestore.
   @override
   Future<void> updateBusiness({
     required String businessId,
@@ -67,6 +80,9 @@ class FirebaseBusinessRepository implements BusinessRepository {
     }
   }
 
+  // BEGINNER NOTE:
+  // Validates the geographic region, updates the tenant root document, and appends
+  // an audit record containing the new territory values for administrative accountability.
   @override
   Future<void> updatePrimaryPricingRegion({
     required String businessId,

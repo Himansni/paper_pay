@@ -1,3 +1,15 @@
+# BEGINNER NOTE:
+# [Continuous Integration Verification Pipeline]
+# This GitHub Actions workflow runs on every pull request and commit to main.
+# It enforces automated quality gates before any code can be merged:
+# 1. Formatting & static analysis (no lint errors, zero warnings)
+# 2. Complete Flutter test suite execution
+# 3. Cloud Firestore Security Rules unit tests against the local emulator
+# 4. Composite index alignment with firestore.indexes.json
+# 5. Release configuration and project isolation validation
+# 6. Repository hygiene checks (ensuring no secrets, credentials, or keys are committed)
+# 7. End-to-end integration tests using emulators
+# 8. Unsigned development APK compilation smoke test
 name: Verify PaperRoute
 
 on:

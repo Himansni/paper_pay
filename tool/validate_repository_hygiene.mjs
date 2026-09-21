@@ -1,3 +1,13 @@
+// BEGINNER NOTE:
+// [Repository Hygiene & Sensitive File Protection]
+// This script acts as a security gate in CI to prevent accidental credential leaks.
+// Sensitive assets must NEVER be checked into Git:
+// - Android signing keystores (*.jks, *.keystore) and `key.properties`
+// - Environment variable files containing secrets (.env)
+// - Google Cloud Service Account JSON credentials
+// - Private encryption/signing keys (RSA, EC, OPENSSH)
+// - Build artifacts (node_modules, build/, .dart_tool)
+// Once a secret is committed to Git history, it must be considered compromised.
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';

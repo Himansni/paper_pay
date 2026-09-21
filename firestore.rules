@@ -1,3 +1,35 @@
+// BEGINNER NOTE:
+// [PaperRoute Cloud Firestore Security Rules]
+//
+// 1. SECURITY AUTHORITY:
+//    Client-side checks (like Flutter's AccessPolicy or UI conditionals) are purely for UX.
+//    These Firestore Security Rules execute server-side on Google's infrastructure and act as
+//    the final, unbypassable security and authorization boundary for all database reads and writes.
+//
+// 2. DENY BY DEFAULT:
+//    Firestore rules deny all operations by default. An operation is only permitted if an explicit
+//    `allow` rule matches and evaluates to `true`.
+//
+// 3. MULTI-TENANCY ISOLATION:
+//    Every business agency is partitioned under `/businesses/{businessId}/...`.
+//    A user must be an `activeMember(businessId)` whose membership record matches `request.auth.uid`.
+//    Users from one agency can NEVER read or modify data belonging to another agency.
+//
+// 4. ROLE & AREA AUTHORIZATION:
+//    - Head (`head(businessId)`): Has administrative control over settings, employees, areas,
+//      newspapers, and financial billing adjustments.
+//    - Employees (`activeEmployeeForArea`): Constrained to their assigned route areas (`areaIds`)
+//      and assigned customers. They cannot alter pricing, finalize bills, or modify other collectors.
+//
+// 5. ATOMIC AUDIT INTEGRITY:
+//    Critical mutations (profile changes, payments, bill finalization, price edits) require paired
+//    append-only records in `auditRecords`. Rules verify with `getAfter()` that state transitions
+//    match the accompanying audit metadata.
+//
+// 6. COMPOSITE INDEXES & QUERIES:
+//    Rules enforce that queries are securely filtered. Whenever a query combines multiple equality
+//    or range filters with `orderBy`, a matching composite index in `firestore.indexes.json` is
+//    required by Firestore. Rules and indexes must stay in strict lockstep.
 rules_version = '2';
 
 service cloud.firestore {

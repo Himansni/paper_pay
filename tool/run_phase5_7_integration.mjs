@@ -1,3 +1,10 @@
+// BEGINNER NOTE:
+// [Emulator Integration Test Runner]
+// This automation script executes end-to-end integration tests using local Firebase Emulators:
+// 1. Verifies that local Firebase Auth and Firestore emulators are running (e.g. 127.0.0.1).
+// 2. Seeds deterministic synthetic data into the emulator using phase seed scripts.
+// 3. Runs Flutter integration tests (billing, collections, reporting) against the local backend.
+// This enables complete verification of data flows and rules without risking remote cloud data.
 import { spawn } from 'node:child_process';
 
 const expectedLocalHosts = [

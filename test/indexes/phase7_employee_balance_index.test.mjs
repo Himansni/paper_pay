@@ -1,3 +1,9 @@
+// BEGINNER NOTE:
+// [Query-to-Index Static Alignment Test]
+// Proves that the actual Dart query code in `firebase_reporting_repository.dart`
+// stays strictly in sync with the index declarations in `firestore.indexes.json`.
+// If an engineer modifies or refactors a Firestore query without updating the
+// composite index manifest, this test fails immediately before deployment.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';

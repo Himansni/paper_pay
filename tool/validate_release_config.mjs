@@ -1,3 +1,13 @@
+// BEGINNER NOTE:
+// [Release Configuration Validation]
+// This script verifies that Firebase project IDs, Android package identifiers,
+// and environment configuration guards stay strictly isolated between Development
+// (`paperroutedev`) and Production (`paperroute-production`).
+// It ensures that:
+// 1. firebase.json points to the correct development project target.
+// 2. Flavor-scoped google-services.json files contain expected package names.
+// 3. Dart environment guards in `app_environment.dart` block cross-environment leaks.
+// 4. Production builds cannot proceed with demo or development credentials.
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 

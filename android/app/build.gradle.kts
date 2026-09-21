@@ -50,6 +50,13 @@ android {
         manifestPlaceholders["usesCleartextTraffic"] = "true"
     }
 
+    // BEGINNER NOTE:
+    // [Android Product Flavors & Build Variants]
+    // PaperRoute defines two isolated environments:
+    // 1. "development": Package `in.paperroute.paper_route`, connects to dev Firebase project
+    //    (`paperroutedev`) and allows cleartext traffic for local emulator testing.
+    // 2. "production": Package `in.paperroute.paper_route.prod`, connects to production Firebase,
+    //    disables cleartext traffic (strict HTTPS/TLS), and applies release code shrinking.
     flavorDimensions += "environment"
     productFlavors {
         create("development") {
@@ -93,6 +100,12 @@ android {
     }
 }
 
+// BEGINNER NOTE:
+// [Fail-Closed Production Release Guard]
+// Ensures production release builds (APK or App Bundle) abort immediately unless:
+// 1. The registered production `google-services.json` exists in `src/production/`.
+// 2. Complete release keystore signing credentials are provided in `key.properties`.
+// This prevents compiling an unsigned or misconfigured production binary.
 val verifyProductionReleaseInputs by tasks.registering {
     group = "verification"
     description = "Fails closed until production Firebase and signing inputs exist."

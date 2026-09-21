@@ -1,3 +1,14 @@
+# BEGINNER NOTE:
+# [Android App Signing & Keystore Protection]
+# Android requires all applications to be digitally signed with a cryptographic certificate
+# before installation or upload to Google Play.
+# - The Java KeyStore (.jks) contains the private key used to sign APKs and App Bundles.
+# - This example template illustrates the format of `android/key.properties`.
+# SECURITY CRITICAL:
+# Never commit `key.properties` or any `.jks`/`.keystore` file to version control.
+# If a private signing key is leaked or lost, existing users cannot receive updates securely.
+# In CI/CD, signing keys should be stored in encrypted GitHub Secrets or KMS.
+#
 # Copy to android/key.properties and replace every placeholder locally.
 # Never commit key.properties or the keystore.
 storeFile=/absolute/path/to/paper-route-upload.jks

@@ -8,6 +8,8 @@ import 'package:paper_route/core/errors/app_exception.dart';
 const maximumPaymentAllocations = 2;
 const maximumCollectionAmountPaise = 9000000000000;
 
+/// How the collector says money was received. A method describes the receipt
+/// channel; it does not itself prove that the payment reached the business.
 enum PaymentMethod {
   cash('cash', 'Cash'),
   upi('upi', 'UPI'),
@@ -76,6 +78,8 @@ class BillAllocation {
   };
 }
 
+/// Mutable projection of how much of one payment allocation was later
+/// reversed. The original [BillAllocation] stored on the payment stays intact.
 class PaymentAllocationState {
   const PaymentAllocationState({
     required this.billId,
@@ -114,6 +118,12 @@ class PaymentAllocationState {
   };
 }
 
+/// Immutable receipt written only after an authorized user manually confirms
+/// that money was received.
+///
+/// BEGINNER NOTE:
+/// A bill records what the customer owes. A payment records money actually
+/// received. Keeping them separate preserves a traceable financial history.
 class ConfirmedPayment {
   const ConfirmedPayment({
     required this.id,
@@ -158,6 +168,8 @@ class ConfirmedPayment {
   int get netAmountPaise => amountPaise - reversedPaise;
 }
 
+/// Validated command used to create a confirmed payment. Money is integer
+/// paise, so ₹125.50 is represented as 12550 without decimal rounding risk.
 class PaymentConfirmationInput {
   const PaymentConfirmationInput({
     required this.amountPaise,
@@ -262,6 +274,8 @@ class PaymentReversalInput {
   }
 }
 
+/// Append-only compensating entry for all or part of a confirmed payment.
+/// The original receipt is never edited or deleted to hide what happened.
 class PaymentReversalRecord {
   const PaymentReversalRecord({
     required this.id,
@@ -330,6 +344,9 @@ class OutstandingBill {
   int get allocatablePaise => math.max(0, outstandingPaise);
 }
 
+/// Read model combining the customer-level balance with its per-bill
+/// allocation projections. A partial payment lowers, but need not clear, the
+/// positive [outstandingPaise].
 class CustomerOutstandingSummary {
   const CustomerOutstandingSummary({
     required this.businessId,

@@ -12,6 +12,8 @@ String collectionReportingStatus({
   return confirmedPaise > reversedPaise ? 'partiallyPaid' : 'unpaid';
 }
 
+/// Customer-level financial projection maintained alongside immutable ledger
+/// records. Confirmations decrease outstanding; reversals restore it.
 class CollectionAccountBalance {
   const CollectionAccountBalance({
     required this.outstandingPaise,
@@ -46,6 +48,9 @@ class BillCollectionProjection {
 
 /// Arithmetic shared by billing and collections so cumulative statement totals
 /// cannot accidentally be summed as independent obligations.
+///
+/// All amounts are integer paise. Keeping this engine free of Firebase and UI
+/// code makes the financial rules deterministic and directly testable.
 class CollectionBalanceEngine {
   const CollectionBalanceEngine();
 
@@ -100,6 +105,7 @@ class CollectionBalanceEngine {
     required CollectionAccountBalance account,
     required int amountPaise,
   }) {
+    // A payment may be partial, but cannot create an accidental customer credit.
     if (amountPaise <= 0 || amountPaise > account.payablePaise) {
       throw const AppException(
         'The payment exceeds the positive outstanding balance.',
@@ -117,6 +123,7 @@ class CollectionBalanceEngine {
     required CollectionAccountBalance account,
     required int amountPaise,
   }) {
+    // Reversal restores debt only up to the net amount previously confirmed.
     if (amountPaise <= 0 || amountPaise > account.netConfirmedPaise) {
       throw const AppException(
         'The reversal exceeds the net confirmed collections.',

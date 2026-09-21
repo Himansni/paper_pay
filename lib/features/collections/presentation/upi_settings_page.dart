@@ -8,6 +8,8 @@ import 'package:paper_route/features/collections/domain/upi_payment_uri.dart';
 import 'package:paper_route/features/collections/presentation/collections_providers.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
+/// Head-only configuration for generating UPI payment requests. These values
+/// identify the payee but never contain banking credentials or confirm receipt.
 class UpiSettingsPage extends ConsumerWidget {
   const UpiSettingsPage({required this.user, this.onSaved, super.key});
 
@@ -256,6 +258,8 @@ class _UpiSettingsFormState extends ConsumerState<_UpiSettingsForm> {
       referencePrefix: _prefixController.text,
       enabled: _enabled,
     );
+    // Saving settings and its audit record is separate from every customer
+    // payment; no outstanding balance changes here.
     try {
       input.validate();
     } on Object catch (error) {

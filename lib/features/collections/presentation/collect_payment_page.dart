@@ -13,6 +13,8 @@ import 'package:paper_route/features/customers/presentation/customer_providers.d
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:uuid/uuid.dart';
 
+/// Coordinates customer access, outstanding balance, and UPI request settings
+/// before presenting the manual receipt-confirmation form.
 class CollectPaymentPage extends ConsumerWidget {
   const CollectPaymentPage({
     required this.user,
@@ -46,6 +48,8 @@ class CollectPaymentPage extends ConsumerWidget {
           return _missingScaffold(context, 'Customer not found');
         }
         const policy = AccessPolicy();
+        // This client check gives immediate feedback. Repository checks and
+        // Firestore Rules still decide whether a write is actually authorized.
         final canCollect = policy.canRecordPayment(
           member: user,
           customerBusinessId: value.businessId,
@@ -473,6 +477,7 @@ class _CollectPaymentFormState extends ConsumerState<_CollectPaymentForm> {
       return;
     }
     try {
+      // Generating this URI changes no balance and creates no payment record.
       final reference = UpiPaymentUriBuilder.deterministicReference(
         settings: settings,
         customerId: widget.customer.id,
@@ -520,6 +525,9 @@ class _CollectPaymentFormState extends ConsumerState<_CollectPaymentForm> {
     );
     if (accepted != true || !mounted) return;
 
+    // BEGINNER NOTE:
+    // Only this explicit, human-confirmed action reaches the ledger repository.
+    // Viewing or scanning the QR above never marks the customer as paid.
     setState(() => _submitting = true);
     try {
       final result = await ref
@@ -556,6 +564,8 @@ class _CollectPaymentFormState extends ConsumerState<_CollectPaymentForm> {
   }
 
   void _newIdempotencyKey() {
+    // One key follows this form attempt through retries, allowing the repository
+    // to return the same receipt instead of charging twice.
     _idempotencyKey = const Uuid().v4().replaceAll('-', '');
   }
 

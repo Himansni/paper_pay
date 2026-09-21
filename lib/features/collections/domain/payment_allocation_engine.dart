@@ -34,6 +34,11 @@ class ReversalAllocationPlan {
 /// Each bill balance represents only incremental debt. The first projection
 /// includes the opening balance; later projections include current charges and
 /// signed adjustments, never the cumulative `totalDuePaise` again.
+///
+/// BEGINNER NOTE:
+/// A partial payment is assigned to concrete bills (oldest first by default).
+/// This lets PaperRoute explain which months remain unpaid instead of storing
+/// only one unexplained customer total.
 class PaymentAllocationEngine {
   const PaymentAllocationEngine();
 
@@ -79,6 +84,8 @@ class PaymentAllocationEngine {
       }
     }
     if (preferredBillId.isNotEmpty) {
+      // A collector may choose the first bill, but the remainder still follows
+      // the same deterministic ordering.
       final index = sorted.indexWhere((bill) => bill.billId == preferredBillId);
       if (index < 0 || sorted[index].allocatablePaise == 0) {
         throw const AppException(
@@ -124,6 +131,8 @@ class PaymentAllocationEngine {
     required int amountPaise,
     required List<PaymentAllocationState> allocationStates,
   }) {
+    // Reversing the newest allocation first reconstructs the allocation state
+    // that existed before the original payment progressed through older debt.
     if (amountPaise <= 0) {
       throw const AppException('The reversal amount must be positive.');
     }

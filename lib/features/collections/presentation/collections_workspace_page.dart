@@ -8,6 +8,8 @@ import 'package:paper_route/features/billing/domain/monthly_bill.dart';
 import 'package:paper_route/features/collections/domain/collection_models.dart';
 import 'package:paper_route/features/collections/presentation/collections_providers.dart';
 
+/// Paginated view of confirmed receipts. It presents ledger history rather
+/// than recalculating financial state inside the widget.
 class CollectionsWorkspacePage extends ConsumerStatefulWidget {
   const CollectionsWorkspacePage({
     required this.user,
@@ -41,6 +43,7 @@ class _CollectionsWorkspacePageState
   Future<void> _load({required bool reset}) async {
     if (_loading && !reset) return;
     final version = ++_requestVersion;
+    // A reset discards the old cursor so refreshes cannot append a stale page.
     if (reset) _cursor = null;
     setState(() {
       _loading = true;

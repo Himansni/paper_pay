@@ -58,6 +58,10 @@ class PaymentLedgerException implements Exception {
 
 /// Computes balances from an append-only payment and reversal ledger. Merely
 /// requesting a payment or showing a QR code never reduces the balance.
+///
+/// BEGINNER NOTE:
+/// Reversals compensate for confirmed money; they never erase its receipt.
+/// That is why net paid equals confirmed payments minus reversal records.
 class PaymentLedger {
   const PaymentLedger();
 

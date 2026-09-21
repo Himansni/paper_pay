@@ -1,6 +1,11 @@
 import 'package:paper_route/features/auth/domain/app_user.dart';
 import 'package:paper_route/features/collections/domain/collection_models.dart';
 
+/// Boundary between collection screens and the persistent financial ledger.
+///
+/// Implementations preserve tenant/customer authorization and atomic balance
+/// updates. Firestore Rules remain authoritative even when the UI has already
+/// hidden an action from an unauthorized employee.
 abstract interface class CollectionsRepository {
   Stream<CustomerOutstandingSummary> watchCustomerOutstanding({
     required String businessId,

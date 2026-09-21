@@ -12,6 +12,11 @@ import 'package:paper_route/features/customers/domain/customer.dart';
 
 const _maximumBillBalanceDocuments = 120;
 
+/// Firestore implementation of the append-only collection ledger.
+///
+/// Public payment and reversal documents preserve historical facts. Private
+/// payment state, bill balances, and `collectionState/current` are projections
+/// updated atomically so the UI can read current totals efficiently.
 class FirebaseCollectionsRepository implements CollectionsRepository {
   FirebaseCollectionsRepository(
     this._firestore, {
@@ -103,6 +108,9 @@ class FirebaseCollectionsRepository implements CollectionsRepository {
     PaymentHistoryCursor? cursor,
     int pageSize = 25,
   }) async {
+    // Heads may view tenant history. Employees use a collector-scoped query so
+    // reassignment cannot expose another collector's receipts. Firestore Rules
+    // independently enforce the same boundary.
     final businessId = _activeBusinessId(actor);
     if (pageSize < 1 || pageSize > 50) {
       throw const AppException(
@@ -240,6 +248,8 @@ class FirebaseCollectionsRepository implements CollectionsRepository {
     ).doc(value.idempotencyKey);
 
     try {
+      // The retry key is also the payment document ID. Repeating the same
+      // command returns the receipt; conflicting reuse is rejected.
       final existing = await paymentRef.get(
         const GetOptions(source: Source.server),
       );
@@ -296,6 +306,10 @@ class FirebaseCollectionsRepository implements CollectionsRepository {
     required String customerId,
     required PaymentConfirmationInput value,
   }) async {
+    // BEGINNER NOTE:
+    // Planning uses server projections, then the transaction rereads their
+    // revisions. Concurrent balance changes therefore cannot cause a partial
+    // payment write.
     final context = await _loadAllocationContext(
       actor: actor,
       businessId: businessId,
@@ -445,6 +459,8 @@ class FirebaseCollectionsRepository implements CollectionsRepository {
       };
       transaction.update(accountRef, nextState);
 
+      // Payment, private reversal state, customer total, per-bill balances,
+      // and audit evidence commit together or not at all.
       for (final allocation in plan.allocations) {
         final current = liveBills[allocation.billId]!;
         final ref = _billBalances(
@@ -492,6 +508,8 @@ class FirebaseCollectionsRepository implements CollectionsRepository {
     required String customerId,
     required PaymentReversalInput input,
   }) async {
+    // Only a Head reaches this operation; Firestore Rules repeat that check.
+    // The reversal receives its own ID and never replaces the receipt.
     final businessId = _headBusinessId(actor);
     final value = input.normalized();
     value.validate();
@@ -685,6 +703,8 @@ class FirebaseCollectionsRepository implements CollectionsRepository {
     required AppUser actor,
     required PaymentConfirmationInput input,
   }) async {
+    // A network error can arrive after Firestore committed. Recovery performs
+    // bounded server reads only, avoiding a second financial write.
     for (var attempt = 0; attempt < 2; attempt++) {
       if (attempt > 0) {
         await Future<void>.delayed(const Duration(milliseconds: 120));
@@ -714,6 +734,8 @@ class FirebaseCollectionsRepository implements CollectionsRepository {
     required String customerId,
     required PaymentReversalInput input,
   }) async {
+    // The same read-after-error pattern makes reversal retries safe without
+    // manufacturing duplicate compensating records.
     for (var attempt = 0; attempt < 2; attempt++) {
       if (attempt > 0) {
         await Future<void>.delayed(const Duration(milliseconds: 120));
@@ -802,6 +824,9 @@ class FirebaseCollectionsRepository implements CollectionsRepository {
       final state = await _collectionState(businessId, customerId).get();
       final data = state.data();
       if (data == null) {
+        // Legacy finalized bills may predate collection projections. They can
+        // be displayed read-only, but confirmation stays blocked until a
+        // separately reviewed migration creates authoritative projections.
         final latest =
             await _customer(businessId, customerId)
                 .collection('bills')
@@ -894,6 +919,8 @@ class FirebaseCollectionsRepository implements CollectionsRepository {
     required String businessId,
     required String customerId,
   }) async {
+    // UI policy gives quick feedback; this check and Firestore Rules defend
+    // tenant, assignment, area, and record-payments permission at write time.
     final customerSnapshot = await _customer(businessId, customerId).get();
     final customerData = customerSnapshot.data();
     if (customerData == null) {
@@ -937,6 +964,8 @@ class FirebaseCollectionsRepository implements CollectionsRepository {
     required String customerId,
     required String paymentId,
   }) async {
+    // The receipt screen opens only after server reads confirm every required
+    // projection, not merely after a local pending write.
     final snapshots = await Future.wait([
       _payments(
         businessId,
@@ -983,6 +1012,8 @@ class FirebaseCollectionsRepository implements CollectionsRepository {
     required String reversalId,
     required String paymentId,
   }) async {
+    // Reversal confirmation likewise requires the immutable reversal, payment
+    // state, and customer account projection to agree on the server.
     final snapshots = await Future.wait([
       _reversals(
         businessId,
@@ -1082,6 +1113,8 @@ class FirebaseCollectionsRepository implements CollectionsRepository {
     String businessId,
     Map<String, dynamic> customer,
   ) {
+    // Heads can collect across the tenant. An employee must own this active
+    // customer, cover its area, and hold the collection permission.
     if (customer['businessId'] != businessId ||
         customer['status'] != 'active') {
       throw const AppException(

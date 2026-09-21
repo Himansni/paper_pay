@@ -1,6 +1,11 @@
 import 'package:paper_route/core/errors/app_exception.dart';
 import 'package:paper_route/features/collections/domain/collection_models.dart';
 
+/// Builds standard UPI request URIs without recording any received money.
+///
+/// BEGINNER NOTE:
+/// A QR code is only a payment request. PaperRoute creates a ledger payment
+/// later, after an authorized collector explicitly verifies receipt.
 abstract final class UpiPaymentUriBuilder {
   static Uri build({
     required UpiSettings settings,
@@ -50,6 +55,8 @@ abstract final class UpiPaymentUriBuilder {
     required String customerId,
     required String idempotencyKey,
   }) {
+    // Stable input produces the same bank-friendly reference for this attempt;
+    // it does not replace the repository's payment idempotency checks.
     final source = '${settings.referencePrefix}-$customerId-$idempotencyKey';
     final normalized = source
         .toUpperCase()

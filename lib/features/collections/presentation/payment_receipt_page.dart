@@ -10,6 +10,8 @@ import 'package:paper_route/features/collections/presentation/collect_payment_pa
 import 'package:paper_route/features/collections/presentation/collections_providers.dart';
 import 'package:uuid/uuid.dart';
 
+/// Displays an immutable confirmed payment together with its mutable reversal
+/// projection and the customer's latest outstanding balance.
 class PaymentReceiptPage extends ConsumerWidget {
   const PaymentReceiptPage({
     required this.user,
@@ -289,6 +291,9 @@ class _PaymentReceiptViewState extends ConsumerState<_PaymentReceiptView> {
               _ReversalDialog(maximumPaise: widget.payment.netAmountPaise),
     );
     if (input == null || !mounted) return;
+    // BEGINNER NOTE:
+    // Reversal creates a separate compensating record. The original receipt
+    // and allocations remain visible so the complete money trail is auditable.
     setState(() => _reversing = true);
     try {
       final result = await ref

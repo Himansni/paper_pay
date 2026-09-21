@@ -7,6 +7,8 @@ import 'package:paper_route/features/billing/domain/monthly_bill.dart';
 import 'package:paper_route/features/collections/presentation/collections_providers.dart';
 import 'package:paper_route/features/customers/domain/customer.dart';
 
+/// Customer-detail summary backed by the server-maintained collection
+/// projection, not by locally subtracting receipt cards from bill totals.
 class CustomerCollectionSummary extends ConsumerWidget {
   const CustomerCollectionSummary({
     required this.user,
@@ -22,6 +24,8 @@ class CustomerCollectionSummary extends ConsumerWidget {
     final key = (businessId: user.businessId!, customerId: customer.id);
     final outstanding = ref.watch(customerOutstandingProvider(key));
     const policy = AccessPolicy();
+    // The button mirrors access policy for usability; Firestore Rules remain
+    // authoritative if an assignment or permission changes concurrently.
     final canCollect = policy.canRecordPayment(
       member: user,
       customerBusinessId: customer.businessId,

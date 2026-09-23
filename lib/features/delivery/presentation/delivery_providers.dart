@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:paper_route/core/domain/local_date.dart';
+import 'package:paper_route/features/areas/domain/delivery_area.dart';
 import 'package:paper_route/features/areas/presentation/area_providers.dart';
 import 'package:paper_route/features/auth/domain/app_user.dart';
 import 'package:paper_route/features/customers/domain/customer.dart';
@@ -141,8 +142,10 @@ final morningRouteStopsProvider =
   final markedStatuses = ref.watch(deliveryStatusStateProvider);
 
   // 1. Fetch areas
-  final areasAsync = await ref.watch(deliveryAreasProvider(businessId).future);
-  final areas = areasAsync.where((a) => a.isActive).toList();
+  final areasAsync = ref.watch(deliveryAreasProvider(businessId));
+  final areas = (areasAsync.asData?.value ?? const <DeliveryArea>[])
+      .where((a) => a.isActive)
+      .toList();
 
   String activeAreaId = selectedAreaId;
   if (activeAreaId.isEmpty) {
@@ -207,12 +210,13 @@ final morningRouteStopsProvider =
 
   for (var i = 0; i < customers.length; i++) {
     final customer = customers[i];
-    final CustomerSubscriptionsKey key = (
-      businessId: businessId,
-      customerId: customer.id,
-    );
-    final List<CustomerSubscription> subs =
-        await ref.read(customerSubscriptionsProvider(key).future);
+    final List<CustomerSubscription> subs = await ref
+        .read(subscriptionRepositoryProvider)
+        .watchCustomerSubscriptions(
+          businessId: businessId,
+          customerId: customer.id,
+        )
+        .first;
 
     final List<DailyPaperDrop> drops = [];
     for (final sub in subs) {
@@ -222,15 +226,38 @@ final morningRouteStopsProvider =
       if (selectedDate.isBefore(sub.startDate)) continue;
       if (sub.endDate != null && selectedDate.isAfter(sub.endDate!)) continue;
 
-      // Check pause
-      final isPaused = sub.isPaused;
+      // Check pause: status-level (open pause) AND dated pauses from subcollection
+      bool isPaused = sub.isPaused;
+      String? pauseReason;
+      if (isPaused) {
+        pauseReason = 'Paused';
+      } else {
+        // Check dated pauses covering selectedDate
+        final pauses = await ref
+            .read(subscriptionRepositoryProvider)
+            .watchPauses(
+              businessId: businessId,
+              customerId: customer.id,
+              subscriptionId: sub.id,
+            )
+            .first;
+        final matchingPause = pauses
+            .where((p) => p.contains(selectedDate))
+            .firstOrNull;
+        if (matchingPause != null) {
+          isPaused = true;
+          pauseReason = matchingPause.reason.isNotEmpty
+              ? matchingPause.reason
+              : 'Scheduled Pause';
+        }
+      }
       drops.add(
         DailyPaperDrop(
           newspaperId: sub.newspaperId,
           newspaperName: sub.newspaperName,
           quantity: sub.quantity,
           isPaused: isPaused,
-          pauseReason: isPaused ? 'Vacation / Pause' : null,
+          pauseReason: pauseReason,
         ),
       );
     }

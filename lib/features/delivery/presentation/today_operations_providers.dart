@@ -107,12 +107,37 @@ final headTodayOperationsProvider = FutureProvider.autoDispose
       }
 
       final existing = pubMap[pubId] ?? (name: pubName, ordered: 0, paused: 0);
-      final isPaused = status == 'paused';
+      bool isCurrentlyPaused = status == 'paused';
+
+      // Check dated pauses from the pauses subcollection when status is active
+      if (!isCurrentlyPaused) {
+        try {
+          final pausesSnap =
+              await doc.reference.collection('pauses').get();
+          for (final pauseDoc in pausesSnap.docs) {
+            final pData = pauseDoc.data();
+            final pStartStr = pData['startDate'] as String?;
+            final pEndStr = pData['endDate'] as String?;
+            if (pStartStr != null) {
+              final pStart = LocalDate.parse(pStartStr);
+              final pEnd =
+                  pEndStr != null ? LocalDate.parse(pEndStr) : null;
+              if (!date.isBefore(pStart) &&
+                  (pEnd == null || !date.isAfter(pEnd))) {
+                isCurrentlyPaused = true;
+                break;
+              }
+            }
+          }
+        } catch (_) {
+          // Offline / test fallback — status-only is still safe
+        }
+      }
 
       pubMap[pubId] = (
         name: pubName,
         ordered: existing.ordered + quantity,
-        paused: existing.paused + (isPaused ? quantity : 0),
+        paused: existing.paused + (isCurrentlyPaused ? quantity : 0),
       );
     }
 

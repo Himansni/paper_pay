@@ -5,6 +5,8 @@ import 'package:paper_route/core/presentation/async_state_cards.dart';
 import 'package:paper_route/features/auth/domain/app_user.dart';
 import 'package:paper_route/features/business/domain/business_profile.dart';
 import 'package:paper_route/features/business/presentation/business_providers.dart';
+import 'package:paper_route/features/saas/domain/saas_models.dart';
+import 'package:paper_route/features/saas/presentation/saas_providers.dart';
 
 class BusinessSettingsPage extends ConsumerWidget {
   const BusinessSettingsPage({required this.user, super.key});
@@ -15,6 +17,20 @@ class BusinessSettingsPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final businessId = user.businessId!;
     final business = ref.watch(businessProfileProvider(businessId));
+    final entitlement = ref.watch(saasEntitlementProvider(businessId));
+    final saasSubtitle =
+        entitlement == null
+            ? 'View trial status, remaining days, and configurable platform plans.'
+            : switch (entitlement.effectiveStatus) {
+              SaasSubscriptionStatus.trial =>
+                'Free 30-Day Trial (${entitlement.daysRemaining} days left) • Tap to view',
+              SaasSubscriptionStatus.active =>
+                'Active Subscription • Tap to view',
+              SaasSubscriptionStatus.gracePeriod =>
+                'Grace Period (${entitlement.graceDaysRemaining} days left) • Tap to renew',
+              SaasSubscriptionStatus.expired =>
+                'Subscription Expired (Read-Only) • Tap to renew',
+            };
 
     return Scaffold(
       appBar: AppBar(
@@ -80,6 +96,17 @@ class BusinessSettingsPage extends ConsumerWidget {
                               region: region,
                             ),
                   ),
+            ),
+            const SizedBox(height: 16),
+            Card(
+              child: ListTile(
+                key: const ValueKey('open-saas-settings'),
+                onTap: () => context.push('/business-settings/subscription'),
+                leading: const Icon(Icons.workspace_premium_outlined),
+                title: const Text('PaperRoute subscription & trial'),
+                subtitle: Text(saasSubtitle),
+                trailing: const Icon(Icons.chevron_right),
+              ),
             ),
             const SizedBox(height: 16),
             Card(

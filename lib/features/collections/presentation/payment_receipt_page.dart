@@ -136,7 +136,10 @@ class _PaymentReceiptViewState extends ConsumerState<_PaymentReceiptView> {
                           ?.copyWith(fontWeight: FontWeight.w800),
                     ),
                     const SizedBox(height: 4),
-                    Text(payment.status.label),
+                    Text(
+                      '${payment.status.label} • Collector-confirmed',
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
                   ],
                 ),
               ),
@@ -158,10 +161,10 @@ class _PaymentReceiptViewState extends ConsumerState<_PaymentReceiptView> {
             Card(
               color: const Color(0xFFE5F5EE),
               child: const ListTile(
-                leading: Icon(Icons.cloud_done_outlined),
+                leading: Icon(Icons.verified_outlined),
                 title: Text('Server-confirmed ledger entry'),
                 subtitle: Text(
-                  'The original payment and allocation history are immutable.',
+                  'Collector-confirmed (manual receipt verification). Never automatically bank-verified. Direct to agency.',
                 ),
               ),
             ),
@@ -180,6 +183,8 @@ class _PaymentReceiptViewState extends ConsumerState<_PaymentReceiptView> {
                   ),
                   const SizedBox(height: 14),
                   _ReceiptRow('Receipt / payment ID', payment.id),
+                  _ReceiptRow('Verification', 'Collector-confirmed (manual)'),
+                  _ReceiptRow('Destination', 'Direct to agency account'),
                   _ReceiptRow(
                     'Customer',
                     '${payment.customerName} • ${payment.customerCode}',

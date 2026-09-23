@@ -3535,6 +3535,14 @@ service cloud.firestore {
         allow delete: if false;
       }
 
+      match /subscription/{documentId} {
+        // Active members (Heads and assigned staff) can read the agency's SaaS subscription & trial state.
+        allow read: if activeMember(businessId);
+        // Clients can NEVER create, update, or delete subscription documents.
+        // Entitlements and trial activations are strictly server-authoritative.
+        allow create, update, delete: if false;
+      }
+
       match /auditRecords/{auditId} {
         allow read: if head(businessId);
         allow create: if activeMember(businessId)

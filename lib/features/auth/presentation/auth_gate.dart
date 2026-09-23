@@ -33,6 +33,7 @@ import 'package:paper_route/features/subscriptions/presentation/subscription_for
 import 'package:paper_route/features/delivery/presentation/morning_route_page.dart';
 import 'package:paper_route/features/delivery/presentation/today_operations_page.dart';
 import 'package:paper_route/features/reports/presentation/reports_page.dart';
+import 'package:paper_route/features/saas/presentation/saas_subscription_page.dart';
 
 enum AuthenticatedDestination {
   dashboard,
@@ -64,6 +65,7 @@ enum AuthenticatedDestination {
   subscriptionChange,
   morningRoute,
   todayOperations,
+  saasSubscription,
 }
 
 /// Single source of truth for auth and role routing. UI routes never trust a
@@ -216,6 +218,8 @@ class AuthGate extends ConsumerWidget {
             MorningRoutePage(user: user),
           AuthenticatedDestination.todayOperations =>
             TodayOperationsPage(user: user),
+          AuthenticatedDestination.saasSubscription =>
+            SaasSubscriptionPage(user: user),
         };
       },
     );

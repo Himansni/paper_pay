@@ -333,13 +333,17 @@ export async function provisionAgencyOwnerHandler(
     const auditReference = firestore.doc(
       `businesses/${businessId}/auditRecords/agencyProvisioned-${identity.uid}`,
     );
-    const [business, membership, consent, audit] = await Promise.all([
+    const subscriptionReference = firestore.doc(
+      `businesses/${businessId}/subscription/saas`,
+    );
+    const [business, membership, consent, audit, subscription] = await Promise.all([
       transaction.get(businessReference),
       transaction.get(membershipReference),
       transaction.get(consentReference),
       transaction.get(auditReference),
+      transaction.get(subscriptionReference),
     ]);
-    if (business.exists || membership.exists || consent.exists || audit.exists) {
+    if (business.exists || membership.exists || consent.exists || audit.exists || subscription.exists) {
       throw new HttpsError(
         "failed-precondition",
         "A target provisioning record already exists unexpectedly.",
@@ -347,12 +351,29 @@ export async function provisionAgencyOwnerHandler(
     }
 
     const now = FieldValue.serverTimestamp();
+    const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+    const nowMs = Timestamp.now().toMillis();
+    const trialStartsAt = Timestamp.fromMillis(nowMs);
+    const trialEndsAt = Timestamp.fromMillis(nowMs + thirtyDaysMs);
+
     transaction.create(businessReference, {
       businessId,
       ownerId: identity.uid,
       name: input.agencyName,
       phone: input.agencyPhone,
       address: input.agencyAddress,
+      createdAt: now,
+      updatedAt: now,
+    });
+    transaction.create(subscriptionReference, {
+      businessId,
+      planId: "trial",
+      status: "trial",
+      trialStartsAt,
+      trialEndsAt,
+      graceDays: 7,
+      customerLimit: 500,
+      employeeLimit: 10,
       createdAt: now,
       updatedAt: now,
     });

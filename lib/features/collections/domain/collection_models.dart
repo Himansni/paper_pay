@@ -156,6 +156,12 @@ class ConfirmedPayment {
   final DateTime? confirmedAt;
 
   int get netAmountPaise => amountPaise - reversedPaise;
+
+  /// Explicit operational label: collector-confirmed, never automatically bank-verified.
+  String get verificationLabel => 'Collector-confirmed (manual receipt verification)';
+
+  /// PaperRoute records manual collector confirmation; automatic bank reconciliation is not performed.
+  bool get isAutomaticallyBankVerified => false;
 }
 
 class PaymentConfirmationInput {
@@ -357,6 +363,12 @@ class CustomerOutstandingSummary {
 
   int get amountDuePaise => math.max(0, outstandingPaise);
   int get creditPaise => math.max(0, -outstandingPaise);
+
+  /// Posted balance due from finalized bills and opening balance.
+  int get postedBalancePaise => amountDuePaise;
+
+  /// Estimated unbilled charges are excluded from immediate collection.
+  int get estimatedUnbilledPaise => 0;
 }
 
 class PaymentHistoryCursor {

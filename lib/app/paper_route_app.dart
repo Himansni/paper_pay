@@ -234,6 +234,16 @@ class _PaperRouteAppState extends ConsumerState<PaperRouteApp> {
                     : SetupRequiredPage(message: widget.startup.message),
       ),
       GoRoute(
+        path: '/business-settings/subscription',
+        builder:
+            (context, state) =>
+                widget.startup.isReady
+                    ? const AuthGate(
+                      destination: AuthenticatedDestination.saasSubscription,
+                    )
+                    : SetupRequiredPage(message: widget.startup.message),
+      ),
+      GoRoute(
         path: '/customers/new',
         builder:
             (context, state) =>

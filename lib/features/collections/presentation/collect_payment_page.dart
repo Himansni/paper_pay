@@ -224,9 +224,32 @@ class _CollectPaymentFormState extends ConsumerState<_CollectPaymentForm> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Server-confirmed outstanding',
-                      style: TextStyle(fontWeight: FontWeight.w700),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Posted balance (collectible)',
+                          style: TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFC6F6D5),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: const Text(
+                            'Posted bills',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF22543D),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 6),
                     Text(
@@ -235,9 +258,32 @@ class _CollectPaymentFormState extends ConsumerState<_CollectPaymentForm> {
                       style: Theme.of(context).textTheme.headlineMedium
                           ?.copyWith(fontWeight: FontWeight.w900),
                     ),
+                    const SizedBox(height: 6),
+                    const Row(
+                      children: [
+                        Icon(
+                          Icons.info_outline,
+                          size: 14,
+                          color: Color(0xFF486581),
+                        ),
+                        SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            'Estimated unbilled charges are excluded until month-end finalization.',
+                            style: TextStyle(
+                              color: Color(0xFF486581),
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                     if (summary.creditPaise > 0)
-                      Text(
-                        'Customer credit: ${BillingMoney.formatPaise(summary.creditPaise)}',
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          'Customer credit: ${BillingMoney.formatPaise(summary.creditPaise)}',
+                        ),
                       ),
                     if (!summary.serverConfirmed)
                       const Padding(
@@ -410,9 +456,9 @@ class _CollectPaymentFormState extends ConsumerState<_CollectPaymentForm> {
                       color: const Color(0xFFFFF8E8),
                       child: const ListTile(
                         leading: Icon(Icons.verified_user_outlined),
-                        title: Text('Receipt must be verified manually'),
+                        title: Text('Collector-confirmed (manual verification)'),
                         subtitle: Text(
-                          'Displaying or scanning a QR code never confirms payment. Confirm only after you have actually seen that funds or cash were received.',
+                          'Displaying or scanning a QR code never automatically confirms payment. This payment is recorded as collector-confirmed, not automatically bank-verified. Confirm only after you have actually seen that funds or cash were received.',
                         ),
                       ),
                     ),
@@ -601,7 +647,7 @@ class _CollectPaymentFormState extends ConsumerState<_CollectPaymentForm> {
           (dialogContext) => AlertDialog(
             title: const Text('Confirm receipt of payment?'),
             content: Text(
-              'Confirm that ${BillingMoney.formatPaise(amountPaise)} was actually received by ${_method.label.toLowerCase()}. This creates an immutable ledger entry.',
+              'Confirm that ${BillingMoney.formatPaise(amountPaise)} was actually received by ${_method.label.toLowerCase()}.\n\nThis records an immutable collector-confirmed ledger entry. It is NOT automatically bank-verified.',
             ),
             actions: [
               TextButton(

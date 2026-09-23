@@ -4362,6 +4362,69 @@ describe('Phase 7 reporting security and projection integrity', () => {
       );
     });
   });
+
+  describe('Phase 5 SaaS subscription security and entitlements', () => {
+    test('Active Head and employee can read agency SaaS subscription', async () => {
+      await environment.withSecurityRulesDisabled(async (context) => {
+        const db = context.firestore();
+        await setDoc(doc(db, 'businesses/business-a/subscription/saas'), {
+          businessId: 'business-a',
+          planId: 'trial',
+          status: 'trial',
+          trialStartsAt: new Date(),
+          trialEndsAt: new Date(Date.now() + 30 * 86_400_000),
+          graceDays: 7,
+          customerLimit: 500,
+          employeeLimit: 10,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        });
+      });
+
+      const headDb = auth('head-a', 'head-a@example.com');
+      const empDb = auth('employee-a', 'employee-a@example.com');
+      const foreignDb = auth('head-b', 'head-b@example.com');
+
+      // Head and employee can read agency subscription
+      await assertSucceeds(getDoc(doc(headDb, 'businesses/business-a/subscription/saas')));
+      await assertSucceeds(getDoc(doc(empDb, 'businesses/business-a/subscription/saas')));
+
+      // Foreign tenant cannot read agency subscription
+      await assertFails(getDoc(doc(foreignDb, 'businesses/business-a/subscription/saas')));
+    });
+
+    test('Clients (Head and employees) cannot create, update, or delete subscription documents', async () => {
+      const headDb = auth('head-a', 'head-a@example.com');
+      const empDb = auth('employee-a', 'employee-a@example.com');
+      const subDoc = doc(headDb, 'businesses/business-a/subscription/saas');
+
+      // Client create fails
+      await assertFails(
+        setDoc(doc(headDb, 'businesses/business-a/subscription/saas-client'), {
+          businessId: 'business-a',
+          planId: 'agencyPro',
+          status: 'active',
+        }),
+      );
+
+      // Client update fails (unauthorized plan change or trial tampering)
+      await assertFails(
+        updateDoc(subDoc, {
+          planId: 'agencyPro',
+          status: 'active',
+          trialEndsAt: new Date(Date.now() + 365 * 86_400_000),
+        }),
+      );
+      await assertFails(
+        updateDoc(doc(empDb, 'businesses/business-a/subscription/saas'), {
+          planId: 'agencyPro',
+        }),
+      );
+
+      // Client delete fails
+      await assertFails(deleteDoc(subDoc));
+    });
+  });
 });
 
 test('test environment initialized', () => {

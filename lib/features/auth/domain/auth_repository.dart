@@ -25,4 +25,11 @@ abstract interface class AuthRepository {
     required String displayName,
     required String phone,
   });
+
+  Future<void> reauthenticate({required String password});
+
+  Future<void> requestAccountDeletion({
+    required String confirmation,
+    String? reason,
+  });
 }

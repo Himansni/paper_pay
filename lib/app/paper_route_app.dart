@@ -52,6 +52,16 @@ class _PaperRouteAppState extends State<PaperRouteApp> {
         builder: (context, state) => const AccessPendingPage(),
       ),
       GoRoute(
+        path: '/account-settings',
+        builder:
+            (context, state) =>
+                widget.startup.isReady
+                    ? const AuthGate(
+                      destination: AuthenticatedDestination.accountSettings,
+                    )
+                    : SetupRequiredPage(message: widget.startup.message),
+      ),
+      GoRoute(
         path: '/business-settings',
         builder:
             (context, state) =>

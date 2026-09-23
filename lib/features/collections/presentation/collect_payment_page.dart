@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:paper_route/core/errors/app_exception.dart';
 import 'package:paper_route/core/presentation/async_state_cards.dart';
 import 'package:paper_route/features/auth/domain/access_policy.dart';
 import 'package:paper_route/features/auth/domain/app_user.dart';
@@ -163,16 +164,20 @@ class _CollectPaymentFormState extends ConsumerState<_CollectPaymentForm> {
   Uri? _upiUri;
   String _upiReference = '';
   bool _submitting = false;
+  bool _confirmingDialog = false;
+  String? _networkErrorMessage;
 
   @override
   void initState() {
     super.initState();
     _newIdempotencyKey();
     _amountController.text = _formatInputAmount(widget.summary.amountDuePaise);
+    _amountController.addListener(_onFormDetailsChanged);
   }
 
   @override
   void dispose() {
+    _amountController.removeListener(_onFormDetailsChanged);
     _amountController.dispose();
     _referenceController.dispose();
     _notesController.dispose();
@@ -302,6 +307,8 @@ class _CollectPaymentFormState extends ConsumerState<_CollectPaymentForm> {
                                 if (method == null) return;
                                 setState(() {
                                   _method = method;
+                                  _networkErrorMessage = null;
+                                  _newIdempotencyKey();
                                   _upiUri = null;
                                   _upiReference = '';
                                   if (method != PaymentMethod.upi) {
@@ -410,10 +417,68 @@ class _CollectPaymentFormState extends ConsumerState<_CollectPaymentForm> {
                       ),
                     ),
                     const SizedBox(height: 14),
+                    if (_networkErrorMessage != null) ...[
+                      Card(
+                        color: const Color(0xFFFFF0F0),
+                        shape: RoundedRectangleBorder(
+                          side: BorderSide(color: Colors.red.shade300),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(14),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.cloud_off_rounded,
+                                    color: Colors.amber.shade900,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      'Payment confirmation unverified',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.amber.shade900,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                '$_networkErrorMessage\n\nAn active internet connection is required to confirm financial activity.',
+                                style: TextStyle(
+                                  color: Colors.brown.shade800,
+                                  fontSize: 13,
+                                  height: 1.3,
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              FilledButton.tonalIcon(
+                                key: const ValueKey(
+                                  'retry-payment-confirmation',
+                                ),
+                                onPressed:
+                                    _submitting || _confirmingDialog
+                                        ? null
+                                        : _confirm,
+                                icon: const Icon(Icons.refresh_rounded),
+                                label: const Text('Retry confirmation'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                    ],
                     FilledButton.icon(
                       key: const ValueKey('confirm-payment'),
                       onPressed:
                           _submitting ||
+                                  _confirmingDialog ||
                                   !summary.serverConfirmed ||
                                   summary.requiresProjectionSetup ||
                                   (_method == PaymentMethod.upi &&
@@ -494,9 +559,42 @@ class _CollectPaymentFormState extends ConsumerState<_CollectPaymentForm> {
     }
   }
 
+  void _onFormDetailsChanged() {
+    if (_networkErrorMessage != null) {
+      setState(() => _networkErrorMessage = null);
+    }
+  }
+
+  bool _isNetworkError(Object error) {
+    if (error is AppException) {
+      final code = error.code ?? '';
+      final msg = error.message.toLowerCase();
+      return code == 'unavailable' ||
+          code == 'deadline-exceeded' ||
+          code == 'network-request-failed' ||
+          msg.contains('server connection') ||
+          msg.contains('connection') ||
+          msg.contains('network') ||
+          msg.contains('offline');
+    }
+    final text = error.toString().toLowerCase();
+    return text.contains('unavailable') ||
+        text.contains('socket') ||
+        text.contains('network') ||
+        text.contains('connection') ||
+        text.contains('offline');
+  }
+
   Future<void> _confirm() async {
+    if (_submitting || _confirmingDialog) return;
     if (!_formKey.currentState!.validate()) return;
     final amountPaise = parseRupeesToPaise(_amountController.text);
+
+    setState(() {
+      _confirmingDialog = true;
+      _networkErrorMessage = null;
+    });
+
     final accepted = await showDialog<bool>(
       context: context,
       builder:
@@ -518,7 +616,9 @@ class _CollectPaymentFormState extends ConsumerState<_CollectPaymentForm> {
             ],
           ),
     );
-    if (accepted != true || !mounted) return;
+    if (!mounted) return;
+    setState(() => _confirmingDialog = false);
+    if (accepted != true) return;
 
     setState(() => _submitting = true);
     try {
@@ -541,6 +641,7 @@ class _CollectPaymentFormState extends ConsumerState<_CollectPaymentForm> {
           'The server has not confirmed this payment. It is not recorded as received.',
         );
       }
+      _newIdempotencyKey();
       if (!mounted) return;
       widget.onConfirmed?.call(result);
       if (widget.onConfirmed == null) {
@@ -549,7 +650,16 @@ class _CollectPaymentFormState extends ConsumerState<_CollectPaymentForm> {
         );
       }
     } on Object catch (error) {
-      if (mounted) _showError(error.toString());
+      if (mounted) {
+        if (_isNetworkError(error)) {
+          setState(() {
+            _networkErrorMessage =
+                'Payment confirmation could not be verified because the connection was interrupted. Tap Retry confirmation to safely check the same payment request. PaperRoute will not create a duplicate.';
+          });
+        } else {
+          _showError(error.toString());
+        }
+      }
     } finally {
       if (mounted) setState(() => _submitting = false);
     }

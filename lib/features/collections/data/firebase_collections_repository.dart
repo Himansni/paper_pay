@@ -677,7 +677,8 @@ class FirebaseCollectionsRepository implements CollectionsRepository {
   bool _mayBeCommittedRace(FirebaseException error) =>
       error.code == 'permission-denied' ||
       error.code == 'aborted' ||
-      error.code == 'unavailable';
+      error.code == 'unavailable' ||
+      error.code == 'deadline-exceeded';
 
   Future<PaymentConfirmationResult?> _recoverPaymentConfirmation({
     required String businessId,
@@ -1296,6 +1297,10 @@ class FirebaseCollectionsRepository implements CollectionsRepository {
         'The account balance changed while saving. Refresh and retry.',
       'unavailable' =>
         'A server connection is required to confirm financial activity.',
+      'deadline-exceeded' =>
+        'The server connection timed out while confirming financial activity. Check your network and retry.',
+      'network-request-failed' =>
+        'Network unavailable. An active internet connection is required to confirm financial activity.',
       _ => fallback,
     };
     return AppException(message, code: error.code);

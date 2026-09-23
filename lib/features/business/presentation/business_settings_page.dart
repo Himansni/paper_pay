@@ -94,6 +94,19 @@ class BusinessSettingsPage extends ConsumerWidget {
                 trailing: const Icon(Icons.chevron_right),
               ),
             ),
+            const SizedBox(height: 16),
+            Card(
+              child: ListTile(
+                key: const ValueKey('open-account-settings'),
+                onTap: () => context.push('/account-settings'),
+                leading: const Icon(Icons.manage_accounts_outlined),
+                title: const Text('Personal account settings'),
+                subtitle: const Text(
+                  'Manage account credentials, sign out, or request account deletion.',
+                ),
+                trailing: const Icon(Icons.chevron_right),
+              ),
+            ),
           ],
         ),
       ),

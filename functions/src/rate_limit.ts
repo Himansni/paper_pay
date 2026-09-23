@@ -16,14 +16,14 @@ interface RateLimit {
 export async function enforceUidRateLimit(
   firestore: Firestore,
   uid: string,
-  kind: "options" | "provision",
+  kind: "options" | "provision" | "deletion",
   limit: RateLimit,
 ): Promise<void> {
   const reference = firestore.doc(`agencyProvisioningControls/${uid}`);
   const exceeded = await firestore.runTransaction(async (transaction) => {
     const snapshot = await transaction.get(reference);
     const now = Timestamp.now();
-    const prefix = kind === "options" ? "options" : "provision";
+    const prefix = kind;
     const data = snapshot.data() ?? {};
     const cooldownUntil = data[`${prefix}CooldownUntil`];
     if (cooldownUntil instanceof Timestamp && cooldownUntil.toMillis() > now.toMillis()) {

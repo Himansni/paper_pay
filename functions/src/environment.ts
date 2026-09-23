@@ -21,3 +21,19 @@ export const optionsRateLimit = {
   windowMilliseconds: 15 * 60 * 1000,
   cooldownMilliseconds: 30 * 60 * 1000,
 };
+
+export const deletionRateLimit = {
+  maximumAttempts: 3,
+  windowMilliseconds: 15 * 60 * 1000,
+  cooldownMilliseconds: 60 * 60 * 1000,
+};
+
+export const accountDeletionRuntime = {
+  region: functionRegion,
+  memory: "256MiB" as const,
+  timeoutSeconds: 30,
+  minInstances: 0,
+  maxInstances: 2,
+  concurrency: 20,
+  enforceAppCheck: false,
+};

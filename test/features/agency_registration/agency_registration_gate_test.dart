@@ -131,5 +131,14 @@ class _FakeAuthRepository implements AuthRepository {
   Future<void> signOut() async {}
 
   @override
+  Future<void> reauthenticate({required String password}) async {}
+
+  @override
+  Future<void> requestAccountDeletion({
+    required String confirmation,
+    String? reason,
+  }) async {}
+
+  @override
   Stream<AppUser?> watchCurrentUser() => const Stream.empty();
 }

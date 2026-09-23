@@ -2815,6 +2815,11 @@ service cloud.firestore {
       allow list, create, update, delete: if false;
     }
 
+    match /accountDeletionRequests/{uid} {
+      allow get: if signedIn() && uid == request.auth.uid;
+      allow list, create, update, delete: if false;
+    }
+
     match /businesses/{businessId} {
       allow read: if activeMember(businessId);
       // The first business and Head are bootstrapped through the trusted

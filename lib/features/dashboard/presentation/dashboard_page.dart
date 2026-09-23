@@ -36,6 +36,11 @@ class DashboardPage extends ConsumerWidget {
             icon: const Icon(Icons.refresh),
           ),
           IconButton(
+            onPressed: () => context.push('/account-settings'),
+            tooltip: 'Account settings',
+            icon: const Icon(Icons.account_circle_outlined),
+          ),
+          IconButton(
             onPressed: () => ref.read(authRepositoryProvider).signOut(),
             tooltip: 'Sign out',
             icon: const Icon(Icons.logout_rounded),

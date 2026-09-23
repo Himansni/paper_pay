@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:paper_route/core/errors/app_exception.dart';
 import 'package:paper_route/features/auth/domain/app_user.dart';
@@ -13,16 +14,21 @@ class FirebaseAuthRepository implements AuthRepository {
   FirebaseAuthRepository({
     required FirebaseAuth auth,
     required FirebaseFirestore firestore,
+    FirebaseFunctions? functions,
   }) : _auth = auth,
-       _firestore = firestore;
+       _firestore = firestore,
+       _functions =
+           functions ?? FirebaseFunctions.instanceFor(region: 'asia-south1');
 
   factory FirebaseAuthRepository.fromDefaultApp() => FirebaseAuthRepository(
     auth: FirebaseAuth.instance,
     firestore: FirebaseFirestore.instance,
+    functions: FirebaseFunctions.instanceFor(region: 'asia-south1'),
   );
 
   final FirebaseAuth _auth;
   final FirebaseFirestore _firestore;
+  final FirebaseFunctions _functions;
 
   @override
   Stream<AppUser?> watchCurrentUser() {
@@ -272,6 +278,49 @@ class FirebaseAuthRepository implements AuthRepository {
             : 'Could not activate access. Please try again.',
         code: error.code,
       );
+    }
+  }
+
+  @override
+  Future<void> reauthenticate({required String password}) async {
+    final user = _requireCurrentUser();
+    final email = user.email;
+    if (email == null || email.isEmpty) {
+      throw const AppException('No signed-in user email found.');
+    }
+    try {
+      final credential = EmailAuthProvider.credential(
+        email: email,
+        password: password,
+      );
+      await user.reauthenticateWithCredential(credential);
+    } on FirebaseAuthException catch (error) {
+      throw _friendlyAuthError(error);
+    }
+  }
+
+  @override
+  Future<void> requestAccountDeletion({
+    required String confirmation,
+    String? reason,
+  }) async {
+    _requireCurrentUser();
+    try {
+      final callable = _functions.httpsCallable('requestAccountDeletion');
+      await callable.call<Map<String, dynamic>>({
+        'confirmation': confirmation,
+        if (reason != null && reason.trim().isNotEmpty)
+          'reason': reason.trim(),
+      });
+      await _auth.signOut();
+    } on FirebaseFunctionsException catch (error) {
+      throw AppException(
+        error.message ??
+            'Could not complete account deletion. Please try again.',
+        code: error.code,
+      );
+    } on FirebaseAuthException catch (error) {
+      throw _friendlyAuthError(error);
     }
   }
 

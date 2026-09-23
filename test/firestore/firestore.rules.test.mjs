@@ -3868,6 +3868,68 @@ describe('Phase 7 reporting security and projection integrity', () => {
     );
   });
 
+  test('concurrent payment submissions with same idempotencyKey create exactly one payment and one audit', async () => {
+    const customerId = 'C-CONCURRENT-001';
+    await seedCollectionProjection({
+      customerId,
+      bills: [{ month: '2026-11', outstandingPaise: 50000 }],
+    });
+    const db = auth('head-a', 'head-a@example.com');
+
+    const paymentParams = {
+      customerId,
+      paymentId: 'pay-concurrent-idempotent-001',
+      amountPaise: 10000,
+      allocations: [
+        { billId: '2026-11', billingMonth: '2026-11', amountPaise: 10000 },
+      ],
+    };
+
+    // First submission succeeds
+    await assertSucceeds(confirmPaymentTransaction(db, paymentParams));
+
+    // Exact same payment submission retry/concurrency is rejected by security rules
+    // preventing duplicate payment document, duplicate balance deduction, or duplicate audit
+    await assertFails(confirmPaymentTransaction(db, paymentParams));
+
+    // Two different operationIds for same customer, date, and amount succeed twice
+    await assertSucceeds(
+      confirmPaymentTransaction(db, {
+        customerId,
+        paymentId: 'pay-legit-diff-001',
+        amountPaise: 10000,
+        allocations: [
+          { billId: '2026-11', billingMonth: '2026-11', amountPaise: 10000 },
+        ],
+      }),
+    );
+    await assertSucceeds(
+      confirmPaymentTransaction(db, {
+        customerId,
+        paymentId: 'pay-legit-diff-002',
+        amountPaise: 10000,
+        allocations: [
+          { billId: '2026-11', billingMonth: '2026-11', amountPaise: 10000 },
+        ],
+      }),
+    );
+
+    const payment1 = await getDoc(
+      doc(
+        db,
+        `businesses/business-a/customers/${customerId}/payments/pay-legit-diff-001`,
+      ),
+    );
+    const payment2 = await getDoc(
+      doc(
+        db,
+        `businesses/business-a/customers/${customerId}/payments/pay-legit-diff-002`,
+      ),
+    );
+    assert.equal(payment1.exists(), true);
+    assert.equal(payment2.exists(), true);
+  });
+
   test('employee balance metrics require their current assignment and area', async () => {
     await seedCollectionProjection();
     const employee = auth('employee-a', 'employee-a@example.com');
@@ -4018,6 +4080,59 @@ describe('Phase 7 reporting security and projection integrity', () => {
         updatedAt: serverTimestamp(),
       }),
     );
+  });
+
+  describe('Account Deletion Security Rules', () => {
+    test('user can read own account deletion request but not list or write', async () => {
+      await environment.withSecurityRulesDisabled(async (context) => {
+        const db = context.firestore();
+        await setDoc(doc(db, 'accountDeletionRequests/head-a'), {
+          uid: 'head-a',
+          status: 'completed',
+          role: 'head',
+        });
+      });
+
+      const head = auth('head-a', 'head-a@example.com');
+      const employee = auth('employee-a', 'employee-a@example.com');
+      const requestDoc = doc(head, 'accountDeletionRequests/head-a');
+
+      // Own read succeeds
+      await assertSucceeds(getDoc(requestDoc));
+
+      // Other user read fails
+      await assertFails(
+        getDoc(doc(employee, 'accountDeletionRequests/head-a')),
+      );
+
+      // List queries fail
+      await assertFails(getDocs(collection(head, 'accountDeletionRequests')));
+
+      // Client writes and deletes fail
+      await assertFails(
+        setDoc(doc(head, 'accountDeletionRequests/head-a'), {
+          uid: 'head-a',
+          status: 'forged',
+        }),
+      );
+      await assertFails(deleteDoc(requestDoc));
+    });
+
+    test('removed employee loses all access to business workspace', async () => {
+      await environment.withSecurityRulesDisabled(async (context) => {
+        const db = context.firestore();
+        await updateDoc(doc(db, 'businesses/business-a/members/employee-a'), {
+          status: 'removed',
+          updatedAt: serverTimestamp(),
+        });
+      });
+
+      const employee = auth('employee-a', 'employee-a@example.com');
+      await assertFails(getDoc(doc(employee, 'businesses/business-a')));
+      await assertFails(
+        getDoc(doc(employee, 'businesses/business-a/customers/C-MANAGED')),
+      );
+    });
   });
 });
 

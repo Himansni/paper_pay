@@ -26,12 +26,14 @@ import 'package:paper_route/features/newspapers/presentation/daily_pricing_page.
 import 'package:paper_route/features/newspapers/presentation/newspaper_form_page.dart';
 import 'package:paper_route/features/newspapers/presentation/newspaper_pricing_page.dart';
 import 'package:paper_route/features/newspapers/presentation/newspapers_page.dart';
+import 'package:paper_route/features/profile/presentation/account_settings_page.dart';
 import 'package:paper_route/features/subscriptions/presentation/subscription_detail_page.dart';
 import 'package:paper_route/features/subscriptions/presentation/subscription_form_page.dart';
 import 'package:paper_route/features/reports/presentation/reports_page.dart';
 
 enum AuthenticatedDestination {
   dashboard,
+  accountSettings,
   businessSettings,
   employees,
   areas,
@@ -117,6 +119,9 @@ class AuthGate extends ConsumerWidget {
         if (headOnly && !user.isHead) return DashboardPage(user: user);
         return switch (destination) {
           AuthenticatedDestination.dashboard => DashboardPage(user: user),
+          AuthenticatedDestination.accountSettings => AccountSettingsPage(
+            user: user,
+          ),
           AuthenticatedDestination.businessSettings => BusinessSettingsPage(
             user: user,
           ),

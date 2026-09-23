@@ -1,0 +1,309 @@
+{
+  "@@locale": "en",
+  "appName": "PaperRoute",
+  "@appName": { "description": "Application title" },
+
+  "english": "English",
+  "hindi": "हिन्दी",
+  "language": "Language",
+  "switchLanguage": "Change Language",
+
+  "goodDay": "Good day, {name}",
+  "@goodDay": {
+    "placeholders": {
+      "name": { "type": "String" }
+    }
+  },
+  "headWorkspace": "Head Distributor workspace",
+  "employeeWorkspace": "Employee distribution workspace",
+
+  "commonSave": "Save",
+  "commonCancel": "Cancel",
+  "commonAdd": "Add",
+  "commonEdit": "Edit",
+  "commonDelete": "Delete",
+  "commonClose": "Close",
+  "commonConfirm": "Confirm",
+  "commonRefresh": "Refresh",
+  "commonTryAgain": "Try again",
+  "commonSearch": "Search",
+  "commonFilter": "Filter",
+  "commonClear": "Clear",
+  "commonDone": "Done",
+  "commonBack": "Back",
+  "commonLoading": "Loading...",
+  "commonActive": "Active",
+  "commonArchived": "Archived",
+  "commonUnassigned": "Unassigned",
+  "commonSuccess": "Success",
+  "commonError": "Error",
+  "commonWarning": "Warning",
+  "commonNotice": "Notice",
+  "commonNoData": "No records found.",
+
+  "authSignIn": "Sign In",
+  "authSignOut": "Sign Out",
+  "authEmail": "Email Address",
+  "authPassword": "Password",
+  "authForgotPassword": "Forgot password?",
+  "authResetPassword": "Reset Password",
+  "authAccountSettings": "Account Settings",
+  "authChangePassword": "Change Password",
+  "authRequestDeletion": "Request Account Deletion",
+  "authAccessPending": "Account Access Pending",
+  "authJoinAgency": "Join Agency",
+  "authInviteCode": "Invitation Code",
+  "authCreateAgency": "Register New Agency",
+
+  "dashboardTitle": "PaperRoute",
+  "currentOutstanding": "Current outstanding",
+  "todayCollection": "Today's collection",
+  "monthBilled": "{month} billed",
+  "@monthBilled": {
+    "placeholders": {
+      "month": { "type": "String" }
+    }
+  },
+  "monthNetCollected": "{month} net collected",
+  "@monthNetCollected": {
+    "placeholders": {
+      "month": { "type": "String" }
+    }
+  },
+  "quickActions": "Quick actions",
+  "dailyPricing": "Daily pricing",
+  "addCustomer": "Add customer",
+  "recordPayment": "Record payment",
+  "viewReports": "View reports",
+  "recentActivity": "Recent activity",
+  "recentPayments": "Recent collections",
+  "recentBilling": "Recent billing",
+  "recentCustomers": "Recent customers",
+
+  "customersTitle": "Customers",
+  "customerDetails": "Customer Profile",
+  "quickAddCustomer": "Quick Add Customer",
+  "saveAndAddNext": "Save & Add Next",
+  "customerName": "Customer Name",
+  "customerPhone": "Phone Number",
+  "alternatePhone": "Alternate Phone",
+  "customerAddress": "Delivery Address",
+  "customerHouseNumber": "House / Flat Number",
+  "customerBuildingInfo": "Wing / Floor / Tower",
+  "customerLandmark": "Landmark",
+  "customerArea": "Delivery Area",
+  "customerPlacement": "Delivery Placement",
+  "customerCode": "Customer ID",
+  "customerSaved": "Customer {code} ({name}) saved successfully",
+  "@customerSaved": {
+    "placeholders": {
+      "code": { "type": "String" },
+      "name": { "type": "String" }
+    }
+  },
+  "locationNotes": "Location Notes",
+  "openingBalance": "Opening Balance (₹)",
+  "placementDoorstep": "Doorstep",
+  "placementHandToCustomer": "Hand to customer",
+  "placementReception": "Security / Reception",
+  "placementCollectionPoint": "Collection Point",
+  "archiveCustomer": "Archive Customer",
+  "searchCustomerHint": "Search name, phone, code or landmark...",
+
+  "subscriptionsTitle": "Newspaper Subscriptions",
+  "subscriptionDetails": "Subscription Details",
+  "addSubscription": "Add Subscription",
+  "editSubscription": "Edit Subscription",
+  "pauseAllSubscriptions": "Pause All Subscriptions",
+  "resumeAllSubscriptions": "Resume All Subscriptions",
+  "pauseDelivery": "Pause Delivery",
+  "resumeDelivery": "Resume Delivery",
+  "stopSubscription": "End Subscription",
+  "stopSubscriptionPermanently": "Stop Subscription Permanently",
+  "pauseNotice": "No delivery from {start} to {end} ({days} days). Delivery resumes on: {resume}.",
+  "@pauseNotice": {
+    "placeholders": {
+      "start": { "type": "String" },
+      "end": { "type": "String" },
+      "days": { "type": "int" },
+      "resume": { "type": "String" }
+    }
+  },
+  "pauseReason": "Reason for pause",
+  "pauseReasonVacation": "Out of town / Vacation",
+  "pauseReasonFestival": "Festival / Holiday",
+  "pauseReasonCustomerRequest": "Customer request",
+  "pauseReasonOther": "Other reason",
+  "permanentStopNotice": "Historical billing and past collection receipts will be permanently preserved. Delivered days up to {date} will be billed normally.",
+  "@permanentStopNotice": {
+    "placeholders": {
+      "date": { "type": "String" }
+    }
+  },
+  "newspaperTitle": "Publication",
+  "quantity": "Copies",
+  "deliveryDays": "Delivery Days",
+  "customPrice": "Custom Price per Day (Optional)",
+  "allSubscriptionsPaused": "All subscriptions paused for this household",
+  "pauseAllSuccess": "All subscriptions paused successfully",
+  "resumeAllSuccess": "All subscriptions resumed successfully",
+
+  "morningRouteTitle": "Morning Route",
+  "morningRouteProgress": "{delivered} of {total} drops completed ({percent}%)",
+  "@morningRouteProgress": {
+    "placeholders": {
+      "delivered": { "type": "int" },
+      "total": { "type": "int" },
+      "percent": { "type": "int" }
+    }
+  },
+  "markDelivered": "Mark Delivered",
+  "undoDelivered": "Undo Delivered",
+  "deliveredBadge": "Delivered",
+  "pausedTodayBadge": "PAUSED TODAY — DO NOT DELIVER",
+  "logException": "Report Issue",
+  "issueBadge": "Issue",
+  "selectRouteDate": "Select Route Date",
+  "refreshRoute": "Refresh Route",
+  "filterAll": "All ({count})",
+  "@filterAll": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "filterPending": "Pending ({count})",
+  "@filterPending": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "filterDelivered": "Delivered ({count})",
+  "@filterDelivered": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "filterPaused": "Paused ({count})",
+  "@filterPaused": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "allDropsCompleted": "🎉 All active drops completed!",
+  "noMatchingStops": "No stops match this filter.",
+  "exceptionHouseLocked": "House Locked / Gate Closed",
+  "exceptionRain": "Heavy Rain / Waterlogged",
+  "exceptionPaperShortage": "Newspaper Shortage",
+  "exceptionCustomerRefused": "Customer Refused Delivery",
+  "papersToDeliver": "PAPERS TO DELIVER:",
+  "pausedHouseholdNotice": "No action required for paused household.",
+  "reportIssueFor": "Report Issue for {name}",
+  "@reportIssueFor": {
+    "placeholders": {
+      "name": { "type": "String" }
+    }
+  },
+
+  "headTodayTitle": "Today's Operations",
+  "headTodaySubtitle": "Live Depot Circulation & Delivery Monitoring",
+  "depotPickupTally": "Depot Pickup Circulation",
+  "copiesToPickup": "{count} copies",
+  "@copiesToPickup": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "orderedCopies": "Ordered: {count}",
+  "@orderedCopies": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "pausedCopies": "Paused: {count}",
+  "@pausedCopies": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "copiesToDistribute": "To Distribute: {count}",
+  "@copiesToDistribute": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "routeProgressTitle": "Route Progress by Hawker",
+  "todayCollectionsTitle": "Today's Collections",
+  "cashCollected": "Cash in Hand: {amount}",
+  "@cashCollected": {
+    "placeholders": {
+      "amount": { "type": "String" }
+    }
+  },
+  "upiCollected": "Direct UPI: {amount}",
+  "@upiCollected": {
+    "placeholders": {
+      "amount": { "type": "String" }
+    }
+  },
+  "totalToday": "Total Today: {amount}",
+  "@totalToday": {
+    "placeholders": {
+      "amount": { "type": "String" }
+    }
+  },
+  "operationalAlertsTitle": "Operational Exceptions Reported Today",
+  "noOperationalAlerts": "No delivery exceptions reported today. All routes running smoothly.",
+
+  "billingTitle": "Monthly Billing",
+  "generateBills": "Generate Bills",
+  "billingMonth": "Billing Month",
+  "finalizedBills": "Finalized Bills",
+  "openBills": "Pending Bills",
+  "totalDue": "Total Due: {amount}",
+  "@totalDue": {
+    "placeholders": {
+      "amount": { "type": "String" }
+    }
+  },
+  "downloadBill": "Download Bill (PDF)",
+  "dailyPricingTitle": "Daily Pricing",
+
+  "collectionsTitle": "Collections & Payments",
+  "recordPaymentTitle": "Record Payment",
+  "amount": "Amount (₹)",
+  "paymentMethod": "Payment Method",
+  "methodCash": "Cash",
+  "methodUpi": "UPI QR Code",
+  "upiReference": "UPI Transaction ID / Ref",
+  "outstandingTitle": "Current Outstanding",
+  "collectPayment": "Collect Payment",
+  "paymentReceipt": "Receipt",
+  "duplicatePaymentWarning": "Notice: A payment of {amount} was already collected today at {time} by {collector}.",
+  "@duplicatePaymentWarning": {
+    "placeholders": {
+      "amount": { "type": "String" },
+      "time": { "type": "String" },
+      "collector": { "type": "String" }
+    }
+  },
+  "ledgerTimelineTitle": "Ledger Statement",
+  "shareOnWhatsApp": "Share Statement on WhatsApp",
+  "runningBalance": "Balance: {amount}",
+  "@runningBalance": {
+    "placeholders": {
+      "amount": { "type": "String" }
+    }
+  },
+
+  "teamTitle": "Employees & Hawkers",
+  "inviteEmployee": "Invite Employee",
+  "pendingRemovalRequests": "Pending Offboarding Requests",
+  "reassignRoute": "Reassign Route",
+  "approveOffboarding": "Approve Offboarding & Archive",
+  "leaveAgency": "Request to Leave Agency",
+
+  "areasTitle": "Delivery Areas",
+  "addArea": "Add Delivery Area",
+  "newspapersTitle": "Newspapers & Publications",
+  "addNewspaper": "Add Publication"
+}

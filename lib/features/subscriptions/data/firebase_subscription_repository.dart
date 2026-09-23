@@ -807,6 +807,124 @@ class FirebaseSubscriptionRepository implements SubscriptionRepository {
     }
   }
 
+  @override
+  Future<void> pauseAllCustomerSubscriptions({
+    required AppUser actor,
+    required String customerId,
+    required LocalDate startDate,
+    required LocalDate? endDate,
+    required String reason,
+    required List<String> subscriptionIds,
+  }) async {
+    final businessId = _businessId(actor);
+    final batch = _firestore.batch();
+    final now = FieldValue.serverTimestamp();
+    final auditRef = _audits(businessId).doc();
+
+    for (final subId in subscriptionIds) {
+      final subRef = _subscription(businessId, customerId, subId);
+      final pauseId = 'P-${_uuid.v4().replaceAll('-', '').toUpperCase()}';
+      final pauseRef = subRef.collection('pauses').doc(pauseId);
+
+      batch.set(pauseRef, {
+        'businessId': businessId,
+        'customerId': customerId,
+        'subscriptionId': subId,
+        'pauseId': pauseId,
+        'startDate': startDate.toString(),
+        'endDate': endDate?.toString(),
+        'reason': reason.trim(),
+        'status': endDate == null ? 'open' : 'closed',
+        'createdBy': actor.uid,
+        'updatedBy': actor.uid,
+        'lastAuditId': auditRef.id,
+        'createdAt': now,
+        'updatedAt': now,
+      });
+
+      batch.update(subRef, {
+        if (endDate == null || !startDate.isAfter(LocalDate.fromDateTime(DateTime.now())))
+          'status': SubscriptionStatus.paused.value,
+        'currentPauseId': pauseId,
+        'updatedBy': actor.uid,
+        'lastAuditId': auditRef.id,
+        'updatedAt': now,
+      });
+    }
+
+    batch.set(auditRef, {
+      'businessId': businessId,
+      'customerId': customerId,
+      'actorId': actor.uid,
+      'action': 'allSubscriptionsPaused',
+      'auditId': auditRef.id,
+      'startDate': startDate.toString(),
+      'endDate': endDate?.toString(),
+      'reason': reason.trim(),
+      'affectedSubscriptions': subscriptionIds,
+      'createdAt': now,
+    });
+
+    try {
+      await batch.commit();
+    } on FirebaseException catch (error) {
+      throw _translate(error, 'Could not pause all subscriptions.');
+    }
+  }
+
+  @override
+  Future<void> resumeAllCustomerSubscriptions({
+    required AppUser actor,
+    required String customerId,
+    required LocalDate resumeDate,
+    required List<String> subscriptionIds,
+  }) async {
+    final businessId = _businessId(actor);
+    final batch = _firestore.batch();
+    final now = FieldValue.serverTimestamp();
+    final auditRef = _audits(businessId).doc();
+
+    for (final subId in subscriptionIds) {
+      final subRef = _subscription(businessId, customerId, subId);
+      final subSnap = await subRef.get();
+      final pauseId = subSnap.data()?['currentPauseId'] as String? ?? '';
+      if (pauseId.isNotEmpty) {
+        final pauseRef = subRef.collection('pauses').doc(pauseId);
+        batch.update(pauseRef, {
+          'endDate': resumeDate.addDays(-1).toString(),
+          'status': 'closed',
+          'updatedBy': actor.uid,
+          'lastAuditId': auditRef.id,
+          'updatedAt': now,
+        });
+      }
+      batch.update(subRef, {
+        'status': SubscriptionStatus.active.value,
+        'currentPauseId': '',
+        'updatedBy': actor.uid,
+        'lastAuditId': auditRef.id,
+        'updatedAt': now,
+      });
+    }
+
+    batch.set(auditRef, {
+      'businessId': businessId,
+      'customerId': customerId,
+      'actorId': actor.uid,
+      'action': 'allSubscriptionsResumed',
+      'auditId': auditRef.id,
+      'resumeDate': resumeDate.toString(),
+      'affectedSubscriptions': subscriptionIds,
+      'createdAt': now,
+    });
+
+    try {
+      await batch.commit();
+    } on FirebaseException catch (error) {
+      throw _translate(error, 'Could not resume all subscriptions.');
+    }
+  }
+
   Map<String, Object?> _versionData({
     required String businessId,
     required String customerId,

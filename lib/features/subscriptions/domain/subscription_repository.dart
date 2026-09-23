@@ -69,4 +69,20 @@ abstract interface class SubscriptionRepository {
     required String subscriptionId,
     required LocalDate endDate,
   });
+
+  Future<void> pauseAllCustomerSubscriptions({
+    required AppUser actor,
+    required String customerId,
+    required LocalDate startDate,
+    required LocalDate? endDate,
+    required String reason,
+    required List<String> subscriptionIds,
+  });
+
+  Future<void> resumeAllCustomerSubscriptions({
+    required AppUser actor,
+    required String customerId,
+    required LocalDate resumeDate,
+    required List<String> subscriptionIds,
+  });
 }

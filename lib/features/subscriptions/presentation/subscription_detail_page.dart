@@ -10,6 +10,7 @@ import 'package:paper_route/features/customers/domain/customer.dart';
 import 'package:paper_route/features/customers/presentation/customer_providers.dart';
 import 'package:paper_route/features/subscriptions/domain/customer_subscription.dart';
 import 'package:paper_route/features/subscriptions/presentation/subscription_providers.dart';
+import 'package:paper_route/l10n/app_localizations.dart';
 
 class CustomerSubscriptionsSection extends ConsumerWidget {
   const CustomerSubscriptionsSection({
@@ -25,6 +26,7 @@ class CustomerSubscriptionsSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
     final key = (businessId: user.businessId!, customerId: customer.id);
     final subscriptions = ref.watch(customerSubscriptionsProvider(key));
     final canManage = _policy.canManageSubscription(
@@ -88,7 +90,11 @@ class CustomerSubscriptionsSection extends ConsumerWidget {
                             : 'No subscriptions are configured for this customer.',
                   );
                 }
+                final active = items.where((s) => s.isActive).toList();
+                final paused = items.where((s) => s.isPaused).toList();
+
                 return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     for (final subscription in items)
                       ListTile(
@@ -116,6 +122,29 @@ class CustomerSubscriptionsSection extends ConsumerWidget {
                               '/customers/${Uri.encodeComponent(customer.id)}/subscriptions/${Uri.encodeComponent(subscription.id)}',
                             ),
                       ),
+                    if (canManage && (active.length > 1 || paused.isNotEmpty)) ...[
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          if (active.isNotEmpty)
+                            OutlinedButton.icon(
+                              key: const ValueKey('pause-all-subscriptions-button'),
+                              onPressed: () => _pauseAll(context, ref, active, key),
+                              icon: const Icon(Icons.pause_circle_outline),
+                              label: Text('${l10n?.pauseAllSubscriptions ?? "Pause all"} (${active.length})'),
+                            ),
+                          if (paused.isNotEmpty)
+                            FilledButton.icon(
+                              key: const ValueKey('resume-all-subscriptions-button'),
+                              onPressed: () => _resumeAll(context, ref, paused, key),
+                              icon: const Icon(Icons.play_circle_outline),
+                              label: Text('${l10n?.resumeAllSubscriptions ?? "Resume all"} (${paused.length})'),
+                            ),
+                        ],
+                      ),
+                    ],
                   ],
                 );
               },
@@ -124,6 +153,73 @@ class CustomerSubscriptionsSection extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _pauseAll(
+    BuildContext context,
+    WidgetRef ref,
+    List<CustomerSubscription> active,
+    ({String businessId, String customerId}) key,
+  ) async {
+    final draft = await showDialog<_PauseAllDraft>(
+      context: context,
+      builder: (context) => _PauseAllDialog(subscriptions: active),
+    );
+    if (draft == null || !context.mounted) return;
+    try {
+      await ref.read(subscriptionRepositoryProvider).pauseAllCustomerSubscriptions(
+        actor: user,
+        customerId: customer.id,
+        startDate: draft.startDate,
+        endDate: draft.endDate,
+        reason: draft.reason,
+        subscriptionIds: draft.subscriptionIds,
+      );
+      ref.invalidate(customerSubscriptionsProvider(key));
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('All selected subscriptions have been paused.')),
+      );
+    } catch (err) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not pause subscriptions. $err')),
+      );
+    }
+  }
+
+  Future<void> _resumeAll(
+    BuildContext context,
+    WidgetRef ref,
+    List<CustomerSubscription> paused,
+    ({String businessId, String customerId}) key,
+  ) async {
+    final date = await showDialog<LocalDate>(
+      context: context,
+      builder: (context) => const _DateDialog(
+        title: 'Resume all deliveries',
+        label: 'First resumed delivery date',
+      ),
+    );
+    if (date == null || !context.mounted) return;
+    try {
+      await ref.read(subscriptionRepositoryProvider).resumeAllCustomerSubscriptions(
+        actor: user,
+        customerId: customer.id,
+        resumeDate: date,
+        subscriptionIds: paused.map((s) => s.id).toList(),
+      );
+      ref.invalidate(customerSubscriptionsProvider(key));
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('All paused subscriptions resumed.')),
+      );
+    } catch (err) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not resume subscriptions. $err')),
+      );
+    }
   }
 }
 
@@ -471,6 +567,9 @@ class _SubscriptionDetailPageState
           (context) => const _DateDialog(
             title: 'End subscription',
             label: 'Final delivery date',
+            description:
+                'Historical deliveries, confirmed monthly bills, and collection receipts will be permanently preserved. '
+                'Delivered copies up to the final date will be billed normally.',
           ),
     );
     if (date == null || !mounted) return;
@@ -730,10 +829,15 @@ class _PauseDialogState extends State<_PauseDialog> {
 }
 
 class _DateDialog extends StatefulWidget {
-  const _DateDialog({required this.title, required this.label});
+  const _DateDialog({
+    required this.title,
+    required this.label,
+    this.description,
+  });
 
   final String title;
   final String label;
+  final String? description;
 
   @override
   State<_DateDialog> createState() => _DateDialogState();
@@ -754,13 +858,26 @@ class _DateDialogState extends State<_DateDialog> {
     title: Text(widget.title),
     content: Form(
       key: _formKey,
-      child: TextFormField(
-        controller: _date,
-        decoration: InputDecoration(
-          labelText: widget.label,
-          hintText: 'YYYY-MM-DD',
-        ),
-        validator: _requiredDate,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (widget.description != null) ...[
+            Text(
+              widget.description!,
+              style: const TextStyle(color: Color(0xFF486581), height: 1.4),
+            ),
+            const SizedBox(height: 12),
+          ],
+          TextFormField(
+            controller: _date,
+            decoration: InputDecoration(
+              labelText: widget.label,
+              hintText: 'YYYY-MM-DD',
+            ),
+            validator: _requiredDate,
+          ),
+        ],
       ),
     ),
     actions: [
@@ -790,3 +907,175 @@ String? _requiredDate(String? value) {
 
 String? _optionalDate(String? value) =>
     (value?.trim().isEmpty ?? true) ? null : _requiredDate(value);
+
+class _PauseAllDraft {
+  const _PauseAllDraft({
+    required this.startDate,
+    required this.endDate,
+    required this.reason,
+    required this.subscriptionIds,
+  });
+
+  final LocalDate startDate;
+  final LocalDate? endDate;
+  final String reason;
+  final List<String> subscriptionIds;
+}
+
+class _PauseAllDialog extends StatefulWidget {
+  const _PauseAllDialog({required this.subscriptions});
+
+  final List<CustomerSubscription> subscriptions;
+
+  @override
+  State<_PauseAllDialog> createState() => _PauseAllDialogState();
+}
+
+class _PauseAllDialogState extends State<_PauseAllDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _start = TextEditingController();
+  final _end = TextEditingController();
+  final _reason = TextEditingController(text: 'Vacation / Out of town');
+  late final Set<String> _selectedIds;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedIds = widget.subscriptions.map((s) => s.id).toSet();
+  }
+
+  @override
+  void dispose() {
+    _start.dispose();
+    _end.dispose();
+    _reason.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    LocalDate? startDate;
+    LocalDate? endDate;
+    try {
+      if (_start.text.trim().isNotEmpty) startDate = LocalDate.parse(_start.text.trim());
+      if (_end.text.trim().isNotEmpty) endDate = LocalDate.parse(_end.text.trim());
+    } catch (_) {}
+
+    final hasPreview = startDate != null && endDate != null && !endDate.isBefore(startDate);
+    final days = hasPreview ? endDate.toDateTime().difference(startDate.toDateTime()).inDays + 1 : 0;
+    final resumeDate = hasPreview ? endDate.addDays(1).toString() : '';
+
+    return AlertDialog(
+      title: Text(l10n?.pauseAllSubscriptions ?? 'Pause all subscriptions'),
+      content: SizedBox(
+        width: 480,
+        child: Form(
+          key: _formKey,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Select the pause period. Delivered days are billed normally; paused days are excluded from monthly charges.',
+                  style: TextStyle(color: Color(0xFF486581), height: 1.4),
+                ),
+                const SizedBox(height: 14),
+                TextFormField(
+                  controller: _start,
+                  decoration: const InputDecoration(
+                    labelText: 'Pause starts (inclusive)',
+                    hintText: 'YYYY-MM-DD',
+                  ),
+                  validator: _requiredDate,
+                  onChanged: (_) => setState(() {}),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _end,
+                  decoration: const InputDecoration(
+                    labelText: 'Pause ends (inclusive, optional)',
+                    hintText: 'YYYY-MM-DD',
+                    helperText: 'Leave empty for an open pause requiring manual resume.',
+                  ),
+                  validator: _optionalDate,
+                  onChanged: (_) => setState(() {}),
+                ),
+                if (hasPreview) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF8E8),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFFFFD599)),
+                    ),
+                    child: Text(
+                      l10n?.pauseNotice(
+                            startDate.toString(),
+                            endDate.toString(),
+                            days,
+                            resumeDate,
+                          ) ??
+                          '⛔ No delivery: $startDate to $endDate ($days days)\n'
+                              '▶️ Delivery resumes on: $resumeDate',
+                      style: const TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF8A4B00), height: 1.4),
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _reason,
+                  decoration: const InputDecoration(labelText: 'Reason for pause'),
+                  validator: (v) => (v?.trim().length ?? 0) < 2 ? 'Enter a short reason.' : null,
+                ),
+                const SizedBox(height: 14),
+                const Text('Subscriptions to pause', style: TextStyle(fontWeight: FontWeight.w700)),
+                for (final sub in widget.subscriptions)
+                  CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: _selectedIds.contains(sub.id),
+                    title: Text(sub.newspaperName),
+                    subtitle: Text('Qty ${sub.quantity} • ${sub.status.label}'),
+                    onChanged: (checked) {
+                      setState(() {
+                        if (checked == true) {
+                          _selectedIds.add(sub.id);
+                        } else if (_selectedIds.length > 1) {
+                          _selectedIds.remove(sub.id);
+                        }
+                      });
+                    },
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text(l10n?.commonCancel ?? 'Cancel'),
+        ),
+        FilledButton(
+          onPressed: () {
+            if (!_formKey.currentState!.validate()) return;
+            if (_selectedIds.isEmpty) return;
+            Navigator.pop(
+              context,
+              _PauseAllDraft(
+                startDate: LocalDate.parse(_start.text.trim()),
+                endDate: _end.text.trim().isEmpty ? null : LocalDate.parse(_end.text.trim()),
+                reason: _reason.text.trim(),
+                subscriptionIds: _selectedIds.toList(),
+              ),
+            );
+          },
+          child: Text('Pause ${_selectedIds.length} subscriptions'),
+        ),
+      ],
+    );
+  }
+}

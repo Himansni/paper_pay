@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:paper_route/core/localization/locale_provider.dart';
 import 'package:paper_route/core/presentation/async_state_cards.dart';
 import 'package:paper_route/core/theme/app_theme.dart';
 import 'package:paper_route/features/auth/domain/app_user.dart';
@@ -9,6 +10,7 @@ import 'package:paper_route/features/auth/presentation/auth_providers.dart';
 import 'package:paper_route/features/billing/domain/monthly_bill.dart';
 import 'package:paper_route/features/reports/domain/report_models.dart';
 import 'package:paper_route/features/reports/presentation/reporting_providers.dart';
+import 'package:paper_route/l10n/app_localizations.dart';
 
 class DashboardPage extends ConsumerWidget {
   const DashboardPage({required this.user, super.key});
@@ -17,6 +19,7 @@ class DashboardPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
     final firstName = user.displayName.trim().split(' ').firstOrNull ?? 'there';
     final dashboard = ref.watch(operationalDashboardProvider(user));
     return Scaffold(
@@ -30,19 +33,20 @@ class DashboardPage extends ConsumerWidget {
           ],
         ),
         actions: [
+          const LanguageToggleButton(isDense: true),
           IconButton(
             onPressed: () => ref.invalidate(operationalDashboardProvider(user)),
-            tooltip: 'Refresh dashboard',
+            tooltip: l10n?.commonRefresh ?? 'Refresh dashboard',
             icon: const Icon(Icons.refresh),
           ),
           IconButton(
             onPressed: () => context.push('/account-settings'),
-            tooltip: 'Account settings',
+            tooltip: l10n?.authAccountSettings ?? 'Account settings',
             icon: const Icon(Icons.account_circle_outlined),
           ),
           IconButton(
             onPressed: () => ref.read(authRepositoryProvider).signOut(),
-            tooltip: 'Sign out',
+            tooltip: l10n?.authSignOut ?? 'Sign out',
             icon: const Icon(Icons.logout_rounded),
           ),
           const SizedBox(width: 8),
@@ -60,7 +64,8 @@ class DashboardPage extends ConsumerWidget {
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 40),
             children: [
               Text(
-                'Good day, ${firstName.isEmpty ? 'there' : firstName}',
+                l10n?.goodDay(firstName.isEmpty ? 'there' : firstName) ??
+                    'Good day, ${firstName.isEmpty ? 'there' : firstName}',
                 style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                   color: AppTheme.ink,
                   fontWeight: FontWeight.w800,
@@ -69,8 +74,9 @@ class DashboardPage extends ConsumerWidget {
               const SizedBox(height: 4),
               Text(
                 user.isHead
-                    ? 'Head Distributor workspace'
-                    : 'Employee distribution workspace',
+                    ? (l10n?.headWorkspace ?? 'Head Distributor workspace')
+                    : (l10n?.employeeWorkspace ??
+                        'Employee distribution workspace'),
                 style: const TextStyle(color: Color(0xFF486581)),
               ),
               const SizedBox(height: 18),
@@ -104,52 +110,63 @@ class _HeadDashboard extends StatelessWidget {
   final OperationalDashboard metrics;
 
   @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      _PrimaryMetrics(
-        items: [
-          _MetricSpec(
-            'Current outstanding',
-            BillingMoney.formatPaise(metrics.currentOutstandingPaise),
-            Icons.account_balance_wallet_outlined,
-            AppTheme.accent,
-            '/reports?tab=outstanding',
-          ),
-          _MetricSpec(
-            "Today's collection",
-            BillingMoney.formatPaise(metrics.todayCollectionsPaise),
-            Icons.today_outlined,
-            AppTheme.brand,
-            '/reports?tab=collections',
-          ),
-          _MetricSpec(
-            '${metrics.monthKey} billed',
-            BillingMoney.formatPaise(metrics.currentMonthBilledPaise),
-            Icons.receipt_long_outlined,
-            const Color(0xFF486581),
-            '/reports?tab=billing',
-          ),
-          _MetricSpec(
-            '${metrics.monthKey} net collected',
-            BillingMoney.formatPaise(metrics.netCollectionsPaise),
-            Icons.payments_outlined,
-            const Color(0xFF127C71),
-            '/reports?tab=collections',
-          ),
-        ],
-      ),
-      const SizedBox(height: 22),
-      const _SectionTitle('Quick actions'),
-      const SizedBox(height: 10),
-      const _QuickActions(
-        actions: [
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _PrimaryMetrics(
+          items: [
+            _MetricSpec(
+              l10n?.currentOutstanding ?? 'Current outstanding',
+              BillingMoney.formatPaise(metrics.currentOutstandingPaise),
+              Icons.account_balance_wallet_outlined,
+              AppTheme.accent,
+              '/reports?tab=outstanding',
+            ),
+            _MetricSpec(
+              l10n?.todayCollection ?? "Today's collection",
+              BillingMoney.formatPaise(metrics.todayCollectionsPaise),
+              Icons.today_outlined,
+              AppTheme.brand,
+              '/reports?tab=collections',
+            ),
+            _MetricSpec(
+              l10n?.monthBilled(metrics.monthKey) ??
+                  '${metrics.monthKey} billed',
+              BillingMoney.formatPaise(metrics.currentMonthBilledPaise),
+              Icons.receipt_long_outlined,
+              const Color(0xFF486581),
+              '/reports?tab=billing',
+            ),
+            _MetricSpec(
+              l10n?.monthNetCollected(metrics.monthKey) ??
+                  '${metrics.monthKey} net collected',
+              BillingMoney.formatPaise(metrics.netCollectionsPaise),
+              Icons.payments_outlined,
+              const Color(0xFF127C71),
+              '/reports?tab=collections',
+            ),
+          ],
+        ),
+        const SizedBox(height: 22),
+        _SectionTitle(l10n?.quickActions ?? 'Quick actions'),
+        const SizedBox(height: 10),
+        _QuickActions(
+          actions: [
+            _ActionSpec(
+              l10n?.headTodayTitle ?? 'Today\'s Operations',
+              l10n?.headTodaySubtitle ??
+                  'Depot pickup tally, route progress & live collections',
+              Icons.dashboard_customize_outlined,
+              '/today-operations',
+              emphasized: true,
+            ),
           _ActionSpec(
             'Daily pricing',
             'Set one date for every applicable subscription',
             Icons.price_change_outlined,
             '/daily-pricing',
-            emphasized: true,
           ),
           _ActionSpec(
             'Add customer',
@@ -188,6 +205,12 @@ class _HeadDashboard extends StatelessWidget {
             '/reports',
           ),
           _ActionSpec(
+            'Morning Route',
+            'Track daily drops and delivery progress',
+            Icons.directions_bike_outlined,
+            '/morning-route',
+          ),
+          _ActionSpec(
             'Business settings',
             'Details, pricing region and UPI',
             Icons.storefront_outlined,
@@ -212,6 +235,19 @@ class _HeadDashboard extends StatelessWidget {
           'Partially paid': metrics.partiallyPaidCustomers,
           'Fully paid': metrics.fullyPaidCustomers,
         },
+        routes: const {
+          'Active customers': '/customers',
+          'Archived customers': '/customers',
+          'Active employees': '/employees',
+          'Active areas': '/areas',
+          'Active newspapers': '/newspapers',
+          'Payments this month': '/reports?tab=collections',
+          'Reversals this month': '/reports?tab=collections',
+          'No finalized bill': '/billing',
+          'Unpaid': '/customers',
+          'Partially paid': '/customers',
+          'Fully paid': '/customers',
+        },
       ),
       const SizedBox(height: 22),
       _SummaryPair(
@@ -228,6 +264,7 @@ class _HeadDashboard extends StatelessWidget {
       ),
     ],
   );
+  }
 }
 
 class _EmployeeDashboard extends StatelessWidget {
@@ -236,54 +273,62 @@ class _EmployeeDashboard extends StatelessWidget {
   final OperationalDashboard metrics;
 
   @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      _PrimaryMetrics(
-        items: [
-          _MetricSpec(
-            'Assigned outstanding',
-            BillingMoney.formatPaise(metrics.currentOutstandingPaise),
-            Icons.account_balance_wallet_outlined,
-            AppTheme.accent,
-            '/customers',
-          ),
-          _MetricSpec(
-            "Today's collection",
-            BillingMoney.formatPaise(metrics.todayCollectionsPaise),
-            Icons.today_outlined,
-            AppTheme.brand,
-            '/collections',
-          ),
-          _MetricSpec(
-            'This month',
-            BillingMoney.formatPaise(metrics.currentMonthCollectionsPaise),
-            Icons.payments_outlined,
-            const Color(0xFF127C71),
-            '/collections',
-          ),
-          _MetricSpec(
-            'Assigned customers',
-            '${metrics.activeCustomers}',
-            Icons.people_alt_outlined,
-            const Color(0xFF486581),
-            '/customers',
-          ),
-        ],
-      ),
-      const SizedBox(height: 18),
-      const _QuickCustomerSearch(),
-      const SizedBox(height: 18),
-      const _SectionTitle('My daily work'),
-      const SizedBox(height: 10),
-      const _QuickActions(
-        actions: [
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _PrimaryMetrics(
+          items: [
+            _MetricSpec(
+              l10n?.outstandingTitle ?? 'Assigned outstanding',
+              BillingMoney.formatPaise(metrics.currentOutstandingPaise),
+              Icons.account_balance_wallet_outlined,
+              AppTheme.accent,
+              '/customers',
+            ),
+            _MetricSpec(
+              l10n?.todayCollection ?? "Today's collection",
+              BillingMoney.formatPaise(metrics.todayCollectionsPaise),
+              Icons.today_outlined,
+              AppTheme.brand,
+              '/collections',
+            ),
+            _MetricSpec(
+              'This month',
+              BillingMoney.formatPaise(metrics.currentMonthCollectionsPaise),
+              Icons.payments_outlined,
+              const Color(0xFF127C71),
+              '/collections',
+            ),
+            _MetricSpec(
+              'Assigned customers',
+              '${metrics.activeCustomers}',
+              Icons.people_alt_outlined,
+              const Color(0xFF486581),
+              '/customers',
+            ),
+          ],
+        ),
+        const SizedBox(height: 18),
+        const _QuickCustomerSearch(),
+        const SizedBox(height: 18),
+        _SectionTitle(l10n?.quickActions ?? 'My daily work'),
+        const SizedBox(height: 10),
+        _QuickActions(
+          actions: [
+            _ActionSpec(
+              l10n?.morningRouteTitle ?? 'Morning Route',
+              'Today\'s paper drops, sequence & delivery status',
+              Icons.directions_bike_outlined,
+              '/morning-route',
+              emphasized: true,
+            ),
           _ActionSpec(
             'Customers needing collection',
             'Open assigned customers with pending balances',
             Icons.pending_actions_outlined,
             '/customers',
-            emphasized: true,
           ),
           _ActionSpec(
             'Collect payment',
@@ -316,6 +361,14 @@ class _EmployeeDashboard extends StatelessWidget {
           'Fully paid': metrics.fullyPaidCustomers,
           'Payments this month': metrics.currentMonthPayments,
         },
+        routes: const {
+          'Assigned areas': '/customers',
+          'Pending customers': '/customers',
+          'Unpaid': '/customers',
+          'Partially paid': '/customers',
+          'Fully paid': '/customers',
+          'Payments this month': '/collections',
+        },
       ),
       const SizedBox(height: 20),
       _NamedMetricCard(
@@ -326,6 +379,7 @@ class _EmployeeDashboard extends StatelessWidget {
       _ActivityCard(title: 'Recent collections', items: metrics.recentPayments),
     ],
   );
+  }
 }
 
 class _PrimaryMetrics extends StatelessWidget {
@@ -445,9 +499,13 @@ class _QuickActions extends StatelessWidget {
 }
 
 class _CompactMetrics extends StatelessWidget {
-  const _CompactMetrics({required this.values});
+  const _CompactMetrics({
+    required this.values,
+    this.routes = const {},
+  });
 
   final Map<String, int> values;
+  final Map<String, String> routes;
 
   @override
   Widget build(BuildContext context) => Card(
@@ -458,10 +516,13 @@ class _CompactMetrics extends StatelessWidget {
         runSpacing: 10,
         children: [
           for (final entry in values.entries)
-            Chip(
+            ActionChip(
               label: Text('${entry.key}: ${entry.value}'),
               side: BorderSide.none,
               backgroundColor: const Color(0xFFF0F4F2),
+              onPressed: routes.containsKey(entry.key)
+                  ? () => context.go(routes[entry.key]!)
+                  : null,
             ),
         ],
       ),

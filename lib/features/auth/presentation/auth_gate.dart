@@ -29,6 +29,8 @@ import 'package:paper_route/features/newspapers/presentation/newspapers_page.dar
 import 'package:paper_route/features/profile/presentation/account_settings_page.dart';
 import 'package:paper_route/features/subscriptions/presentation/subscription_detail_page.dart';
 import 'package:paper_route/features/subscriptions/presentation/subscription_form_page.dart';
+import 'package:paper_route/features/delivery/presentation/morning_route_page.dart';
+import 'package:paper_route/features/delivery/presentation/today_operations_page.dart';
 import 'package:paper_route/features/reports/presentation/reports_page.dart';
 
 enum AuthenticatedDestination {
@@ -58,6 +60,8 @@ enum AuthenticatedDestination {
   subscriptionCreate,
   subscriptionDetail,
   subscriptionChange,
+  morningRoute,
+  todayOperations,
 }
 
 /// Single source of truth for auth and role routing. UI routes never trust a
@@ -114,6 +118,7 @@ class AuthGate extends ConsumerWidget {
           AuthenticatedDestination.newspaperEdit => true,
           AuthenticatedDestination.billPreview => true,
           AuthenticatedDestination.upiSettings => true,
+          AuthenticatedDestination.todayOperations => true,
           _ => false,
         };
         if (headOnly && !user.isHead) return DashboardPage(user: user);
@@ -202,6 +207,10 @@ class AuthGate extends ConsumerWidget {
               customerId: resourceId ?? '',
               subscriptionId: secondaryResourceId ?? '',
             ),
+          AuthenticatedDestination.morningRoute =>
+            MorningRoutePage(user: user),
+          AuthenticatedDestination.todayOperations =>
+            TodayOperationsPage(user: user),
         };
       },
     );

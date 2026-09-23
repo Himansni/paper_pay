@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:paper_route/core/config/firebase_bootstrap.dart';
 import 'package:paper_route/core/theme/app_theme.dart';
+import 'package:paper_route/core/localization/locale_provider.dart';
 import 'package:paper_route/features/agency_registration/presentation/create_agency_account_page.dart';
 import 'package:paper_route/features/agency_registration/presentation/agency_registration_providers.dart';
 import 'package:paper_route/features/auth/presentation/access_pending_page.dart';
@@ -10,17 +11,18 @@ import 'package:paper_route/features/auth/presentation/auth_gate.dart';
 import 'package:paper_route/features/auth/presentation/forgot_password_page.dart';
 import 'package:paper_route/features/auth/presentation/invite_registration_page.dart';
 import 'package:paper_route/features/auth/presentation/setup_required_page.dart';
+import 'package:paper_route/l10n/app_localizations.dart';
 
-class PaperRouteApp extends StatefulWidget {
+class PaperRouteApp extends ConsumerStatefulWidget {
   const PaperRouteApp({required this.startup, super.key});
 
   final FirebaseStartup startup;
 
   @override
-  State<PaperRouteApp> createState() => _PaperRouteAppState();
+  ConsumerState<PaperRouteApp> createState() => _PaperRouteAppState();
 }
 
-class _PaperRouteAppState extends State<PaperRouteApp> {
+class _PaperRouteAppState extends ConsumerState<PaperRouteApp> {
   late final GoRouter _router = GoRouter(
     routes: [
       GoRoute(
@@ -78,6 +80,26 @@ class _PaperRouteAppState extends State<PaperRouteApp> {
                 widget.startup.isReady
                     ? const AuthGate(
                       destination: AuthenticatedDestination.employees,
+                    )
+                    : SetupRequiredPage(message: widget.startup.message),
+      ),
+      GoRoute(
+        path: '/morning-route',
+        builder:
+            (context, state) =>
+                widget.startup.isReady
+                    ? const AuthGate(
+                      destination: AuthenticatedDestination.morningRoute,
+                    )
+                    : SetupRequiredPage(message: widget.startup.message),
+      ),
+      GoRoute(
+        path: '/today-operations',
+        builder:
+            (context, state) =>
+                widget.startup.isReady
+                    ? const AuthGate(
+                      destination: AuthenticatedDestination.todayOperations,
                     )
                     : SetupRequiredPage(message: widget.startup.message),
       ),
@@ -348,11 +370,15 @@ class _PaperRouteAppState extends State<PaperRouteApp> {
 
   @override
   Widget build(BuildContext context) {
+    final locale = ref.watch(localeProvider);
     return MaterialApp.router(
       title: 'PaperRoute',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       routerConfig: _router,
+      locale: locale,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
     );
   }
 }

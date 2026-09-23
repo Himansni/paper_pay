@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:paper_route/core/errors/app_exception.dart';
+import 'package:paper_route/core/localization/locale_provider.dart';
 import 'package:paper_route/core/theme/app_theme.dart';
 import 'package:paper_route/features/auth/domain/app_user.dart';
 import 'package:paper_route/features/auth/presentation/auth_providers.dart';
+import 'package:paper_route/l10n/app_localizations.dart';
 
 class AccountSettingsPage extends ConsumerStatefulWidget {
   const AccountSettingsPage({required this.user, super.key});
@@ -282,13 +284,14 @@ class _AccountSettingsPageState extends ConsumerState<AccountSettingsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final user = widget.user;
     final roleLabel = user.isHead ? 'Agency Head' : 'Employee Collector';
 
     return Scaffold(
       appBar: AppBar(
         leading: BackButton(onPressed: () => context.pop()),
-        title: const Text('Account settings'),
+        title: Text(l10n?.authAccountSettings ?? 'Account settings'),
       ),
       body: SafeArea(
         child: ListView(
@@ -378,6 +381,26 @@ class _AccountSettingsPageState extends ConsumerState<AccountSettingsPage> {
             ),
             const SizedBox(height: 24),
             Text(
+              l10n?.language ?? 'Language / भाषा',
+              style: Theme.of(
+                context,
+              ).textTheme.titleSmall?.copyWith(color: AppTheme.mutedInk),
+            ),
+            const SizedBox(height: 8),
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.translate),
+                title: Text(l10n?.language ?? 'Language'),
+                subtitle: Text(
+                  ref.watch(localeProvider).languageCode == 'hi'
+                      ? 'हिन्दी (Hindi)'
+                      : 'English',
+                ),
+                trailing: const LanguageToggleButton(isDense: true),
+              ),
+            ),
+            const SizedBox(height: 24),
+            Text(
               'Account Management',
               style: Theme.of(
                 context,
@@ -389,7 +412,7 @@ class _AccountSettingsPageState extends ConsumerState<AccountSettingsPage> {
                 children: [
                   ListTile(
                     leading: const Icon(Icons.logout_rounded),
-                    title: const Text('Sign out'),
+                    title: Text(l10n?.authSignOut ?? 'Sign out'),
                     subtitle: const Text('Log out of this device'),
                     onTap: () async {
                       await ref.read(authRepositoryProvider).signOut();

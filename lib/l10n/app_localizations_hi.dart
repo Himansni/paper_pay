@@ -1030,4 +1030,37 @@ class AppLocalizationsHi extends AppLocalizations {
 
   @override
   String get allSubscriptions => 'सभी सदस्यताएँ';
+
+  @override
+  String get detailedCustomerMode => 'विस्तृत विवरण मोड';
+
+  @override
+  String get saveCustomer => 'ग्राहक सहेजें';
+
+  @override
+  String get bulkImportCustomers => 'थोक ग्राहक आयात (CSV)';
+
+  @override
+  String get masterCatalogTitle => 'भारतीय प्रकाशन सूची';
+
+  @override
+  String get browseMasterCatalog => 'भारतीय मास्टर सूची ब्राउज़ करें';
+
+  @override
+  String get magazinesTab => 'पत्रिकाएँ';
+
+  @override
+  String get newspapersTab => 'अखबार';
+
+  @override
+  String get frequencyDaily => 'दैनिक';
+
+  @override
+  String get frequencyWeekly => 'साप्ताहिक';
+
+  @override
+  String get frequencyFortnightly => 'पाक्षिक';
+
+  @override
+  String get frequencyMonthly => 'मासिक';
 }

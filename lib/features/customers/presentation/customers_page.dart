@@ -130,6 +130,15 @@ class _CustomersPageState extends ConsumerState<CustomersPage> {
       appBar: AppBar(
         leading: BackButton(onPressed: () => context.go('/')),
         title: Text(widget.user.isHead ? (l10n?.customersTitle ?? 'Customers') : 'My customers'),
+        actions: [
+          if (_accessPolicy.canCreateCustomer(widget.user))
+            IconButton(
+              key: const ValueKey('import-customers-nav-button'),
+              icon: const Icon(Icons.upload_file_outlined),
+              tooltip: 'Bulk Import Customers (CSV)',
+              onPressed: () => _open('/customers/import'),
+            ),
+        ],
       ),
       floatingActionButton:
           _accessPolicy.canCreateCustomer(widget.user)

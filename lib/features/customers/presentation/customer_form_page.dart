@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:paper_route/core/domain/local_date.dart';
 import 'package:paper_route/core/presentation/async_state_cards.dart';
 import 'package:paper_route/features/areas/domain/delivery_area.dart';
 import 'package:paper_route/features/areas/presentation/area_providers.dart';
@@ -12,6 +13,10 @@ import 'package:paper_route/features/delivery/domain/route_order.dart';
 import 'package:paper_route/features/delivery/presentation/delivery_providers.dart';
 import 'package:paper_route/features/employees/domain/employee_member.dart';
 import 'package:paper_route/features/employees/presentation/employee_providers.dart';
+import 'package:paper_route/features/newspapers/domain/newspaper.dart';
+import 'package:paper_route/features/newspapers/presentation/newspaper_providers.dart';
+import 'package:paper_route/features/subscriptions/domain/customer_subscription.dart';
+import 'package:paper_route/features/subscriptions/presentation/subscription_providers.dart';
 import 'package:paper_route/l10n/app_localizations.dart';
 
 class CustomerFormRoutePage extends ConsumerWidget {
@@ -33,7 +38,9 @@ class CustomerFormRoutePage extends ConsumerWidget {
               const Scaffold(body: Center(child: CircularProgressIndicator())),
       error:
           (error, _) => Scaffold(
-            appBar: AppBar(title: Text(l10n?.customerEditTitle ?? 'Edit Customer')),
+            appBar: AppBar(
+              title: Text(l10n?.customerEditTitle ?? 'Edit Customer'),
+            ),
             body: Padding(
               padding: const EdgeInsets.all(20),
               child: AsyncErrorCard(
@@ -46,13 +53,17 @@ class CustomerFormRoutePage extends ConsumerWidget {
           (value) =>
               value == null
                   ? Scaffold(
-                    appBar: AppBar(title: Text(l10n?.customerEditTitle ?? 'Edit Customer')),
+                    appBar: AppBar(
+                      title: Text(l10n?.customerEditTitle ?? 'Edit Customer'),
+                    ),
                     body: Padding(
                       padding: const EdgeInsets.all(20),
                       child: EmptyStateCard(
                         icon: Icons.person_off_outlined,
                         title: l10n?.customerNotFound ?? 'Customer not found',
-                        message: l10n?.customerNotFoundMessage ?? 'The record may no longer be available.',
+                        message:
+                            l10n?.customerNotFoundMessage ??
+                            'The record may no longer be available.',
                       ),
                     ),
                   )
@@ -62,10 +73,16 @@ class CustomerFormRoutePage extends ConsumerWidget {
 }
 
 class CustomerFormPage extends ConsumerStatefulWidget {
-  const CustomerFormPage({required this.user, this.customer, super.key});
+  const CustomerFormPage({
+    required this.user,
+    this.customer,
+    this.isQuickAdd = false,
+    super.key,
+  });
 
   final AppUser user;
   final Customer? customer;
+  final bool isQuickAdd;
 
   @override
   ConsumerState<CustomerFormPage> createState() => _CustomerFormPageState();
@@ -74,6 +91,8 @@ class CustomerFormPage extends ConsumerStatefulWidget {
 class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
   static const _accessPolicy = AccessPolicy();
   final _formKey = GlobalKey<FormState>();
+  final _nameFocus = FocusNode();
+
   late final TextEditingController _name;
   late final TextEditingController _phone;
   late final TextEditingController _alternatePhone;
@@ -86,6 +105,7 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
   late final TextEditingController _longitude;
   late final TextEditingController _openingBalance;
   late final TextEditingController _notes;
+
   late String _areaId;
   late String _employeeId;
   late bool _locationConsent;
@@ -95,11 +115,17 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
   String? _afterCustomerId;
   bool _isBusy = false;
 
+  // Phase 3 Quick Add & Subscription state
+  late bool _quickAddMode;
+  String? _selectedNewspaperId;
+  int _subscriptionQuantity = 1;
+
   bool get _isEditing => widget.customer != null;
 
   @override
   void initState() {
     super.initState();
+    _quickAddMode = widget.isQuickAdd;
     final customer = widget.customer;
     _name = TextEditingController(text: customer?.name ?? '');
     _phone = TextEditingController(text: customer?.phone ?? '');
@@ -131,10 +157,15 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
     _deliveryPlacement =
         customer?.deliveryPlacement ?? DeliveryPlacement.doorstep;
     _billingCycle = customer?.billingCycle ?? BillingCyclePreference.monthly;
+
+    if (_isEditing) {
+      _quickAddMode = false;
+    }
   }
 
   @override
   void dispose() {
+    _nameFocus.dispose();
     for (final controller in [
       _name,
       _phone,
@@ -202,13 +233,42 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
             .where((member) => member.isEmployee && member.isActive)
             .toList();
 
+    final newspapersAsync = ref.watch(
+      activeNewspapersListProvider((
+        businessId: businessId,
+        requesterId: widget.user.uid,
+      ),),
+    );
+    final newspapers = newspapersAsync.asData?.value ?? const <Newspaper>[];
+
     return Scaffold(
       appBar: AppBar(
         leading: BackButton(
           onPressed:
-              () => context.canPop() ? context.pop() : context.go('/customers'),
+              () =>
+                  context.canPop() ? context.pop() : context.go('/customers'),
         ),
-        title: Text(_isEditing ? 'Edit customer' : 'New customer'),
+        title: Text(
+          _isEditing
+              ? 'Edit customer'
+              : (_quickAddMode ? 'Quick Add Customer' : 'New customer'),
+        ),
+        actions: [
+          if (!_isEditing)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: TextButton.icon(
+                onPressed: () => setState(() => _quickAddMode = !_quickAddMode),
+                icon: Icon(
+                  _quickAddMode
+                      ? Icons.tune_rounded
+                      : Icons.bolt_rounded,
+                  size: 18,
+                ),
+                label: Text(_quickAddMode ? 'Detailed Mode' : 'Quick Add'),
+              ),
+            ),
+        ],
       ),
       body: SafeArea(
         top: false,
@@ -218,7 +278,11 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 40),
             children: [
               Text(
-                _isEditing ? existing!.name : 'Customer profile',
+                _isEditing
+                    ? existing!.name
+                    : (_quickAddMode
+                        ? 'Quick Customer Onboarding'
+                        : 'Customer profile'),
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                   fontWeight: FontWeight.w800,
                 ),
@@ -227,14 +291,19 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
               Text(
                 _isEditing
                     ? 'Customer ID ${existing!.customerCode} is permanent. Assignment and status have separate audited actions.'
-                    : 'A permanent customer ID is generated when this record is saved.',
+                    : (_quickAddMode
+                        ? 'Minimal fields for rapid customer entry. Sticky area & publications are retained on Save & Add Next.'
+                        : 'A permanent customer ID is generated when this record is saved.'),
                 style: const TextStyle(color: Color(0xFF486581), height: 1.4),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
+
+              // Identity & Contact Card
               _SectionCard(
                 title: 'Identity and contact',
                 children: [
                   TextFormField(
+                    focusNode: _nameFocus,
                     controller: _name,
                     textCapitalization: TextCapitalization.words,
                     decoration: const InputDecoration(
@@ -251,70 +320,95 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
                     ),
                     validator: _requiredText,
                   ),
-                  const SizedBox(height: 14),
-                  TextFormField(
-                    controller: _alternatePhone,
-                    keyboardType: TextInputType.phone,
-                    decoration: const InputDecoration(
-                      labelText: 'Alternate phone (optional)',
+                  if (!_quickAddMode) ...[
+                    const SizedBox(height: 14),
+                    TextFormField(
+                      controller: _alternatePhone,
+                      keyboardType: TextInputType.phone,
+                      decoration: const InputDecoration(
+                        labelText: 'Alternate phone (optional)',
+                      ),
                     ),
-                  ),
+                  ],
                 ],
               ),
               const SizedBox(height: 14),
+
+              // House & Address Card
               _SectionCard(
-                title: 'House identification',
-                subtitle:
-                    'Keep these details clear enough to recognize the correct house outdoors.',
+                title: 'Address and physical location',
                 children: [
                   TextFormField(
                     controller: _houseNumber,
                     decoration: const InputDecoration(
-                      labelText: 'House / flat number (optional)',
+                      labelText: 'House / Flat number',
+                      hintText: 'e.g. 402, B-12, A-Block',
                     ),
                   ),
                   const SizedBox(height: 14),
-                  TextFormField(
-                    controller: _buildingInfo,
+                  DropdownButtonFormField<DeliveryPlacement>(
+                    key: const ValueKey('delivery-placement-dropdown'),
+                    value: _deliveryPlacement,
                     decoration: const InputDecoration(
-                      labelText: 'Building / floor details (optional)',
+                      labelText: 'Delivery placement point',
                     ),
+                    items: [
+                      for (final p in DeliveryPlacement.values)
+                        DropdownMenuItem(
+                          value: p,
+                          child: Text(p.label),
+                        ),
+                    ],
+                    onChanged: (val) {
+                      if (val != null) setState(() => _deliveryPlacement = val);
+                    },
                   ),
-                  const SizedBox(height: 14),
-                  TextFormField(
-                    controller: _address,
-                    minLines: 2,
-                    maxLines: 4,
-                    textCapitalization: TextCapitalization.sentences,
-                    decoration: const InputDecoration(
-                      labelText: 'Full address',
+                  if (!_quickAddMode) ...[
+                    const SizedBox(height: 14),
+                    TextFormField(
+                      controller: _buildingInfo,
+                      decoration: const InputDecoration(
+                        labelText: 'Building / floor details (optional)',
+                      ),
                     ),
-                    validator: _requiredText,
-                  ),
-                  const SizedBox(height: 14),
-                  TextFormField(
-                    controller: _landmark,
-                    textCapitalization: TextCapitalization.sentences,
-                    decoration: const InputDecoration(
-                      labelText: 'Recognizable landmark',
+                    const SizedBox(height: 14),
+                    TextFormField(
+                      controller: _address,
+                      minLines: 2,
+                      maxLines: 4,
+                      textCapitalization: TextCapitalization.sentences,
+                      decoration: const InputDecoration(
+                        labelText: 'Full address',
+                      ),
+                      validator: _requiredText,
                     ),
-                    validator: _requiredText,
-                  ),
-                  const SizedBox(height: 14),
-                  TextFormField(
-                    controller: _locationNotes,
-                    minLines: 2,
-                    maxLines: 4,
-                    decoration: const InputDecoration(
-                      labelText: 'Location-identification notes (optional)',
-                      hintText: 'Gate colour, side lane, delivery point…',
+                    const SizedBox(height: 14),
+                    TextFormField(
+                      controller: _landmark,
+                      textCapitalization: TextCapitalization.sentences,
+                      decoration: const InputDecoration(
+                        labelText: 'Recognizable landmark',
+                      ),
+                      validator: _requiredText,
                     ),
-                  ),
+                    const SizedBox(height: 14),
+                    TextFormField(
+                      controller: _locationNotes,
+                      minLines: 2,
+                      maxLines: 4,
+                      decoration: const InputDecoration(
+                        labelText: 'Location-identification notes (optional)',
+                        hintText: 'Gate colour, side lane, delivery point…',
+                      ),
+                    ),
+                  ],
                 ],
               ),
               const SizedBox(height: 14),
+
+              // Area and Route Placement Card
               _SectionCard(
-                title: 'Area and assignment',
+                title: 'Area and route placement',
                 children: [
                   if (_isEditing) ...[
                     _ReadOnlyValue(
@@ -385,7 +479,7 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
                             }
                           }),
                     ),
-                    if (widget.user.isHead) ...[
+                    if (widget.user.isHead && !_quickAddMode) ...[
                       const SizedBox(height: 14),
                       if (members.isLoading)
                         const Center(child: CircularProgressIndicator())
@@ -398,38 +492,31 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
                         )
                       else
                         DropdownButtonFormField<String>(
-                          key: const ValueKey('customer-employee-dropdown'),
                           value:
-                              _employeesForArea(memberItems).any(
-                                    (employee) => employee.uid == _employeeId,
+                              memberItems.any(
+                                    (member) => member.uid == _employeeId,
                                   )
                                   ? _employeeId
                                   : '',
                           decoration: const InputDecoration(
-                            labelText: 'Assigned employee',
+                            labelText: 'Assigned employee (optional)',
                           ),
                           items: [
                             const DropdownMenuItem(
                               value: '',
-                              child: Text('Unassigned'),
+                              child: Text('Leave unassigned for now'),
                             ),
-                            for (final employee in _employeesForArea(
-                              memberItems,
-                            ))
+                            for (final member in _employeesForArea(memberItems))
                               DropdownMenuItem(
-                                value: employee.uid,
-                                child: Text(
-                                  employee.displayName.isEmpty
-                                      ? employee.email
-                                      : employee.displayName,
-                                ),
+                                value: member.uid,
+                                child: Text(member.displayName),
                               ),
                           ],
                           onChanged:
                               (value) =>
                                   setState(() => _employeeId = value ?? ''),
                         ),
-                    ] else
+                    ] else if (!widget.user.isHead)
                       const Padding(
                         padding: EdgeInsets.only(top: 12),
                         child: Text(
@@ -437,63 +524,26 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
                           style: TextStyle(color: Color(0xFF486581)),
                         ),
                       ),
-                  ],
-                ],
-              ),
-              const SizedBox(height: 14),
-              _SectionCard(
-                title: 'Delivery and billing preferences',
-                subtitle:
-                    'Set delivery and future billing preferences here. Manage dated newspaper subscriptions from the saved customer.',
-                children: [
-                  DropdownButtonFormField<DeliveryPlacement>(
-                    value: _deliveryPlacement,
-                    decoration: const InputDecoration(
-                      labelText: 'Delivery placement',
-                    ),
-                    items: [
-                      for (final item in DeliveryPlacement.values)
-                        DropdownMenuItem(value: item, child: Text(item.label)),
-                    ],
-                    onChanged: (value) {
-                      if (value != null) {
-                        setState(() => _deliveryPlacement = value);
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 14),
-                  DropdownButtonFormField<BillingCyclePreference>(
-                    value: _billingCycle,
-                    decoration: const InputDecoration(
-                      labelText: 'Preferred billing cycle',
-                    ),
-                    items: [
-                      for (final item in BillingCyclePreference.values)
-                        DropdownMenuItem(value: item, child: Text(item.label)),
-                    ],
-                    onChanged: (value) {
-                      if (value != null) setState(() => _billingCycle = value);
-                    },
-                  ),
-                  if (!_isEditing) ...[
                     const SizedBox(height: 14),
                     DropdownButtonFormField<RoutePlacement>(
+                      key: const ValueKey('route-placement-dropdown'),
                       value: _routePlacement,
                       decoration: const InputDecoration(
-                        labelText: 'Place in delivery route',
+                        labelText: 'Route order placement',
+                        helperText: 'Controls morning delivery sequence.',
                       ),
                       items: const [
                         DropdownMenuItem(
                           value: RoutePlacement.first,
-                          child: Text('At start of route (First)'),
-                        ),
-                        DropdownMenuItem(
-                          value: RoutePlacement.afterCustomer,
-                          child: Text('After an existing customer'),
+                          child: Text('Add at start of route (First)'),
                         ),
                         DropdownMenuItem(
                           value: RoutePlacement.last,
-                          child: Text('At end of route (Last)'),
+                          child: Text('Add at end of route (Last)'),
+                        ),
+                        DropdownMenuItem(
+                          value: RoutePlacement.afterCustomer,
+                          child: Text('Place after existing customer…'),
                         ),
                       ],
                       onChanged: (value) {
@@ -511,7 +561,10 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
                               padding: EdgeInsets.symmetric(vertical: 4),
                               child: Text(
                                 'Select an area above to choose preceding customer.',
-                                style: TextStyle(color: Color(0xFF627D98), fontSize: 13),
+                                style: TextStyle(
+                                  color: Color(0xFF627D98),
+                                  fontSize: 13,
+                                ),
                               ),
                             );
                           }
@@ -523,21 +576,31 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
                           );
                           return areaCustomersAsync.when(
                             loading: () => const LinearProgressIndicator(),
-                            error: (e, _) => Text('Could not load customers: $e'),
+                            error:
+                                (e, _) => Text('Could not load customers: $e'),
                             data: (customers) {
-                              final active = customers
-                                  .where((c) => c.status == CustomerStatus.active)
-                                  .toList();
+                              final active =
+                                  customers
+                                      .where(
+                                        (c) => c.status == CustomerStatus.active,
+                                      )
+                                      .toList();
                               if (active.isEmpty) {
                                 return const Text(
                                   'No existing customers in this area. Customer will be placed first.',
-                                  style: TextStyle(color: Color(0xFF627D98), fontSize: 13),
+                                  style: TextStyle(
+                                    color: Color(0xFF627D98),
+                                    fontSize: 13,
+                                  ),
                                 );
                               }
-                              final selectedValue = _afterCustomerId != null &&
-                                      active.any((c) => c.id == _afterCustomerId)
-                                  ? _afterCustomerId
-                                  : active.first.id;
+                              final selectedValue =
+                                  _afterCustomerId != null &&
+                                          active.any(
+                                            (c) => c.id == _afterCustomerId,
+                                          )
+                                      ? _afterCustomerId
+                                      : active.first.id;
                               return DropdownButtonFormField<String>(
                                 value: selectedValue,
                                 decoration: const InputDecoration(
@@ -547,7 +610,9 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
                                   for (final c in active)
                                     DropdownMenuItem(
                                       value: c.id,
-                                      child: Text('${c.name} (${c.customerCode})'),
+                                      child: Text(
+                                        '${c.name} (${c.customerCode})',
+                                      ),
                                     ),
                                 ],
                                 onChanged: (val) {
@@ -563,116 +628,242 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
                 ],
               ),
               const SizedBox(height: 14),
-              _SectionCard(
-                title: 'Optional GPS location',
-                children: [
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Customer consent recorded'),
-                    subtitle: const Text(
-                      'Enable only after the customer agrees to store coordinates for delivery identification.',
+
+              // Initial Publication / Subscription Selector (New Customers)
+              if (!_isEditing && newspapers.isNotEmpty) ...[
+                _SectionCard(
+                  title: 'Initial Subscription (Optional)',
+                  subtitle:
+                      'Attach a publication right away or configure full details later.',
+                  children: [
+                    DropdownButtonFormField<String>(
+                      key: const ValueKey('initial-newspaper-dropdown'),
+                      value: _selectedNewspaperId ?? '',
+                      decoration: const InputDecoration(
+                        labelText: 'Select Newspaper / Magazine',
+                      ),
+                      items: [
+                        const DropdownMenuItem(
+                          value: '',
+                          child: Text('None (Set up subscription later)'),
+                        ),
+                        for (final pub in newspapers)
+                          DropdownMenuItem(
+                            value: pub.id,
+                            child: Text(pub.displayName),
+                          ),
+                      ],
+                      onChanged: (val) {
+                        setState(() => _selectedNewspaperId = val);
+                      },
                     ),
-                    value: _locationConsent,
-                    onChanged:
-                        (value) => setState(() {
-                          _locationConsent = value;
-                          if (!value) {
-                            _latitude.clear();
-                            _longitude.clear();
-                          }
-                        }),
-                  ),
-                  if (_locationConsent) ...[
-                    const SizedBox(height: 10),
+                    if (_selectedNewspaperId != null &&
+                        _selectedNewspaperId!.isNotEmpty) ...[
+                      const SizedBox(height: 14),
+                      Row(
+                        children: [
+                          const Text(
+                            'Quantity: ',
+                            style: TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                          const SizedBox(width: 10),
+                          IconButton(
+                            icon: const Icon(Icons.remove_circle_outline),
+                            onPressed:
+                                _subscriptionQuantity > 1
+                                    ? () => setState(
+                                      () => _subscriptionQuantity--,
+                                    )
+                                    : null,
+                          ),
+                          Text(
+                            '$_subscriptionQuantity',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.add_circle_outline),
+                            onPressed:
+                                _subscriptionQuantity < 20
+                                    ? () => setState(
+                                      () => _subscriptionQuantity++,
+                                    )
+                                    : null,
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 14),
+              ],
+
+              // Extended Fields (GPS & Finances) for Detailed Mode
+              if (!_quickAddMode) ...[
+                _SectionCard(
+                  title: 'Optional GPS location',
+                  children: [
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Customer consent recorded'),
+                      subtitle: const Text(
+                        'Enable only after the customer agrees to store coordinates for delivery identification.',
+                      ),
+                      value: _locationConsent,
+                      onChanged:
+                          (value) => setState(() {
+                            _locationConsent = value;
+                            if (!value) {
+                              _latitude.clear();
+                              _longitude.clear();
+                            }
+                          }),
+                    ),
+                    if (_locationConsent) ...[
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextFormField(
+                              controller: _latitude,
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                    decimal: true,
+                                    signed: true,
+                                  ),
+                              decoration: const InputDecoration(
+                                labelText: 'Latitude',
+                              ),
+                              validator: _requiredText,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: TextFormField(
+                              controller: _longitude,
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                    decimal: true,
+                                    signed: true,
+                                  ),
+                              decoration: const InputDecoration(
+                                labelText: 'Longitude',
+                              ),
+                              validator: _requiredText,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 14),
+                _SectionCard(
+                  title: 'Financial opening and notes',
+                  children: [
+                    if (!_isEditing && widget.user.isHead)
+                      TextFormField(
+                        controller: _openingBalance,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        decoration: const InputDecoration(
+                          labelText: 'Opening balance (₹)',
+                          helperText:
+                              'Set once during Head-created onboarding; later corrections require an audited adjustment.',
+                        ),
+                        validator: _requiredText,
+                      )
+                    else
+                      _ReadOnlyValue(
+                        label: 'Opening balance',
+                        value:
+                            _isEditing && widget.user.isHead
+                                ? '₹${CustomerMoney.formatPaiseForInput(existing!.openingBalancePaise)} (immutable)'
+                                : _isEditing
+                                ? 'Protected — only the Head can view or set opening balance'
+                                : '₹0.00 — employees cannot set financial opening data',
+                      ),
+                    const SizedBox(height: 14),
+                    TextFormField(
+                      controller: _notes,
+                      minLines: 2,
+                      maxLines: 5,
+                      decoration: const InputDecoration(
+                        labelText: 'Operational notes (optional)',
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 22),
+              ],
+
+              const SizedBox(height: 16),
+
+              // Action Buttons
+              if (_isEditing)
+                FilledButton.icon(
+                  key: const ValueKey('save-customer-button'),
+                  onPressed:
+                      _isBusy || areaItems.isEmpty ? null : () => _submit(),
+                  icon:
+                      _isBusy
+                          ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                          : const Icon(Icons.save_outlined),
+                  label: const Text('Save customer changes'),
+                )
+              else
+                Column(
+                  children: [
                     Row(
                       children: [
                         Expanded(
-                          child: TextFormField(
-                            controller: _latitude,
-                            keyboardType: const TextInputType.numberWithOptions(
-                              decimal: true,
-                              signed: true,
+                          child: OutlinedButton.icon(
+                            key: const ValueKey('save-and-add-next-button'),
+                            onPressed:
+                                _isBusy || areaItems.isEmpty
+                                    ? null
+                                    : () => _submit(addNext: true),
+                            icon: const Icon(Icons.playlist_add_rounded),
+                            label: const Text('Save & Add Next'),
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 14),
                             ),
-                            decoration: const InputDecoration(
-                              labelText: 'Latitude',
-                            ),
-                            validator: _requiredText,
                           ),
                         ),
-                        const SizedBox(width: 10),
+                        const SizedBox(width: 12),
                         Expanded(
-                          child: TextFormField(
-                            controller: _longitude,
-                            keyboardType: const TextInputType.numberWithOptions(
-                              decimal: true,
-                              signed: true,
+                          child: FilledButton.icon(
+                            key: const ValueKey('save-customer-button'),
+                            onPressed:
+                                _isBusy || areaItems.isEmpty
+                                    ? null
+                                    : () => _submit(addNext: false),
+                            icon:
+                                _isBusy
+                                    ? const SizedBox.square(
+                                      dimension: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                    : const Icon(Icons.check_circle_outline),
+                            label: const Text('Create customer'),
+                            style: FilledButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 14),
                             ),
-                            decoration: const InputDecoration(
-                              labelText: 'Longitude',
-                            ),
-                            validator: _requiredText,
                           ),
                         ),
                       ],
                     ),
                   ],
-                ],
-              ),
-              const SizedBox(height: 14),
-              _SectionCard(
-                title: 'Financial opening and notes',
-                children: [
-                  if (!_isEditing && widget.user.isHead)
-                    TextFormField(
-                      controller: _openingBalance,
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      decoration: const InputDecoration(
-                        labelText: 'Opening balance (₹)',
-                        helperText:
-                            'Set once during Head-created onboarding; later corrections require an audited adjustment.',
-                      ),
-                      validator: _requiredText,
-                    )
-                  else
-                    _ReadOnlyValue(
-                      label: 'Opening balance',
-                      value:
-                          _isEditing && widget.user.isHead
-                              ? '₹${CustomerMoney.formatPaiseForInput(existing!.openingBalancePaise)} (immutable)'
-                              : _isEditing
-                              ? 'Protected — only the Head can view or set opening balance'
-                              : '₹0.00 — employees cannot set financial opening data',
-                    ),
-                  const SizedBox(height: 14),
-                  TextFormField(
-                    controller: _notes,
-                    minLines: 2,
-                    maxLines: 5,
-                    decoration: const InputDecoration(
-                      labelText: 'Operational notes (optional)',
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 22),
-              FilledButton.icon(
-                onPressed:
-                    _isBusy || (!_isEditing && areaItems.isEmpty)
-                        ? null
-                        : _submit,
-                icon:
-                    _isBusy
-                        ? const SizedBox.square(
-                          dimension: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                        : const Icon(Icons.save_outlined),
-                label: Text(
-                  _isEditing ? 'Save customer changes' : 'Create customer',
                 ),
-              ),
             ],
           ),
         ),
@@ -688,12 +879,14 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
   String? _requiredText(String? value) =>
       value == null || value.trim().isEmpty ? 'This field is required.' : null;
 
-  Future<void> _submit() async {
+  Future<void> _submit({bool addNext = false}) async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isBusy = true);
     try {
       final coordinates =
-          _locationConsent
+          _locationConsent &&
+                  _latitude.text.trim().isNotEmpty &&
+                  _longitude.text.trim().isNotEmpty
               ? CustomerCoordinates(
                 latitude: double.parse(_latitude.text.trim()),
                 longitude: double.parse(_longitude.text.trim()),
@@ -702,16 +895,48 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
       final existing = widget.customer;
       final openingBalance =
           existing?.openingBalancePaise ??
-          (widget.user.isHead
+          (widget.user.isHead && _openingBalance.text.trim().isNotEmpty
               ? CustomerMoney.parseRupeesToPaise(_openingBalance.text)
               : 0);
+
+      // Resolve area name for fallback address/landmark
+      final businessId = widget.user.businessId!;
+      final areas = ref.read(deliveryAreasProvider(businessId));
+      final areaName =
+          (areas.asData?.value ?? const <DeliveryArea>[])
+              .firstWhere(
+                (a) => a.id == _areaId,
+                orElse:
+                    () => const DeliveryArea(
+                      id: '',
+                      name: 'Area',
+                      isActive: true,
+                      assignedEmployeeIds: {},
+                    ),
+              )
+              .name;
+
+      var address = _address.text.trim();
+      var landmark = _landmark.text.trim();
+      final house = _houseNumber.text.trim();
+
+      if (address.isEmpty || address.length < 5) {
+        address =
+            house.isNotEmpty
+                ? 'House / Flat $house, $areaName'
+                : '${_name.text.trim()}, $areaName';
+      }
+      if (landmark.isEmpty || landmark.length < 2) {
+        landmark = 'Near $areaName';
+      }
+
       final input = CustomerInput(
         name: _name.text,
         phone: _phone.text,
         alternatePhone: _alternatePhone.text,
-        address: _address.text,
+        address: address,
         areaId: existing?.areaId ?? _areaId,
-        landmark: _landmark.text,
+        landmark: landmark,
         houseNumber: _houseNumber.text,
         buildingInfo: _buildingInfo.text,
         locationNotes: _locationNotes.text,
@@ -733,24 +958,82 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
           actor: widget.user,
           input: input,
         );
+
+        // Optional route ordering insertion
         try {
           await ref.read(deliveryRepositoryProvider).insertCustomerInRoute(
-                businessId: widget.user.businessId!,
-                areaId: input.areaId,
-                customerId: id,
-                placement: _routePlacement,
-                afterCustomerId: _afterCustomerId,
-                actorUid: widget.user.uid,
-              );
+            businessId: widget.user.businessId!,
+            areaId: input.areaId,
+            customerId: id,
+            placement: _routePlacement,
+            afterCustomerId: _afterCustomerId,
+            actorUid: widget.user.uid,
+          );
           ref.invalidate(morningRouteStopsProvider(widget.user));
         } catch (_) {
-          // Route placement error non-fatal to customer creation
+          // Route placement error non-fatal
         }
+
+        // Optional initial publication subscription
+        if (_selectedNewspaperId != null &&
+            _selectedNewspaperId!.isNotEmpty) {
+          try {
+            await ref.read(subscriptionRepositoryProvider).createSubscription(
+              actor: widget.user,
+              customerId: id,
+              input: SubscriptionInput(
+                newspaperId: _selectedNewspaperId!,
+                startDate: LocalDate.fromDateTime(DateTime.now()),
+                endDate: null,
+                quantity: _subscriptionQuantity,
+                deliveryWeekdays: DeliveryWeekday.all,
+                customPricePaise: null,
+                customPriceReason: '',
+              ),
+            );
+          } catch (_) {
+            // Subscription setup non-fatal
+          }
+        }
+
         if (!mounted) return;
         final l10n = AppLocalizations.of(context);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(l10n?.customerCreated(id) ?? 'Customer $id created.')));
+
+        if (addNext) {
+          // Retain sticky selections (_areaId, _employeeId, _deliveryPlacement, _routePlacement, _selectedNewspaperId)
+          setState(() {
+            _name.clear();
+            _phone.clear();
+            _alternatePhone.clear();
+            _houseNumber.clear();
+            _buildingInfo.clear();
+            _address.clear();
+            _landmark.clear();
+            _locationNotes.clear();
+            _notes.clear();
+            _latitude.clear();
+            _longitude.clear();
+            _openingBalance.text = '0';
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Customer $id created! Ready for next customer.',
+              ),
+              backgroundColor: const Color(0xFF1B5E20),
+            ),
+          );
+          _nameFocus.requestFocus();
+          return;
+        }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              l10n?.customerCreated(id) ?? 'Customer $id created.',
+            ),
+          ),
+        );
       } else {
         await repository.updateCustomerProfile(
           actor: widget.user,
@@ -760,9 +1043,14 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
         if (!mounted) return;
         final l10n = AppLocalizations.of(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(l10n?.customerDetailsUpdated ?? 'Customer details updated.')),
+          SnackBar(
+            content: Text(
+              l10n?.customerDetailsUpdated ?? 'Customer details updated.',
+            ),
+          ),
         );
       }
+
       if (context.canPop()) {
         context.pop(true);
       } else {

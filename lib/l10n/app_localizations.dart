@@ -2020,6 +2020,72 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'All subscriptions'**
   String get allSubscriptions;
+
+  /// No description provided for @detailedCustomerMode.
+  ///
+  /// In en, this message translates to:
+  /// **'Detailed Mode'**
+  String get detailedCustomerMode;
+
+  /// No description provided for @saveCustomer.
+  ///
+  /// In en, this message translates to:
+  /// **'Save Customer'**
+  String get saveCustomer;
+
+  /// No description provided for @bulkImportCustomers.
+  ///
+  /// In en, this message translates to:
+  /// **'Bulk Import Customers (CSV)'**
+  String get bulkImportCustomers;
+
+  /// No description provided for @masterCatalogTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Indian Publication Catalogue'**
+  String get masterCatalogTitle;
+
+  /// No description provided for @browseMasterCatalog.
+  ///
+  /// In en, this message translates to:
+  /// **'Browse Indian Master Catalogue'**
+  String get browseMasterCatalog;
+
+  /// No description provided for @magazinesTab.
+  ///
+  /// In en, this message translates to:
+  /// **'Magazines'**
+  String get magazinesTab;
+
+  /// No description provided for @newspapersTab.
+  ///
+  /// In en, this message translates to:
+  /// **'Newspapers'**
+  String get newspapersTab;
+
+  /// No description provided for @frequencyDaily.
+  ///
+  /// In en, this message translates to:
+  /// **'Daily'**
+  String get frequencyDaily;
+
+  /// No description provided for @frequencyWeekly.
+  ///
+  /// In en, this message translates to:
+  /// **'Weekly'**
+  String get frequencyWeekly;
+
+  /// No description provided for @frequencyFortnightly.
+  ///
+  /// In en, this message translates to:
+  /// **'Fortnightly'**
+  String get frequencyFortnightly;
+
+  /// No description provided for @frequencyMonthly.
+  ///
+  /// In en, this message translates to:
+  /// **'Monthly'**
+  String get frequencyMonthly;
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

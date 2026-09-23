@@ -386,5 +386,18 @@
   "allNewspapers": "सभी समाचार पत्र",
   "allMethods": "सभी विधियाँ",
   "allBalances": "सभी शेष राशियाँ",
-  "allSubscriptions": "सभी सदस्यताएँ"
+  "allSubscriptions": "सभी सदस्यताएँ",
+  "quickAddCustomer": "त्वरित ग्राहक जोड़ें",
+  "detailedCustomerMode": "विस्तृत विवरण मोड",
+  "saveAndAddNext": "सहेजें और अगला जोड़ें",
+  "saveCustomer": "ग्राहक सहेजें",
+  "bulkImportCustomers": "थोक ग्राहक आयात (CSV)",
+  "masterCatalogTitle": "भारतीय प्रकाशन सूची",
+  "browseMasterCatalog": "भारतीय मास्टर सूची ब्राउज़ करें",
+  "magazinesTab": "पत्रिकाएँ",
+  "newspapersTab": "अखबार",
+  "frequencyDaily": "दैनिक",
+  "frequencyWeekly": "साप्ताहिक",
+  "frequencyFortnightly": "पाक्षिक",
+  "frequencyMonthly": "मासिक"
 }

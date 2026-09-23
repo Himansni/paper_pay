@@ -505,5 +505,18 @@
   "allNewspapers": "All newspapers",
   "allMethods": "All methods",
   "allBalances": "All balances",
-  "allSubscriptions": "All subscriptions"
+  "allSubscriptions": "All subscriptions",
+  "quickAddCustomer": "Quick Add Customer",
+  "detailedCustomerMode": "Detailed Mode",
+  "saveAndAddNext": "Save & Add Next",
+  "saveCustomer": "Save Customer",
+  "bulkImportCustomers": "Bulk Import Customers (CSV)",
+  "masterCatalogTitle": "Indian Publication Catalogue",
+  "browseMasterCatalog": "Browse Indian Master Catalogue",
+  "magazinesTab": "Magazines",
+  "newspapersTab": "Newspapers",
+  "frequencyDaily": "Daily",
+  "frequencyWeekly": "Weekly",
+  "frequencyFortnightly": "Fortnightly",
+  "frequencyMonthly": "Monthly"
 }

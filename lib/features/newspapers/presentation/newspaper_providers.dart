@@ -28,3 +28,21 @@ final newspaperAuditProvider = StreamProvider.autoDispose
             newspaperId: key.newspaperId,
           );
     });
+
+final activeNewspapersListProvider = FutureProvider.autoDispose
+    .family<List<Newspaper>, ({String businessId, String requesterId})>((
+      ref,
+      key,
+    ) async {
+      final page = await ref
+          .watch(newspaperRepositoryProvider)
+          .fetchNewspapers(
+            NewspaperListRequest(
+              businessId: key.businessId,
+              requesterId: key.requesterId,
+              status: NewspaperStatus.active,
+              pageSize: 50,
+            ),
+          );
+      return page.newspapers;
+    });

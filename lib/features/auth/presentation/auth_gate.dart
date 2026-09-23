@@ -18,6 +18,7 @@ import 'package:paper_route/features/collections/presentation/payment_receipt_pa
 import 'package:paper_route/features/collections/presentation/upi_settings_page.dart';
 import 'package:paper_route/features/customers/presentation/customer_detail_page.dart';
 import 'package:paper_route/features/customers/presentation/customer_form_page.dart';
+import 'package:paper_route/features/customers/presentation/customer_import_page.dart';
 import 'package:paper_route/features/customers/presentation/customers_page.dart';
 import 'package:paper_route/features/dashboard/presentation/dashboard_page.dart';
 import 'package:paper_route/features/employees/presentation/employees_page.dart';
@@ -50,6 +51,7 @@ enum AuthenticatedDestination {
   paymentReceipt,
   upiSettings,
   customerCreate,
+  customerImport,
   customerDetail,
   customerEdit,
   newspapers,
@@ -167,6 +169,9 @@ class AuthGate extends ConsumerWidget {
           ),
           AuthenticatedDestination.upiSettings => UpiSettingsPage(user: user),
           AuthenticatedDestination.customerCreate => CustomerFormRoutePage(
+            user: user,
+          ),
+          AuthenticatedDestination.customerImport => CustomerImportPage(
             user: user,
           ),
           AuthenticatedDestination.customerDetail => CustomerDetailPage(

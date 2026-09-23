@@ -1030,4 +1030,37 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get allSubscriptions => 'All subscriptions';
+
+  @override
+  String get detailedCustomerMode => 'Detailed Mode';
+
+  @override
+  String get saveCustomer => 'Save Customer';
+
+  @override
+  String get bulkImportCustomers => 'Bulk Import Customers (CSV)';
+
+  @override
+  String get masterCatalogTitle => 'Indian Publication Catalogue';
+
+  @override
+  String get browseMasterCatalog => 'Browse Indian Master Catalogue';
+
+  @override
+  String get magazinesTab => 'Magazines';
+
+  @override
+  String get newspapersTab => 'Newspapers';
+
+  @override
+  String get frequencyDaily => 'Daily';
+
+  @override
+  String get frequencyWeekly => 'Weekly';
+
+  @override
+  String get frequencyFortnightly => 'Fortnightly';
+
+  @override
+  String get frequencyMonthly => 'Monthly';
 }

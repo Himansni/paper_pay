@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:paper_route/core/presentation/async_state_cards.dart';
 import 'package:paper_route/features/auth/domain/app_user.dart';
 import 'package:paper_route/features/newspapers/domain/newspaper.dart';
+import 'package:paper_route/features/newspapers/presentation/master_catalog_picker_sheet.dart';
 import 'package:paper_route/features/newspapers/presentation/newspaper_providers.dart';
 
 class NewspaperFormRoutePage extends ConsumerWidget {
@@ -142,7 +143,30 @@ class _NewspaperFormPageState extends ConsumerState<NewspaperFormPage> {
                     : 'Add any publication; example titles are never hardcoded.',
                 style: const TextStyle(color: Color(0xFF486581), height: 1.4),
               ),
-              const SizedBox(height: 20),
+              if (!_isEditing) ...[
+                OutlinedButton.icon(
+                  key: const ValueKey('browse-master-catalog-button'),
+                  onPressed: () async {
+                    final selected = await MasterCatalogPickerSheet.show(context);
+                    if (selected != null && mounted) {
+                      setState(() {
+                        _name.text = selected.name;
+                        _edition.text = selected.edition;
+                        _language.text = selected.language;
+                        _defaultPrice.text = NewspaperMoney.formatPaiseForInput(
+                          selected.defaultPricePaise,
+                        );
+                      });
+                    }
+                  },
+                  icon: const Icon(Icons.menu_book_outlined),
+                  label: const Text('Browse Indian Master Catalogue'),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
               TextFormField(
                 key: const ValueKey('newspaper-name-field'),
                 controller: _name,

@@ -1899,6 +1899,31 @@ service cloud.firestore {
         && data.createdAt == request.time;
     }
 
+    function validDeliveryDropShape(
+      businessId,
+      customerId,
+      routeId,
+      data
+    ) {
+      return data.keys().hasOnly([
+          'businessId', 'routeId', 'date', 'areaId', 'customerId',
+          'status', 'exceptionReason', 'actorUid', 'updatedAt'
+        ])
+        && data.businessId == businessId
+        && data.routeId == routeId
+        && data.customerId == customerId
+        && data.areaId is string
+        && data.areaId.size() > 0
+        && validDate(data.date)
+        && data.status in ['delivered', 'exception', 'pending']
+        && (
+          (data.status == 'exception' && data.exceptionReason is string && data.exceptionReason.size() > 0 && data.exceptionReason.size() <= 200)
+          || (data.status != 'exception' && (!('exceptionReason' in data.keys()) || data.exceptionReason == null))
+        )
+        && data.actorUid is string
+        && data.actorUid.size() > 0;
+    }
+
     function validServiceBillingSourceAdvance(
       businessId,
       customerId,
@@ -3553,6 +3578,43 @@ service cloud.firestore {
             )
           );
         allow update, delete: if false;
+      }
+
+      match /dailyRoutes/{routeId} {
+        allow read: if activeMember(businessId);
+        allow write: if head(businessId);
+
+        match /drops/{customerId} {
+          allow read: if activeMember(businessId)
+            && (
+              head(businessId)
+              || (
+                memberData(businessId).role == 'employee'
+                && (
+                  resource == null
+                  || (
+                    memberData(businessId).areaIds is list
+                    && memberData(businessId).areaIds.hasAny([resource.data.areaId])
+                  )
+                )
+              )
+            );
+
+          allow create, update: if activeMember(businessId)
+            && validDeliveryDropShape(businessId, customerId, routeId, request.resource.data)
+            && request.resource.data.actorUid == request.auth.uid
+            && request.resource.data.updatedAt == request.time
+            && (
+              head(businessId)
+              || (
+                memberData(businessId).role == 'employee'
+                && memberData(businessId).areaIds is list
+                && memberData(businessId).areaIds.hasAny([request.resource.data.areaId])
+              )
+            );
+
+          allow delete: if false;
+        }
       }
 
     }

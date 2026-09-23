@@ -2141,6 +2141,234 @@ describe('Phase 3 customer management', () => {
   });
 });
 
+describe('Phase 4 customer removal approval and lifecycle security', () => {
+  test('authorized employee creates removal request for assigned customer but cannot approve or reject it', async () => {
+    const employeeDb = auth('employee-c', 'employee-c@example.com');
+    const reqRef = doc(employeeDb, 'businesses/business-a/removalRequests/REQ-EMP-1');
+    const auditRef = doc(employeeDb, 'businesses/business-a/auditRecords/audit-req-1');
+
+    const createBatch = writeBatch(employeeDb);
+    createBatch.set(reqRef, {
+      businessId: 'business-a',
+      customerId: 'C-EMPLOYEE',
+      customerName: 'Managed Customer',
+      customerCode: 'C-EMPLOYEE',
+      areaId: 'east',
+      assignedEmployeeId: 'employee-c',
+      requestedBy: 'employee-c',
+      requestedByName: 'Employee C',
+      reason: 'Customer relocated to another area',
+      status: 'pending',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    createBatch.set(auditRef, {
+      businessId: 'business-a',
+      actorId: 'employee-c',
+      action: 'customerRemovalRequested',
+      entityType: 'customerRemovalRequest',
+      entityId: 'REQ-EMP-1',
+      customerId: 'C-EMPLOYEE',
+      reason: 'Customer relocated to another area',
+      createdAt: serverTimestamp(),
+    });
+    await assertSucceeds(createBatch.commit());
+
+    // Employee cannot approve or reject removal requests
+    await assertFails(
+      updateDoc(reqRef, {
+        status: 'approved',
+        reviewedBy: 'employee-c',
+        reviewedByName: 'Employee C',
+        reviewNotes: 'Self approved',
+        updatedAt: serverTimestamp(),
+      }),
+    );
+    await assertFails(
+      updateDoc(reqRef, {
+        status: 'rejected',
+        reviewedBy: 'employee-c',
+        reviewedByName: 'Employee C',
+        reviewNotes: 'Self rejected',
+        updatedAt: serverTimestamp(),
+      }),
+    );
+  });
+
+  test('Head cannot review another agencys removal requests (cross-tenant isolation)', async () => {
+    await environment.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await setDoc(doc(db, 'businesses/business-a/removalRequests/REQ-BIZ-A'), {
+        businessId: 'business-a',
+        customerId: 'C-MANAGED',
+        customerName: 'Managed Customer',
+        customerCode: 'C-MANAGED',
+        areaId: 'east',
+        assignedEmployeeId: 'employee-a',
+        requestedBy: 'employee-a',
+        requestedByName: 'Employee A',
+        reason: 'Cross tenant test',
+        status: 'pending',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+    });
+
+    // Head of business-b cannot read or review business-a removal request
+    const headBDb = auth('head-b', 'head-b@example.com');
+    await assertFails(getDoc(doc(headBDb, 'businesses/business-a/removalRequests/REQ-BIZ-A')));
+    await assertFails(
+      updateDoc(doc(headBDb, 'businesses/business-a/removalRequests/REQ-BIZ-A'), {
+        status: 'approved',
+        reviewedBy: 'head-b',
+        reviewedByName: 'Head B',
+        updatedAt: serverTimestamp(),
+      }),
+    );
+  });
+
+  test('duplicate or concurrent review cannot approve an already rejected or approved request', async () => {
+    await environment.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await setDoc(doc(db, 'businesses/business-a/removalRequests/REQ-REJECT-TEST'), {
+        businessId: 'business-a',
+        customerId: 'C-MANAGED',
+        customerName: 'Managed Customer',
+        customerCode: 'C-MANAGED',
+        areaId: 'east',
+        assignedEmployeeId: 'employee-a',
+        requestedBy: 'employee-a',
+        requestedByName: 'Employee A',
+        reason: 'Initial removal request',
+        status: 'pending',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+    });
+
+    const headDb = auth('head-a', 'head-a@example.com');
+    const reqRefHead = doc(headDb, 'businesses/business-a/removalRequests/REQ-REJECT-TEST');
+
+    // Head rejects request
+    await assertSucceeds(
+      updateDoc(reqRefHead, {
+        status: 'rejected',
+        reviewedBy: 'head-a',
+        reviewedByName: 'Head A',
+        reviewNotes: 'Customer requested to stay',
+        updatedAt: serverTimestamp(),
+      }),
+    );
+
+    // Subsequent/duplicate review to re-approve or mutate is rejected by rules
+    await assertFails(
+      updateDoc(reqRefHead, {
+        status: 'approved',
+        reviewedBy: 'head-a',
+        reviewedByName: 'Head A',
+        reviewNotes: 'Second review attempt',
+        updatedAt: serverTimestamp(),
+      }),
+    );
+  });
+
+  test('removal approval preserves existing financial records and creates required immutable audit', async () => {
+    const headDb = auth('head-a', 'head-a@example.com');
+    const customerId = 'C-REMOVED-FINANCIAL';
+    const reqId = 'REQ-APPROVE-FIN';
+    const auditId = 'audit-archive-fin';
+
+    // 1. Seed customer with bill line and payment subcollections
+    await environment.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await setDoc(
+        doc(db, `businesses/business-a/customers/${customerId}`),
+        completeCustomer({ id: customerId, openingBalancePaise: 25000 }),
+      );
+      await setDoc(
+        doc(db, `businesses/business-a/customers/${customerId}/bills/2026-08`),
+        {
+          businessId: 'business-a',
+          customerId: customerId,
+          month: '2026-08',
+          totalPaise: 45000,
+          status: 'finalized',
+        },
+      );
+      await setDoc(
+        doc(db, `businesses/business-a/customers/${customerId}/payments/PAY-1`),
+        {
+          businessId: 'business-a',
+          customerId: customerId,
+          paymentId: 'PAY-1',
+          amountPaise: 45000,
+          collectorUid: 'employee-a',
+        },
+      );
+      await setDoc(
+        doc(db, `businesses/business-a/removalRequests/${reqId}`),
+        {
+          businessId: 'business-a',
+          customerId: customerId,
+          customerName: 'Managed Customer',
+          customerCode: customerId,
+          areaId: 'east',
+          assignedEmployeeId: 'employee-a',
+          requestedBy: 'employee-a',
+          requestedByName: 'Employee A',
+          reason: 'Account closed by customer',
+          status: 'pending',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      );
+    });
+
+    // 2. Head approves request and archives customer
+    const archiveBatch = writeBatch(headDb);
+    archiveBatch.update(doc(headDb, `businesses/business-a/removalRequests/${reqId}`), {
+      status: 'approved',
+      reviewedBy: 'head-a',
+      reviewedByName: 'Head A',
+      reviewNotes: 'Approved after verifying settlement',
+      updatedAt: serverTimestamp(),
+    });
+    archiveBatch.update(doc(headDb, `businesses/business-a/customers/${customerId}`), {
+      status: 'archived',
+      updatedAt: serverTimestamp(),
+      updatedBy: 'head-a',
+      lastAuditId: auditId,
+    });
+    archiveBatch.set(doc(headDb, `businesses/business-a/auditRecords/${auditId}`), {
+      businessId: 'business-a',
+      actorId: 'head-a',
+      action: 'customerArchived',
+      entityType: 'customer',
+      entityId: customerId,
+      areaId: 'east',
+      employeeId: 'employee-a',
+      createdAt: serverTimestamp(),
+    });
+    await assertSucceeds(archiveBatch.commit());
+
+    // 3. Verify customer cannot be physically deleted
+    await assertFails(deleteDoc(doc(headDb, `businesses/business-a/customers/${customerId}`)));
+
+    // 4. Verify financial subcollections (bills, payments) cannot be deleted
+    await assertFails(
+      deleteDoc(doc(headDb, `businesses/business-a/customers/${customerId}/bills/2026-08`)),
+    );
+    await assertFails(
+      deleteDoc(doc(headDb, `businesses/business-a/customers/${customerId}/payments/PAY-1`)),
+    );
+
+    // 5. Verify removal request document cannot be deleted
+    await assertFails(
+      deleteDoc(doc(headDb, `businesses/business-a/removalRequests/${reqId}`)),
+    );
+  });
+});
+
 describe('Phase 4 newspaper catalog and pricing', () => {
   test('Head creates, edits, and archives a newspaper with paired immutable audits', async () => {
     const db = auth('head-a', 'head-a@example.com');

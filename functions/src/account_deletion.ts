@@ -222,10 +222,12 @@ export async function requestAccountDeletionHandler(
       .where("email", "==", identity.email)
       .get();
     for (const inviteDoc of ownerInvites.docs) {
-      batch.update(inviteDoc.ref, {
-        email: `deleted-${anonymizedHash}@deleted.paperroute.local`,
-        updatedAt: now,
-      });
+      if (inviteDoc.ref.parent.parent?.path === `businesses/${businessId}`) {
+        batch.update(inviteDoc.ref, {
+          email: `deleted-${anonymizedHash}@deleted.paperroute.local`,
+          updatedAt: now,
+        });
+      }
     }
 
     // Archive active delivery areas
@@ -356,16 +358,18 @@ export async function requestAccountDeletionHandler(
       });
     }
 
-    // Anonymize any invitations referencing this employee's email
+    // Anonymize any invitations referencing this employee's email for this business
     const employeeInvites = await firestore
       .collectionGroup("invitations")
       .where("email", "==", identity.email)
       .get();
     for (const inviteDoc of employeeInvites.docs) {
-      batch.update(inviteDoc.ref, {
-        email: `deleted-${anonymizedHash}@deleted.paperroute.local`,
-        updatedAt: now,
-      });
+      if (inviteDoc.ref.parent.parent?.path === `businesses/${businessId}`) {
+        batch.update(inviteDoc.ref, {
+          email: `deleted-${anonymizedHash}@deleted.paperroute.local`,
+          updatedAt: now,
+        });
+      }
     }
 
     const auditReference = firestore

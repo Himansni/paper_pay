@@ -140,6 +140,38 @@ await empInviteDoc.set({
   createdAt: Timestamp.now(),
 });
 
+// Seed an unrelated business with an invitation for the EXACT SAME email to test cross-tenant isolation
+const unrelatedAgency = firestore.doc('businesses/del-agency-unrelated');
+await unrelatedAgency.set({
+  businessId: 'del-agency-unrelated',
+  name: 'Unrelated Cross-Tenant Agency',
+  ownerId: 'unrelated-owner',
+  status: 'active',
+});
+
+const unrelatedInviteCreatedAt = Timestamp.fromMillis(Date.now() - 3600000);
+const unrelatedEmpInviteDoc = unrelatedAgency.collection('invitations').doc('invite-unrelated-emp');
+await unrelatedEmpInviteDoc.set({
+  businessId: 'del-agency-unrelated',
+  email: emp.email,
+  status: 'pending',
+  role: 'employee',
+  permissions: ['collectPayments'],
+  areaIds: ['area-unrelated'],
+  createdAt: unrelatedInviteCreatedAt,
+  updatedAt: unrelatedInviteCreatedAt,
+});
+
+const unrelatedAuditDoc = unrelatedAgency.collection('auditRecords').doc('audit-unrelated-001');
+await unrelatedAuditDoc.set({
+  businessId: 'del-agency-unrelated',
+  actorId: 'unrelated-owner',
+  action: 'employeeInvited',
+  entityType: 'invitation',
+  entityId: 'invite-unrelated-emp',
+  createdAt: unrelatedInviteCreatedAt,
+});
+
 // Seed historical payment collected by this employee
 const paymentDoc = agency1
   .collection('customers')
@@ -177,9 +209,23 @@ const updatedProfile = await firestore.doc(`userProfiles/${emp.uid}`).get();
 assert.equal(updatedProfile.get('displayName'), 'Former Employee');
 assert.equal(updatedProfile.get('phone'), '');
 
-// Verify invitation email was anonymized
+// Verify invitation email was anonymized for Business A
 const updatedEmpInvite = await empInviteDoc.get();
 assert.match(updatedEmpInvite.get('email'), /^deleted-[a-f0-9]+@deleted\.paperroute\.local$/);
+
+// Cross-tenant verification: Verify unrelated business invitation with EXACT SAME email is COMPLETELY UNCHANGED
+const checkUnrelatedEmpInvite = await unrelatedEmpInviteDoc.get();
+assert.equal(checkUnrelatedEmpInvite.exists, true);
+assert.equal(checkUnrelatedEmpInvite.get('email'), emp.email, 'Unrelated business invitation email must NOT be modified');
+assert.equal(checkUnrelatedEmpInvite.get('status'), 'pending', 'Unrelated business invitation status must remain pending');
+assert.equal(checkUnrelatedEmpInvite.get('businessId'), 'del-agency-unrelated');
+assert.deepEqual(checkUnrelatedEmpInvite.get('createdAt'), unrelatedInviteCreatedAt);
+assert.deepEqual(checkUnrelatedEmpInvite.get('updatedAt'), unrelatedInviteCreatedAt);
+
+// Verify unrelated business audit records were completely unmodified
+const unrelatedAudits = await unrelatedAgency.collection('auditRecords').get();
+assert.equal(unrelatedAudits.size, 1);
+assert.equal(unrelatedAudits.docs[0].id, 'audit-unrelated-001');
 
 // Verify payment is STILL PRESENT and collectorUid is PRESERVED (audit integrity)
 const preservedPayment = await paymentDoc.get();
@@ -200,7 +246,7 @@ await assert.rejects(
   () => signInWithEmailAndPassword(clientAuth, 'employee-del@example.com', 'password-123'),
   (err) => err.code === 'auth/invalid-credential' || err.code === 'auth/user-not-found',
 );
-process.stdout.write('✔ Employee account deleted, profile anonymized, payment history preserved, sign-in blocked.\n');
+process.stdout.write('✔ Employee account deleted, profile anonymized, payment history preserved, unrelated business invitation unchanged.\n');
 
 process.stdout.write('\n--- 3. Testing Head Account Deletion Blocked by Active Operations ---\n');
 const agency2 = firestore.doc('businesses/del-agency-2');
@@ -292,6 +338,28 @@ await inviteDoc.set({
   createdAt: Timestamp.now(),
 });
 
+// Seed an owner invitation in agency 2 to test owner invitation anonymization
+const headOwnerInviteDoc = agency2.collection('invitations').doc('invite-head-owner-001');
+await headOwnerInviteDoc.set({
+  businessId: 'del-agency-2',
+  email: head.email,
+  status: 'accepted',
+  role: 'head',
+  createdAt: Timestamp.now(),
+});
+
+// Seed an invitation in the unrelated agency with the Head's email to verify cross-tenant isolation
+const unrelatedHeadInviteCreatedAt = Timestamp.fromMillis(Date.now() - 1800000);
+const unrelatedHeadInviteDoc = unrelatedAgency.collection('invitations').doc('invite-unrelated-head');
+await unrelatedHeadInviteDoc.set({
+  businessId: 'del-agency-unrelated',
+  email: head.email,
+  status: 'pending',
+  role: 'employee',
+  createdAt: unrelatedHeadInviteCreatedAt,
+  updatedAt: unrelatedHeadInviteCreatedAt,
+});
+
 const areaDoc = agency2.collection('areas').doc('area-route-del');
 await areaDoc.set({
   businessId: 'del-agency-2',
@@ -333,6 +401,19 @@ assert.equal(closedAgency.get('phone'), '');
 // Verify pending invitation was automatically revoked
 const closedInvite = await inviteDoc.get();
 assert.equal(closedInvite.get('status'), 'revoked');
+
+// Verify owner invitation was anonymized
+const closedHeadOwnerInvite = await headOwnerInviteDoc.get();
+assert.match(closedHeadOwnerInvite.get('email'), /^deleted-[a-f0-9]+@deleted\.paperroute\.local$/);
+
+// Cross-tenant verification: Verify unrelated business invitation with Head's email is COMPLETELY UNCHANGED
+const checkUnrelatedHeadInvite = await unrelatedHeadInviteDoc.get();
+assert.equal(checkUnrelatedHeadInvite.exists, true);
+assert.equal(checkUnrelatedHeadInvite.get('email'), head.email, 'Unrelated business invitation for Head email must NOT be modified');
+assert.equal(checkUnrelatedHeadInvite.get('status'), 'pending', 'Unrelated business invitation status must remain pending');
+assert.equal(checkUnrelatedHeadInvite.get('businessId'), 'del-agency-unrelated');
+assert.deepEqual(checkUnrelatedHeadInvite.get('createdAt'), unrelatedHeadInviteCreatedAt);
+assert.deepEqual(checkUnrelatedHeadInvite.get('updatedAt'), unrelatedHeadInviteCreatedAt);
 
 // Verify active delivery area was automatically archived
 const closedArea = await areaDoc.get();

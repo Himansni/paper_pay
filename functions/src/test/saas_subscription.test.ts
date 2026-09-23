@@ -3,14 +3,32 @@ import assert from "node:assert/strict";
 import {
   evaluateAgencySubscriptionState,
   verifyWebhookSignature,
-  SAAS_LAUNCH_DATE,
+  getSaasActivationDate,
+  DEFAULT_SAAS_ACTIVATION_DATE_ISO,
 } from "../saas_subscription_service";
 import {
   deriveSubscriptionUpdate,
+  resolveInternalPlanId,
+  APPROVED_PLAN_LIMITS,
 } from "../saas_webhook_handler";
+import {PLAN_PRICING_PAISE} from "../saas_checkout_service";
 import {createHmac} from "node:crypto";
 
+describe("SaaS Activation Date Configuration", () => {
+  it("resolves default activation date when no custom date is provided", () => {
+    const defaultDate = getSaasActivationDate();
+    assert.equal(defaultDate.toISOString(), DEFAULT_SAAS_ACTIVATION_DATE_ISO);
+  });
+
+  it("resolves custom Date or ISO string when provided", () => {
+    const custom = new Date("2026-10-15T00:00:00.000Z");
+    assert.equal(getSaasActivationDate(custom).toISOString(), "2026-10-15T00:00:00.000Z");
+    assert.equal(getSaasActivationDate("2026-11-01T00:00:00.000Z").toISOString(), "2026-11-01T00:00:00.000Z");
+  });
+});
+
 describe("evaluateAgencySubscriptionState", () => {
+  const activationDate = new Date("2026-09-24T00:00:00.000Z");
   const postLaunchTime = new Date("2026-10-01T00:00:00.000Z");
 
   it("newly activated agency after launch receives exact 30-day trial starting at activation", () => {
@@ -22,6 +40,7 @@ describe("evaluateAgencySubscriptionState", () => {
       activation,
       undefined,
       now,
+      activationDate,
     );
 
     assert.equal(state.status, "trial");
@@ -38,32 +57,32 @@ describe("evaluateAgencySubscriptionState", () => {
     );
   });
 
-  it("legacy agency created before launch has trial anchored to SAAS_LAUNCH_DATE (migration policy)", () => {
+  it("legacy agency created before activation date has trial anchored to activationDate (migration policy)", () => {
     // Agency created 60 days before launch
     const legacyCreatedAt = new Date("2026-07-25T00:00:00.000Z");
-    // Evaluated 5 days after launch
-    const now = new Date(SAAS_LAUNCH_DATE.getTime() + 5 * 24 * 60 * 60 * 1000);
+    // Evaluated 5 days after activation
+    const now = new Date(activationDate.getTime() + 5 * 24 * 60 * 60 * 1000);
 
     const state = evaluateAgencySubscriptionState(
       "biz-legacy",
       legacyCreatedAt,
       undefined,
       now,
+      activationDate,
     );
 
     assert.equal(state.status, "trial");
-    // Anchored to SAAS_LAUNCH_DATE, not legacyCreatedAt
-    assert.equal(state.trialStartsAt.toISOString(), SAAS_LAUNCH_DATE.toISOString());
+    // Anchored to activationDate, not legacyCreatedAt
+    assert.equal(state.trialStartsAt.toISOString(), activationDate.toISOString());
     assert.equal(
       state.trialEndsAt.toISOString(),
-      new Date(SAAS_LAUNCH_DATE.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      new Date(activationDate.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString(),
     );
     assert.equal(state.daysRemaining, 25);
     assert.equal(state.isReadOnly, false);
   });
 
   it("post-launch agency with historical createdAt never receives duplicate trial", () => {
-    // Agency created 25 days before current time, post launch
     const createdAt = new Date("2026-10-01T00:00:00.000Z");
     const now = new Date("2026-10-26T00:00:00.000Z");
 
@@ -72,11 +91,11 @@ describe("evaluateAgencySubscriptionState", () => {
       createdAt,
       undefined,
       now,
+      activationDate,
     );
 
     assert.equal(state.status, "trial");
     assert.equal(state.trialStartsAt.toISOString(), createdAt.toISOString());
-    // Only 5 days remain, NOT 30
     assert.equal(state.daysRemaining, 5);
     assert.equal(state.isReadOnly, false);
   });
@@ -97,6 +116,7 @@ describe("evaluateAgencySubscriptionState", () => {
         graceDays: 7,
       },
       now,
+      activationDate,
     );
 
     assert.equal(state.status, "trial");
@@ -107,7 +127,6 @@ describe("evaluateAgencySubscriptionState", () => {
   });
 
   it("agency enters 7-day grace period immediately when trial expires", () => {
-    // Agency created on postLaunchTime, evaluated 32 days later (2 days into grace)
     const createdAt = postLaunchTime;
     const now = new Date(postLaunchTime.getTime() + 32 * 24 * 60 * 60 * 1000);
 
@@ -116,17 +135,16 @@ describe("evaluateAgencySubscriptionState", () => {
       createdAt,
       undefined,
       now,
+      activationDate,
     );
 
     assert.equal(state.status, "gracePeriod");
     assert.equal(state.daysRemaining, 0);
     assert.equal(state.graceDaysRemaining, 5);
-    // Writes are still allowed during grace period
     assert.equal(state.isReadOnly, false);
   });
 
   it("agency switches to read-only mode after trial + grace period expires", () => {
-    // Agency created on postLaunchTime, evaluated 40 days later (30 trial + 7 grace = 37, 3 days expired)
     const createdAt = postLaunchTime;
     const now = new Date(postLaunchTime.getTime() + 40 * 24 * 60 * 60 * 1000);
 
@@ -135,13 +153,13 @@ describe("evaluateAgencySubscriptionState", () => {
       createdAt,
       undefined,
       now,
+      activationDate,
     );
 
     assert.equal(state.status, "expired");
     assert.equal(state.daysRemaining, 0);
     assert.equal(state.graceDaysRemaining, 0);
     assert.equal(state.isReadOnly, true);
-    // effectiveExpiresAt is in the past
     assert.ok(state.effectiveExpiresAt.getTime() < now.getTime());
   });
 
@@ -162,6 +180,7 @@ describe("evaluateAgencySubscriptionState", () => {
         employeeLimit: 10,
       },
       postLaunchTime,
+      activationDate,
     );
 
     assert.equal(state.status, "active");
@@ -195,7 +214,16 @@ describe("deriveSubscriptionUpdate (Webhook state machine)", () => {
     assert.equal(update?.planId, "growth");
     assert.equal(update?.customerLimit, 1000);
     assert.equal(update?.employeeLimit, 10);
+    assert.equal(update?.razorpaySubscriptionId, "sub_12345");
     assert.ok(update?.effectiveExpiresAt);
+  });
+
+  it("resolves plan IDs correctly with case-insensitive matching", () => {
+    assert.equal(resolveInternalPlanId("plan_starter_monthly"), "starter");
+    assert.equal(resolveInternalPlanId("growth_annual"), "growth");
+    assert.equal(resolveInternalPlanId("agencypro_quarterly"), "agencyPro");
+    assert.equal(resolveInternalPlanId("agency-pro-plan"), "agencyPro");
+    assert.equal(resolveInternalPlanId(undefined), "starter");
   });
 
   it("handles subscription.halted / payment.failed by entering gracePeriod", () => {
@@ -232,7 +260,7 @@ describe("deriveSubscriptionUpdate (Webhook state machine)", () => {
 
     assert.ok(update);
     assert.equal(update?.status, "expired");
-    assert.equal(update?.effectiveExpiresAt.toMillis(), 0); // epoch = immediately expired in rules
+    assert.equal(update?.effectiveExpiresAt.toMillis(), 0);
   });
 
   it("returns null for unhandled events", () => {
@@ -242,6 +270,23 @@ describe("deriveSubscriptionUpdate (Webhook state machine)", () => {
       testNow,
     );
     assert.equal(update, null);
+  });
+});
+
+describe("SaaS Checkout Pricing & Plan Limits", () => {
+  it("enforces exact pricing table for monthly and annual plans", () => {
+    assert.equal(PLAN_PRICING_PAISE.starter.monthly, 29900);
+    assert.equal(PLAN_PRICING_PAISE.starter.annual, 299900);
+    assert.equal(PLAN_PRICING_PAISE.growth.monthly, 59900);
+    assert.equal(PLAN_PRICING_PAISE.growth.annual, 599900);
+    assert.equal(PLAN_PRICING_PAISE.agencyPro.monthly, 129900);
+    assert.equal(PLAN_PRICING_PAISE.agencyPro.annual, 1299900);
+  });
+
+  it("enforces approved plan limits", () => {
+    assert.equal(APPROVED_PLAN_LIMITS.starter.customerLimit, 300);
+    assert.equal(APPROVED_PLAN_LIMITS.growth.customerLimit, 1000);
+    assert.equal(APPROVED_PLAN_LIMITS.agencyPro.customerLimit, 10000);
   });
 });
 

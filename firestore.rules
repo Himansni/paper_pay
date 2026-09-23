@@ -53,10 +53,10 @@ service cloud.firestore {
 
     function subscriptionAllowsWrites(businessId) {
       let subDoc = saasSubscriptionPath(businessId);
-      return !exists(subDoc)
-        || !('effectiveExpiresAt' in get(subDoc).data)
-        || get(subDoc).data.effectiveExpiresAt == null
-        || request.time < get(subDoc).data.effectiveExpiresAt;
+      return exists(subDoc)
+        && ('effectiveExpiresAt' in get(subDoc).data)
+        && get(subDoc).data.effectiveExpiresAt != null
+        && request.time < get(subDoc).data.effectiveExpiresAt;
     }
 
     function deliveryDropPath(businessId, routeId, customerId) {
@@ -2873,7 +2873,8 @@ service cloud.firestore {
       // The first business and Head are bootstrapped through the trusted
       // Firebase Console. The mobile client can never promote itself to Head.
       allow create, delete: if false;
-      allow update: if head(businessId)
+      allow update: if subscriptionAllowsWrites(businessId)
+        && head(businessId)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'name', 'phone', 'address', 'primaryPricingRegion', 'updatedAt'
         ])
@@ -2955,7 +2956,8 @@ service cloud.firestore {
             && resource.data.email == request.auth.token.email
           );
         allow list: if head(businessId);
-        allow create: if head(businessId)
+        allow create: if subscriptionAllowsWrites(businessId)
+          && head(businessId)
           && request.resource.data.keys().hasAll([
             'businessId', 'email', 'role', 'status', 'permissions', 'areaIds',
             'createdBy', 'createdAt', 'expiresAt'
@@ -2996,14 +2998,17 @@ service cloud.firestore {
 
       match /areas/{areaId} {
         allow read: if activeMember(businessId);
-        allow create: if head(businessId)
+        allow create: if subscriptionAllowsWrites(businessId)
+          && head(businessId)
           && request.resource.data.businessId == businessId
           && request.resource.data.createdBy == request.auth.uid
           && request.resource.data.createdAt == request.time;
-        allow update: if head(businessId)
+        allow update: if subscriptionAllowsWrites(businessId)
+          && head(businessId)
           && request.resource.data.businessId == businessId
           && request.resource.data.updatedAt == request.time;
-        allow delete: if head(businessId);
+        allow delete: if subscriptionAllowsWrites(businessId)
+          && head(businessId);
       }
 
       match /customers/{customerId} {
@@ -3043,7 +3048,8 @@ service cloud.firestore {
               ])
             )
           );
-        allow update: if validCustomerShape(
+        allow update: if subscriptionAllowsWrites(businessId)
+          && validCustomerShape(
             businessId,
             customerId,
             request.resource.data
@@ -3066,21 +3072,24 @@ service cloud.firestore {
 
         match /subscriptions/{subscriptionId} {
           allow read: if canReadCustomer(businessId, customerId);
-          allow create: if validSubscriptionCreate(
-            businessId,
-            customerId,
-            subscriptionId
-          );
-          allow update: if validSubscriptionUpdate(
-            businessId,
-            customerId,
-            subscriptionId
-          );
+          allow create: if subscriptionAllowsWrites(businessId)
+            && validSubscriptionCreate(
+              businessId,
+              customerId,
+              subscriptionId
+            );
+          allow update: if subscriptionAllowsWrites(businessId)
+            && validSubscriptionUpdate(
+              businessId,
+              customerId,
+              subscriptionId
+            );
           allow delete: if false;
 
           match /versions/{versionId} {
             allow read: if canReadCustomer(businessId, customerId);
-            allow create: if canManageAssignedSubscription(
+            allow create: if subscriptionAllowsWrites(businessId)
+              && canManageAssignedSubscription(
                 businessId,
                 customerId
               )
@@ -3130,7 +3139,8 @@ service cloud.firestore {
                     )
                   ).data.customPriceReason
               );
-            allow update: if (
+            allow update: if subscriptionAllowsWrites(businessId)
+              && (
                 canManageAssignedSubscription(businessId, customerId)
                 || head(businessId)
               )
@@ -3161,7 +3171,8 @@ service cloud.firestore {
 
           match /pauses/{pauseId} {
             allow read: if canReadCustomer(businessId, customerId);
-            allow create: if canManageAssignedSubscription(
+            allow create: if subscriptionAllowsWrites(businessId)
+              && canManageAssignedSubscription(
                 businessId,
                 customerId
               )
@@ -3203,7 +3214,8 @@ service cloud.firestore {
                   )).data.currentPauseId == pauseId
                 )
               );
-            allow update: if (
+            allow update: if subscriptionAllowsWrites(businessId)
+              && (
                 canManageAssignedSubscription(businessId, customerId)
                 || head(businessId)
               )
@@ -3240,7 +3252,8 @@ service cloud.firestore {
 
         match /deliveryExceptions/{exceptionId} {
           allow read: if canReadCustomer(businessId, customerId);
-          allow create: if canReadCustomer(businessId, customerId)
+          allow create: if subscriptionAllowsWrites(businessId)
+            && canReadCustomer(businessId, customerId)
             && (
               head(businessId)
               || permission(businessId, 'recordDeliveryExceptions')
@@ -3263,7 +3276,8 @@ service cloud.firestore {
         match /billingSources/{sourceId} {
           allow read: if sourceId == 'service'
             && canReadCustomer(businessId, customerId);
-          allow create, update: if sourceId == 'service'
+          allow create, update: if subscriptionAllowsWrites(businessId)
+            && sourceId == 'service'
             && activeMember(businessId)
             && validServiceBillingSourceAdvance(
               businessId,
@@ -3309,7 +3323,8 @@ service cloud.firestore {
 
           match /lineItems/{lineItemId} {
             allow read: if canReadCustomer(businessId, customerId);
-            allow create: if head(businessId)
+            allow create: if subscriptionAllowsWrites(businessId)
+              && head(businessId)
               && validBillLineShape(
                 businessId,
                 customerId,
@@ -3350,7 +3365,8 @@ service cloud.firestore {
                 )).data.action == 'billingAdjustmentCreated'
               )
             );
-          allow update: if head(businessId)
+          allow update: if subscriptionAllowsWrites(businessId)
+            && head(businessId)
             && validBillingControlShape(
               businessId,
               customerId,
@@ -3429,12 +3445,14 @@ service cloud.firestore {
             customerId,
             paymentId
           );
-          allow create: if validPaymentStateCreate(
-            businessId,
-            customerId,
-            paymentId
-          );
-          allow update: if head(businessId)
+          allow create: if subscriptionAllowsWrites(businessId)
+            && validPaymentStateCreate(
+              businessId,
+              customerId,
+              paymentId
+            );
+          allow update: if subscriptionAllowsWrites(businessId)
+            && head(businessId)
             && validPaymentStateUpdate(
               businessId,
               customerId,
@@ -3445,32 +3463,36 @@ service cloud.firestore {
 
         match /paymentReversals/{reversalId} {
           allow read: if canReadCollectionHistory(businessId, customerId);
-          allow create: if validReversalCreate(
-            businessId,
-            customerId,
-            reversalId
-          );
+          allow create: if subscriptionAllowsWrites(businessId)
+            && validReversalCreate(
+              businessId,
+              customerId,
+              reversalId
+            );
           allow update, delete: if false;
         }
 
         match /collectionState/{stateId} {
           allow read: if stateId == 'current'
             && canReadCollectionHistory(businessId, customerId);
-          allow create: if stateId == 'current'
+          allow create: if subscriptionAllowsWrites(businessId)
+            && stateId == 'current'
             && validCollectionStateShape(
               businessId,
               customerId,
               request.resource.data
             )
             && validCollectionStateCreateForBill(businessId, customerId);
-          allow update: if stateId == 'current'
+          allow update: if subscriptionAllowsWrites(businessId)
+            && stateId == 'current'
             && validCollectionStateUpdate(businessId, customerId);
           allow delete: if false;
         }
 
         match /billBalances/{billId} {
           allow read: if canReadCollectionHistory(businessId, customerId);
-          allow create: if validBillBalanceShape(
+          allow create: if subscriptionAllowsWrites(businessId)
+            && validBillBalanceShape(
               businessId,
               customerId,
               billId,
@@ -3481,18 +3503,20 @@ service cloud.firestore {
               customerId,
               billId
             );
-          allow update: if validBillBalanceUpdate(
-            businessId,
-            customerId,
-            billId
-          );
+          allow update: if subscriptionAllowsWrites(businessId)
+            && validBillBalanceUpdate(
+              businessId,
+              customerId,
+              billId
+            );
           allow delete: if false;
         }
       }
 
       match /newspapers/{newspaperId} {
         allow read: if activeMember(businessId);
-        allow create: if head(businessId)
+        allow create: if subscriptionAllowsWrites(businessId)
+          && head(businessId)
           && validNewspaperShape(
             businessId,
             newspaperId,
@@ -3510,7 +3534,8 @@ service cloud.firestore {
             newspaperId,
             'newspaperCreated'
           );
-        allow update: if head(businessId)
+        allow update: if subscriptionAllowsWrites(businessId)
+          && head(businessId)
           && validNewspaperShape(
             businessId,
             newspaperId,
@@ -3525,9 +3550,11 @@ service cloud.firestore {
 
         match /priceRules/{ruleId} {
           allow read: if activeMember(businessId);
-          allow create: if head(businessId)
+          allow create: if subscriptionAllowsWrites(businessId)
+            && head(businessId)
             && validPriceRuleCreate(businessId, newspaperId, ruleId);
-          allow update: if head(businessId)
+          allow update: if subscriptionAllowsWrites(businessId)
+            && head(businessId)
             && validPriceRuleShape(
               businessId,
               newspaperId,
@@ -3541,13 +3568,16 @@ service cloud.firestore {
 
       match /configuration/{documentId} {
         allow read: if activeMember(businessId);
-        allow create, update: if documentId != 'upi'
+        allow create, update: if subscriptionAllowsWrites(businessId)
+          && documentId != 'upi'
           && head(businessId)
           && request.resource.data.businessId == businessId
           && request.resource.data.updatedAt == request.time;
-        allow create: if documentId == 'upi'
+        allow create: if subscriptionAllowsWrites(businessId)
+          && documentId == 'upi'
           && validUpiConfigurationCreate(businessId);
-        allow update: if documentId == 'upi'
+        allow update: if subscriptionAllowsWrites(businessId)
+          && documentId == 'upi'
           && validUpiConfigurationUpdate(businessId);
         allow delete: if false;
       }
@@ -3648,7 +3678,7 @@ service cloud.firestore {
 
       match /dailyRoutes/{routeId} {
         allow read: if activeMember(businessId);
-        allow write: if head(businessId);
+        allow write: if subscriptionAllowsWrites(businessId) && head(businessId);
 
         match /drops/{customerId} {
           allow read: if activeMember(businessId)
@@ -3666,7 +3696,8 @@ service cloud.firestore {
               )
             );
 
-          allow create, update: if activeMember(businessId)
+          allow create, update: if subscriptionAllowsWrites(businessId)
+            && activeMember(businessId)
             && validDeliveryDropShape(businessId, customerId, routeId, request.resource.data)
             && request.resource.data.actorUid == request.auth.uid
             && request.resource.data.updatedAt == request.time
@@ -3685,7 +3716,8 @@ service cloud.firestore {
 
       match /routeOrders/{areaId} {
         allow read: if activeMember(businessId);
-        allow create, update: if activeMember(businessId)
+        allow create, update: if subscriptionAllowsWrites(businessId)
+          && activeMember(businessId)
           && request.resource.data.businessId == businessId
           && request.resource.data.areaId == areaId
           && request.resource.data.customerIds is list

@@ -12,6 +12,7 @@ import {
 } from "./provision_agency_owner";
 import {requestAccountDeletionHandler} from "./account_deletion";
 import {razorpayWebhookHandler} from "./saas_webhook_handler";
+import {createSaasCheckoutSessionHandler} from "./saas_checkout_service";
 
 initializeApp();
 setGlobalOptions(ownerProvisioningRuntime);
@@ -29,6 +30,11 @@ export const provisionAgencyOwner = onCall(
 export const requestAccountDeletion = onCall(
   accountDeletionRuntime,
   requestAccountDeletionHandler,
+);
+
+export const createSaasCheckoutSession = onCall(
+  ownerProvisioningRuntime,
+  createSaasCheckoutSessionHandler,
 );
 
 /**

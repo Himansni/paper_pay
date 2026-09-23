@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PaperRoute SaaS — Agency Subscription Checkout</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-functions-compat.js"></script>
+  <!-- Razorpay Checkout JS -->
+  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+</head>
+<body>
+  <div class="app-container">
+    <header class="app-header">
+      <div class="brand">
+        <div class="logo-icon">📰</div>
+        <h1>PaperRoute SaaS</h1>
+      </div>
+      <div id="user-profile" class="user-profile hidden">
+        <span id="user-email" class="user-email"></span>
+        <button id="signout-btn" class="btn btn-secondary btn-sm">Sign Out</button>
+      </div>
+    </header>
+
+    <main class="app-main">
+      <!-- Auth Section -->
+      <section id="auth-section" class="card auth-card">
+        <h2>Agency Head Sign In</h2>
+        <p class="subtitle">Sign in with your PaperRoute Agency Head credentials to manage and renew your subscription.</p>
+        <form id="login-form">
+          <div class="form-group">
+            <label for="login-email">Email Address</label>
+            <input type="email" id="login-email" required placeholder="head@agency.com">
+          </div>
+          <div class="form-group">
+            <label for="login-password">Password</label>
+            <input type="password" id="login-password" required placeholder="••••••••">
+          </div>
+          <div class="form-group">
+            <label for="login-biz-id">Business ID (optional if linked)</label>
+            <input type="text" id="login-biz-id" placeholder="business_id">
+          </div>
+          <button type="submit" id="login-btn" class="btn btn-primary btn-block">Sign In to Agency Portal</button>
+          <div id="auth-error" class="alert alert-error hidden"></div>
+        </form>
+      </section>
+
+      <!-- Subscription Management Section -->
+      <section id="checkout-section" class="checkout-section hidden">
+        <div class="card agency-status-card">
+          <div class="agency-info">
+            <h2 id="agency-name">Loading Agency...</h2>
+            <p id="agency-id-badge" class="badge">Business ID: -</p>
+          </div>
+          <div class="current-plan-box">
+            <span class="status-label">Current Status:</span>
+            <span id="subscription-status-pill" class="status-pill status-trial">Checking...</span>
+            <div id="expiry-info" class="expiry-info">Expiry Date: -</div>
+          </div>
+        </div>
+
+        <div class="pricing-header">
+          <h2>Select Your Subscription Plan</h2>
+          <p>Choose the right capacity for your newspaper distribution network.</p>
+          <div class="billing-toggle">
+            <span id="monthly-label" class="active">Monthly</span>
+            <label class="switch">
+              <input type="checkbox" id="billing-cycle-toggle">
+              <span class="slider round"></span>
+            </label>
+            <span id="annual-label">Annual (2 Months Free!)</span>
+          </div>
+        </div>
+
+        <div class="pricing-grid">
+          <!-- Starter Plan -->
+          <div class="pricing-card" data-plan="starter">
+            <div class="card-badge">Starter</div>
+            <div class="price">
+              <span class="currency">₹</span>
+              <span class="amount" id="starter-price">299</span>
+              <span class="period" id="starter-period">/mo</span>
+            </div>
+            <ul class="features">
+              <li>✔ Up to <strong>300 Customers</strong></li>
+              <li>✔ Up to <strong>3 Delivery Staff</strong></li>
+              <li>✔ Daily Route & Drop Checkoffs</li>
+              <li>✔ Bill Finalization & Receipts</li>
+              <li>✔ Full Data Export & Backups</li>
+            </ul>
+            <button class="btn btn-outline btn-block select-plan-btn" data-plan="starter">Choose Starter</button>
+          </div>
+
+          <!-- Growth Plan (Popular) -->
+          <div class="pricing-card featured" data-plan="growth">
+            <div class="popular-tag">MOST POPULAR</div>
+            <div class="card-badge">Growth</div>
+            <div class="price">
+              <span class="currency">₹</span>
+              <span class="amount" id="growth-price">599</span>
+              <span class="period" id="growth-period">/mo</span>
+            </div>
+            <ul class="features">
+              <li>✔ Up to <strong>1,000 Customers</strong></li>
+              <li>✔ Up to <strong>10 Delivery Staff</strong></li>
+              <li>✔ Multiple Delivery Areas</li>
+              <li>✔ Custom Customer Pricing</li>
+              <li>✔ Priority Billing Control</li>
+              <li>✔ Advanced Financial Reports</li>
+            </ul>
+            <button class="btn btn-primary btn-block select-plan-btn" data-plan="growth">Choose Growth</button>
+          </div>
+
+          <!-- Agency Pro Plan -->
+          <div class="pricing-card" data-plan="agencyPro">
+            <div class="card-badge">Agency Pro</div>
+            <div class="price">
+              <span class="currency">₹</span>
+              <span class="amount" id="agencypro-price">1,299</span>
+              <span class="period" id="agencypro-period">/mo</span>
+            </div>
+            <ul class="features">
+              <li>✔ Up to <strong>10,000 Customers</strong></li>
+              <li>✔ Up to <strong>100 Delivery Staff</strong></li>
+              <li>✔ Unlimited Delivery Areas</li>
+              <li>✔ High-Volume Daily Deliveries</li>
+              <li>✔ Multi-Route Optimization</li>
+              <li>✔ Dedicated Customer Support</li>
+            </ul>
+            <button class="btn btn-outline btn-block select-plan-btn" data-plan="agencyPro">Choose Agency Pro</button>
+          </div>
+        </div>
+
+        <!-- Payment Confirmation Dialog -->
+        <div id="payment-status-modal" class="modal hidden">
+          <div class="modal-content card">
+            <div id="payment-spinner" class="spinner"></div>
+            <h3 id="payment-status-title">Processing Subscription...</h3>
+            <p id="payment-status-message">Please complete payment in the Razorpay checkout window.</p>
+            <button id="close-modal-btn" class="btn btn-secondary btn-sm hidden">Return to Agency App</button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="app-footer">
+      <p>PaperRoute SaaS &copy; 2026. Official Agency Subscription Portal. Option A Web Checkout Architecture.</p>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

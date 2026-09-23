@@ -4506,6 +4506,65 @@ describe('Phase 7 reporting security and projection integrity', () => {
 
       await assertSucceeds(batch.commit());
     });
+
+    test('Missing subscription document strictly default-denies operational writes until backfilled', async () => {
+      // Simulate agency without subscription doc
+      await environment.withSecurityRulesDisabled(async (context) => {
+        const adminDb = context.firestore();
+        await deleteDoc(doc(adminDb, 'businesses/business-a/subscription/saas'));
+      });
+
+      const headDb = auth('head-a', 'head-a@example.com');
+
+      const newCustomer = completeCustomer({
+        id: 'cust-no-sub-attempt',
+        businessId: 'business-a',
+        assignedEmployeeId: 'employee-a',
+        areaId: 'east',
+        lastAuditId: 'audit-no-sub-cust',
+      });
+      const auditDoc = customerAudit({
+        businessId: 'business-a',
+        actorId: 'head-a',
+        action: 'customerCreated',
+        entityId: 'cust-no-sub-attempt',
+      });
+
+      const batch = writeBatch(headDb);
+      batch.set(doc(headDb, 'businesses/business-a/customers/cust-no-sub-attempt'), newCustomer);
+      batch.set(doc(headDb, 'businesses/business-a/auditRecords/audit-no-sub-cust'), auditDoc);
+
+      // Default-deny: write MUST fail because subscription doc does not exist
+      await assertFails(batch.commit());
+    });
+
+    test('Expired agency can still submit Account Deletion Request', async () => {
+      // Restore expired subscription
+      await environment.withSecurityRulesDisabled(async (context) => {
+        const adminDb = context.firestore();
+        await setDoc(doc(adminDb, 'businesses/business-a/subscription/saas'), {
+          businessId: 'business-a',
+          planId: 'trial',
+          status: 'expired',
+          effectiveExpiresAt: new Date(Date.now() - 86_400_000),
+          customerLimit: 500,
+          employeeLimit: 10,
+          graceDays: 7,
+          updatedAt: new Date(),
+        });
+      });
+
+      const headDb = auth('head-a', 'head-a@example.com');
+      // Account deletion request must succeed even when agency is expired
+      await assertSucceeds(
+        setDoc(doc(headDb, 'accountDeletionRequests/head-a'), {
+          uid: 'head-a',
+          email: 'head-a@example.com',
+          status: 'pending',
+          requestedAt: new Date(),
+        }),
+      );
+    });
   });
 });
 

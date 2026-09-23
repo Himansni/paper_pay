@@ -24,27 +24,40 @@ export interface SaasSubscriptionContract {
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
+/** Default fallback activation date for migrations if not configured in environment. */
+export const DEFAULT_SAAS_ACTIVATION_DATE_ISO = "2026-09-24T00:00:00.000Z";
+
 /**
- * The date Phase 5 SaaS entitlement went live in production.
- * Agencies whose business.createdAt predates this are "legacy" agencies.
- * Their trial window is anchored to this date rather than their original
- * createdAt, giving them a fair 30-day window from launch day while
- * preventing exploitation — the constant is fixed on the server and
- * cannot be reset by any client action.
+ * Returns the controlled SaaS activation date for legacy agency migration.
+ * Reads from process.env.SAAS_ACTIVATION_DATE if provided.
  */
-export const SAAS_LAUNCH_DATE = new Date("2026-09-24T00:00:00.000Z");
+export function getSaasActivationDate(customDate?: Date | string): Date {
+  if (customDate instanceof Date && !isNaN(customDate.getTime())) {
+    return customDate;
+  }
+  if (typeof customDate === "string") {
+    const parsed = new Date(customDate);
+    if (!isNaN(parsed.getTime())) return parsed;
+  }
+  const envDate = process.env.SAAS_ACTIVATION_DATE;
+  if (envDate) {
+    const parsed = new Date(envDate);
+    if (!isNaN(parsed.getTime())) return parsed;
+  }
+  return new Date(DEFAULT_SAAS_ACTIVATION_DATE_ISO);
+}
 
 /**
  * Evaluates the authoritative SaaS subscription/trial state for an agency.
  *
- * Migration policy for legacy agencies (created before SAAS_LAUNCH_DATE):
- *   effectiveTrialStart = max(businessCreatedAt, SAAS_LAUNCH_DATE)
+ * Migration policy for legacy agencies (created before activationDate):
+ *   effectiveTrialStart = max(businessCreatedAt, activationDate)
  *
  * This guarantees:
  * - Newly registered agencies always get exactly 30 days from activation.
  * - Pre-launch agencies are not immediately expired; they get 30 days from
- *   the Phase 5 go-live date.
- * - Trial resets are impossible: the cutoff is a fixed server constant and
+ *   the controlled activation date.
+ * - Trial resets are impossible: the cutoff is a fixed server configuration and
  *   clients cannot delete or recreate the subscription document.
  */
 export function evaluateAgencySubscriptionState(
@@ -62,6 +75,7 @@ export function evaluateAgencySubscriptionState(
     employeeLimit?: number;
   },
   now: Date = new Date(),
+  activationDate: Date = getSaasActivationDate(),
 ): SaasSubscriptionContract {
   const graceDays = existingSubscription?.graceDays ?? 7;
   const graceDurationMs = graceDays * ONE_DAY_MS;
@@ -79,9 +93,9 @@ export function evaluateAgencySubscriptionState(
     trialStart = existingSubscription.trialStartsAt;
   } else {
     // No subscription document (legacy or new agency):
-    // Apply migration policy — anchor to max(createdAt, SAAS_LAUNCH_DATE).
-    trialStart = businessCreatedAt < SAAS_LAUNCH_DATE
-      ? SAAS_LAUNCH_DATE
+    // Apply migration policy — anchor to max(createdAt, activationDate).
+    trialStart = businessCreatedAt < activationDate
+      ? activationDate
       : businessCreatedAt;
   }
 
@@ -126,7 +140,7 @@ export function evaluateAgencySubscriptionState(
 
   // Pre-compute the authoritative expiry timestamp stored in Firestore.
   // Firestore Security Rules read this field directly to gate operational
-  // create operations — no server-side duration arithmetic required in rules.
+  // mutation operations — no duration arithmetic required in rules.
   const effectiveExpiresAt = graceEnd;
 
   return {

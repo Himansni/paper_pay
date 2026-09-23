@@ -573,4 +573,461 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get addNewspaper => 'Add Publication';
+
+  @override
+  String get arrangeDeliveryRoute => 'Arrange Delivery Route';
+
+  @override
+  String get routeOrderSaved => 'Route order saved successfully.';
+
+  @override
+  String get placeInRoute => 'Place in delivery route';
+
+  @override
+  String get placeInRouteFirst => 'At start of route (First)';
+
+  @override
+  String get placeInRouteAfter => 'After an existing customer';
+
+  @override
+  String get placeInRouteLast => 'At end of route (Last)';
+
+  @override
+  String get precedingCustomer => 'Preceding customer';
+
+  @override
+  String get selectAreaFirst => 'Select an area first to choose preceding customer.';
+
+  @override
+  String get noCustomersInArea => 'No existing customers in this area.';
+
+  @override
+  String get dragHandleHint => 'Long-press or drag the handle on the right to reorder delivery stops.';
+
+  @override
+  String get permissionDeniedArrangeRoute => 'You do not have permission to rearrange route stops for this area.';
+
+  @override
+  String get noCustomersToArrange => 'No active customers in this area to arrange.';
+
+  @override
+  String get customerEditTitle => 'Edit Customer';
+
+  @override
+  String get customerNewTitle => 'New Customer';
+
+  @override
+  String get customerDetailsTitle => 'Customer Details';
+
+  @override
+  String get customerNotFound => 'Customer not found';
+
+  @override
+  String get customerNotFoundMessage => 'The record may no longer be available.';
+
+  @override
+  String customerCreated(String code) {
+    return 'Customer $code created.';
+  }
+
+  @override
+  String get customerDetailsUpdated => 'Customer details updated.';
+
+  @override
+  String get customerAssignmentUpdated => 'Customer assignment updated.';
+
+  @override
+  String assignCustomerTitle(String name) {
+    return 'Assign $name';
+  }
+
+  @override
+  String get selectAnArea => 'Select an area';
+
+  @override
+  String get keepUnassigned => 'Keep unassigned';
+
+  @override
+  String get saveAssignment => 'Save assignment';
+
+  @override
+  String get loadMoreCustomers => 'Load more customers';
+
+  @override
+  String get allAreas => 'All areas';
+
+  @override
+  String get clearSearch => 'Clear search';
+
+  @override
+  String get customerConsentRecorded => 'Customer consent recorded';
+
+  @override
+  String get changeAssignment => 'Change assignment';
+
+  @override
+  String get upiSettingsTitle => 'UPI Settings';
+
+  @override
+  String get enableUpiRequests => 'Enable UPI collection requests';
+
+  @override
+  String get upiSettingsUpdated => 'UPI collection settings updated.';
+
+  @override
+  String get collectFromCustomerRecord => 'Collect from a customer record';
+
+  @override
+  String get loadMorePayments => 'Load more payments';
+
+  @override
+  String get oldestOutstandingFirst => 'Oldest outstanding first';
+
+  @override
+  String get receiptMustBeVerified => 'Receipt must be verified manually';
+
+  @override
+  String get retryConfirmation => 'Retry confirmation';
+
+  @override
+  String get confirmReceiptOfPayment => 'Confirm receipt of payment?';
+
+  @override
+  String get goBack => 'Go back';
+
+  @override
+  String get iVerifiedReceipt => 'I verified receipt';
+
+  @override
+  String get generateAmountUpiQr => 'Generate amount-specific UPI QR';
+
+  @override
+  String get paymentReceiptTitle => 'Payment Receipt';
+
+  @override
+  String get notYetConfirmedReceipt => 'Not yet a confirmed receipt';
+
+  @override
+  String get serverConfirmedLedger => 'Server-confirmed ledger entry';
+
+  @override
+  String get remainingOutstanding => 'Remaining outstanding';
+
+  @override
+  String get recordPaymentReversal => 'Record Payment Reversal';
+
+  @override
+  String get recordReversal => 'Record reversal';
+
+  @override
+  String get finalizedBill => 'Finalized Bill';
+
+  @override
+  String get immutableFinancialSnapshot => 'Immutable financial snapshot';
+
+  @override
+  String deliveryLinesCount(int count) {
+    return '$count delivery lines';
+  }
+
+  @override
+  String get noAdjustmentsApplied => 'No adjustments were applied.';
+
+  @override
+  String get loadMoreDailyLines => 'Load more daily lines';
+
+  @override
+  String get finalizeBillQuestion => 'Finalize immutable bill?';
+
+  @override
+  String get finalizeBillAction => 'Finalize bill';
+
+  @override
+  String get finalizeImmutableBill => 'Finalize immutable bill';
+
+  @override
+  String get readOnlyCalculation => 'Read-only calculation';
+
+  @override
+  String get signedBillingAdjustment => 'Signed billing adjustment';
+
+  @override
+  String get recordAdjustment => 'Record adjustment';
+
+  @override
+  String get adjustmentRecorded => 'Adjustment recorded with audit history.';
+
+  @override
+  String monthPreview(String month) {
+    return '$month preview';
+  }
+
+  @override
+  String monthBill(String month) {
+    return '$month bill';
+  }
+
+  @override
+  String get todayOperationsTitle => 'Today\'s Operations';
+
+  @override
+  String get circulationSummaryTitle => 'Circulation Tally';
+
+  @override
+  String get findTheHouse => 'Find the house';
+
+  @override
+  String get landmarkPrefix => 'LANDMARK: ';
+
+  @override
+  String get contactSection => 'Contact';
+
+  @override
+  String get primaryPhone => 'Primary phone';
+
+  @override
+  String get deliveryAssignment => 'Delivery assignment';
+
+  @override
+  String get areaLabel => 'Area';
+
+  @override
+  String get employeeLabel => 'Employee';
+
+  @override
+  String get placementLabel => 'Placement';
+
+  @override
+  String get billingPreference => 'Billing preference';
+
+  @override
+  String get consentedGpsLocation => 'Consented GPS location';
+
+  @override
+  String get latitude => 'Latitude';
+
+  @override
+  String get longitude => 'Longitude';
+
+  @override
+  String get operationalNotes => 'Operational notes';
+
+  @override
+  String get financialOpening => 'Financial opening';
+
+  @override
+  String get immutableOpeningNotice => 'Immutable after creation; future corrections require an audited adjustment.';
+
+  @override
+  String get assignmentAndChangeHistory => 'Assignment and change history';
+
+  @override
+  String get noCustomerAuditEntries => 'No customer audit entries are available yet.';
+
+  @override
+  String couldNotLoadAuditHistory(String error) {
+    return 'Could not load audit history: $error';
+  }
+
+  @override
+  String get reactivateCustomer => 'Reactivate customer';
+
+  @override
+  String get reactivateCustomerConfirm => 'Reactivate customer?';
+
+  @override
+  String get archiveCustomerConfirm => 'Archive customer?';
+
+  @override
+  String get reactivateCustomerDesc => 'The customer will return to active operational lists.';
+
+  @override
+  String get archiveCustomerDesc => 'The record and all history will be preserved. Delivery and billing records will not be deleted.';
+
+  @override
+  String get customerReactivated => 'Customer reactivated.';
+
+  @override
+  String get customerArchivedNotice => 'Customer archived without deleting history.';
+
+  @override
+  String get auditCustomerCreated => 'Customer created';
+
+  @override
+  String get auditCustomerUpdated => 'Customer details updated';
+
+  @override
+  String get auditCustomerArchived => 'Customer archived';
+
+  @override
+  String get auditCustomerReactivated => 'Customer reactivated';
+
+  @override
+  String get auditCustomerAssignmentTransferred => 'Assignment transferred';
+
+  @override
+  String get customerPaymentHistory => 'Customer payment history';
+
+  @override
+  String get paymentHistory => 'Payment history';
+
+  @override
+  String get myCollections => 'My collections';
+
+  @override
+  String get customerPaymentHistorySubtitle => 'Confirmed payments for this customer, including reversal status and immutable allocations.';
+
+  @override
+  String get headPaymentHistorySubtitle => 'Confirmed payments and reversals are retained as an immutable financial trail.';
+
+  @override
+  String get employeeCollectionsSubtitle => 'Your own immutable collection receipts remain available after a customer is reassigned.';
+
+  @override
+  String get collectFromCustomerRecordSubtitle => 'Open an active customer to confirm cash, UPI, bank-transfer, or other manual collection.';
+
+  @override
+  String get noConfirmedPayments => 'No confirmed payments';
+
+  @override
+  String get noConfirmedPaymentsMessage => 'A payment appears here only after an authorized collector confirms receipt.';
+
+  @override
+  String get paymentReversedBadge => 'REVERSED';
+
+  @override
+  String reversalReasonPrefix(String reason) {
+    return 'Reversal reason: $reason';
+  }
+
+  @override
+  String collectedByPrefix(String name, String method) {
+    return 'Collected by $name • $method';
+  }
+
+  @override
+  String get paymentReversalSuccess => 'Payment reversed with immutable financial audit record.';
+
+  @override
+  String get collectionUnavailable => 'Collection unavailable';
+
+  @override
+  String get billingWorkspace => 'Billing workspace';
+
+  @override
+  String get assignedBills => 'Assigned bills';
+
+  @override
+  String get billingWorkspaceSubtitle => 'Review deterministic daily charges before finalization. Previews never write data.';
+
+  @override
+  String get assignedBillsSubtitle => 'You can read finalized bills only for customers currently assigned to you.';
+
+  @override
+  String get noActiveCustomers => 'No active customers';
+
+  @override
+  String get noActiveCustomersDesc => 'There are no accessible active customers to bill.';
+
+  @override
+  String get routeCoverage => 'Route coverage';
+
+  @override
+  String get routeCoverageSubtitle => 'Create operational areas and keep employee coverage synchronized with authoritative member records.';
+
+  @override
+  String get newArea => 'New area';
+
+  @override
+  String get editArea => 'Edit area';
+
+  @override
+  String get areaName => 'Area name';
+
+  @override
+  String get areaDescription => 'Description (optional)';
+
+  @override
+  String get assignEmployees => 'Assign employees';
+
+  @override
+  String get noAreasConfigured => 'No areas configured';
+
+  @override
+  String get noAreasConfiguredSubtitle => 'Create delivery areas to organize customer stops and route assignments.';
+
+  @override
+  String get publicationsSubtitle => 'Manage newspapers, periodicals, and standard weekday/weekend pricing schedules.';
+
+  @override
+  String get dailyPricingSubtitle => 'Set single-day or holiday paper prices that override recurring subscription rates for that morning.';
+
+  @override
+  String get recordPrice => 'Record price';
+
+  @override
+  String get standardPrice => 'Standard price';
+
+  @override
+  String get teamSubtitle => 'Manage agency staff, invitation codes, and operational permissions.';
+
+  @override
+  String get manageEmployee => 'Manage employee';
+
+  @override
+  String get employeeAccessUpdated => 'Employee access updated.';
+
+  @override
+  String get invitationCreated => 'Invitation created';
+
+  @override
+  String get invitationCodeCopied => 'Invitation code copied.';
+
+  @override
+  String get invitationRevoked => 'Invitation revoked.';
+
+  @override
+  String get copyCode => 'Copy code';
+
+  @override
+  String get createInvitation => 'Create invitation';
+
+  @override
+  String get permissionsLabel => 'Permissions';
+
+  @override
+  String get initialAreasLabel => 'Initial areas';
+
+  @override
+  String get activeAccess => 'Active access';
+
+  @override
+  String get businessReports => 'Business reports';
+
+  @override
+  String get reportsSubtitle => 'Server-side totals and paginated records respect the selected filters. CSV exports use the same query scope.';
+
+  @override
+  String get exportFilteredCsv => 'Export filtered CSV';
+
+  @override
+  String get loadMoreResults => 'Load more results';
+
+  @override
+  String get applyFilters => 'Apply filters';
+
+  @override
+  String get allEmployees => 'All employees';
+
+  @override
+  String get allNewspapers => 'All newspapers';
+
+  @override
+  String get allMethods => 'All methods';
+
+  @override
+  String get allBalances => 'All balances';
+
+  @override
+  String get allSubscriptions => 'All subscriptions';
 }

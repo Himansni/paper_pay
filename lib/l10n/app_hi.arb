@@ -186,5 +186,205 @@
   "areasTitle": "वितरण क्षेत्र",
   "addArea": "नया क्षेत्र जोड़ें",
   "newspapersTitle": "अख़बार एवं पत्रिकाएं",
-  "addNewspaper": "नया प्रकाशन जोड़ें"
+  "addNewspaper": "नया प्रकाशन जोड़ें",
+
+  "arrangeDeliveryRoute": "वितरण मार्ग क्रम व्यवस्थित करें",
+  "routeOrderSaved": "मार्ग क्रम सफलतापूर्वक सहेजा गया।",
+  "placeInRoute": "वितरण मार्ग में स्थान",
+  "placeInRouteFirst": "मार्ग की शुरुआत में (पहला)",
+  "placeInRouteAfter": "किसी मौजूदा ग्राहक के बाद",
+  "placeInRouteLast": "मार्ग के अंत में (अंतिम)",
+  "precedingCustomer": "पूर्ववर्ती ग्राहक",
+  "selectAreaFirst": "पूर्ववर्ती ग्राहक चुनने के लिए पहले क्षेत्र चुनें।",
+  "noCustomersInArea": "इस क्षेत्र में कोई ग्राहक नहीं हैं।",
+  "dragHandleHint": "स्टॉप्स को पुनर्व्यवस्थित करने के लिए दाईं ओर के हैंडल को खींचें।",
+  "permissionDeniedArrangeRoute": "आपको इस क्षेत्र के मार्ग क्रम को बदलने की अनुमति नहीं है।",
+  "noCustomersToArrange": "इस क्षेत्र में व्यवस्थित करने के लिए कोई सक्रिय ग्राहक नहीं हैं।",
+
+  "customerEditTitle": "ग्राहक संपादित करें",
+  "customerNewTitle": "नया ग्राहक",
+  "customerDetailsTitle": "ग्राहक विवरण",
+  "customerNotFound": "ग्राहक नहीं मिला",
+  "customerNotFoundMessage": "रिकॉर्ड अब उपलब्ध नहीं हो सकता है।",
+  "customerCreated": "ग्राहक {code} बन गया।",
+  "@customerCreated": {
+    "placeholders": {
+      "code": { "type": "String" }
+    }
+  },
+  "customerDetailsUpdated": "ग्राहक विवरण अपडेट कर दिया गया।",
+  "customerAssignmentUpdated": "ग्राहक असाइनमेंट अपडेट किया गया।",
+  "assignCustomerTitle": "{name} को असाइन करें",
+  "@assignCustomerTitle": {
+    "placeholders": {
+      "name": { "type": "String" }
+    }
+  },
+  "selectAnArea": "एक क्षेत्र चुनें",
+  "keepUnassigned": "अनावंटित रखें",
+  "saveAssignment": "असाइनमेंट सहेजें",
+  "loadMoreCustomers": "और ग्राहक लोड करें",
+  "allAreas": "सभी क्षेत्र",
+  "clearSearch": "खोज साफ़ करें",
+  "customerConsentRecorded": "ग्राहक सहमति दर्ज की गई",
+  "changeAssignment": "असाइनमेंट बदलें",
+
+  "upiSettingsTitle": "UPI सेटिंग्स",
+  "enableUpiRequests": "UPI संग्रह अनुरोध सक्षम करें",
+  "upiSettingsUpdated": "UPI सेटिंग्स अपडेट की गईं।",
+  "collectFromCustomerRecord": "ग्राहक रिकॉर्ड से संग्रह करें",
+  "loadMorePayments": "और भुगतान लोड करें",
+  "oldestOutstandingFirst": "सबसे पुराना बकाया पहले",
+  "receiptMustBeVerified": "रसीद मैन्युअल रूप से सत्यापित की जानी चाहिए",
+  "retryConfirmation": "पुष्टिकरण पुनः प्रयास करें",
+  "confirmReceiptOfPayment": "भुगतान प्राप्ति की पुष्टि करें?",
+  "goBack": "वापस जाएं",
+  "iVerifiedReceipt": "मैंने प्राप्ति सत्यापित की",
+  "generateAmountUpiQr": "राशि-विशिष्ट UPI QR बनाएं",
+  "paymentReceiptTitle": "भुगतान रसीद",
+  "notYetConfirmedReceipt": "अभी तक पुष्ट रसीद नहीं है",
+  "serverConfirmedLedger": "सर्वर-पुष्ट खाता प्रविष्टि",
+  "remainingOutstanding": "शेष बकाया",
+  "recordPaymentReversal": "भुगतान उलटाव (रिवर्सल) दर्ज करें",
+  "recordReversal": "रिवर्सल दर्ज करें",
+
+  "finalizedBill": "अंतिम बिल",
+  "immutableFinancialSnapshot": "अपरिवर्तनीय वित्तीय विवरण",
+  "deliveryLinesCount": "{count} वितरण लाइनें",
+  "@deliveryLinesCount": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "noAdjustmentsApplied": "कोई समायोजन लागू नहीं किया गया।",
+  "loadMoreDailyLines": "और दैनिक लाइनें लोड करें",
+  "finalizeBillQuestion": "क्या अपरिवर्तनीय बिल को अंतिम रूप दें?",
+  "finalizeBillAction": "बिल अंतिम रूप दें",
+  "finalizeImmutableBill": "अपरिवर्तनीय बिल अंतिम रूप दें",
+  "readOnlyCalculation": "केवल-पठन गणना",
+  "signedBillingAdjustment": "हस्ताक्षरित बिलिंग समायोजन",
+  "recordAdjustment": "समायोजन दर्ज करें",
+  "adjustmentRecorded": "ऑडिट इतिहास के साथ समायोजन दर्ज किया गया।",
+  "monthPreview": "{month} पूर्वावलोकन",
+  "@monthPreview": {
+    "placeholders": {
+      "month": { "type": "String" }
+    }
+  },
+  "monthBill": "{month} बिल",
+  "@monthBill": {
+    "placeholders": {
+      "month": { "type": "String" }
+    }
+  },
+
+  "todayOperationsTitle": "आज का संचालन",
+  "circulationSummaryTitle": "वितरण गणना",
+
+  "findTheHouse": "घर का पता",
+  "landmarkPrefix": "लैंडमार्क: ",
+  "contactSection": "संपर्क",
+  "primaryPhone": "मुख्य फ़ोन",
+  "deliveryAssignment": "वितरण आवंटन",
+  "areaLabel": "क्षेत्र",
+  "employeeLabel": "कर्मचारी",
+  "placementLabel": "वितरण स्थान",
+  "billingPreference": "बिलिंग प्राथमिकता",
+  "consentedGpsLocation": "सहमति प्राप्त GPS स्थान",
+  "latitude": "अक्षांश",
+  "longitude": "देशांतर",
+  "operationalNotes": "परिचालन टिप्पणियाँ",
+  "financialOpening": "प्रारंभिक वित्तीय विवरण",
+  "immutableOpeningNotice": "बनाने के बाद अपरिवर्तनीय; भविष्य के सुधारों के लिए ऑडिट किए गए समायोजन की आवश्यकता है।",
+  "assignmentAndChangeHistory": "आवंटन और परिवर्तन इतिहास",
+  "noCustomerAuditEntries": "अभी तक कोई ग्राहक ऑडिट प्रविष्टि उपलब्ध नहीं है।",
+  "couldNotLoadAuditHistory": "ऑडिट इतिहास लोड नहीं किया जा सका: {error}",
+  "@couldNotLoadAuditHistory": {
+    "placeholders": {
+      "error": { "type": "String" }
+    }
+  },
+  "reactivateCustomer": "ग्राहक पुनः सक्रिय करें",
+  "reactivateCustomerConfirm": "क्या ग्राहक को पुनः सक्रिय करें?",
+  "archiveCustomerConfirm": "क्या ग्राहक को संग्रहित (आर्काइव) करें?",
+  "reactivateCustomerDesc": "ग्राहक सक्रिय परिचालन सूचियों में वापस आ जाएगा।",
+  "archiveCustomerDesc": "रिकॉर्ड और सारा इतिहास सुरक्षित रहेगा। वितरण और बिलिंग रिकॉर्ड हटाए नहीं जाएंगे।",
+  "customerReactivated": "ग्राहक पुनः सक्रिय किया गया।",
+  "customerArchivedNotice": "इतिहास हटाए बिना ग्राहक संग्रहित किया गया।",
+  "auditCustomerCreated": "ग्राहक बनाया गया",
+  "auditCustomerUpdated": "ग्राहक विवरण अपडेट किया गया",
+  "auditCustomerArchived": "ग्राहक संग्रहित किया गया",
+  "auditCustomerReactivated": "ग्राहक पुनः सक्रिय किया गया",
+  "auditCustomerAssignmentTransferred": "आवंटन स्थानांतरित किया गया",
+
+  "customerPaymentHistory": "ग्राहक भुगतान इतिहास",
+  "paymentHistory": "भुगतान इतिहास",
+  "myCollections": "मेरी प्राप्तियां",
+  "customerPaymentHistorySubtitle": "इस ग्राहक के लिए पुष्ट भुगतान, जिसमें रिवर्सल स्थिति और अपरिवर्तनीय आवंटन शामिल हैं।",
+  "headPaymentHistorySubtitle": "पुष्ट भुगतान और रिवर्सल एक अपरिवर्तनीय वित्तीय रिकॉर्ड के रूप में सुरक्षित रखे जाते हैं।",
+  "employeeCollectionsSubtitle": "ग्राहक को पुनः आवंटित करने के बाद भी आपकी अपनी अपरिवर्तनीय भुगतान रसीदें उपलब्ध रहती हैं।",
+  "collectFromCustomerRecordSubtitle": "नकद, UPI, बैंक ट्रांसफर, या अन्य संग्रह की पुष्टि करने के लिए सक्रिय ग्राहक खोलें।",
+  "noConfirmedPayments": "कोई पुष्ट भुगतान नहीं",
+  "noConfirmedPaymentsMessage": "अधिकृत संग्रहकर्ता द्वारा प्राप्ति की पुष्टि के बाद ही भुगतान यहां दिखाई देता है।",
+  "paymentReversedBadge": "रिवर्स किया गया",
+  "reversalReasonPrefix": "रिवर्सल का कारण: {reason}",
+  "@reversalReasonPrefix": {
+    "placeholders": {
+      "reason": { "type": "String" }
+    }
+  },
+  "collectedByPrefix": "{name} द्वारा प्राप्त • {method}",
+  "@collectedByPrefix": {
+    "placeholders": {
+      "name": { "type": "String" },
+      "method": { "type": "String" }
+    }
+  },
+  "paymentReversalSuccess": "अपरिवर्तनीय वित्तीय ऑडिट रिकॉर्ड के साथ भुगतान रिवर्स किया गया।",
+  "collectionUnavailable": "संग्रह अनुपलब्ध",
+
+  "billingWorkspace": "बिलिंग कार्यक्षेत्र",
+  "assignedBills": "आवंटित बिल",
+  "billingWorkspaceSubtitle": "अंतिम रूप देने से पहले दैनिक शुल्कों की समीक्षा करें। पूर्वावलोकन कभी डेटा नहीं लिखता।",
+  "assignedBillsSubtitle": "आप केवल उन ग्राहकों के अंतिम बिल पढ़ सकते हैं जो वर्तमान में आपको आवंटित हैं।",
+  "noActiveCustomers": "कोई सक्रिय ग्राहक नहीं",
+  "noActiveCustomersDesc": "बिल करने के लिए कोई सुलभ सक्रिय ग्राहक नहीं है।",
+
+  "routeCoverage": "मार्ग कवरेज",
+  "routeCoverageSubtitle": "परिचालन क्षेत्र बनाएं और कर्मचारी कवरेज को आधिकारिक सदस्य रिकॉर्ड के साथ समन्वयित रखें।",
+  "newArea": "नया क्षेत्र",
+  "editArea": "क्षेत्र संपादित करें",
+  "areaName": "क्षेत्र का नाम",
+  "areaDescription": "विवरण (वैकल्पिक)",
+  "assignEmployees": "कर्मचारी आवंटित करें",
+  "noAreasConfigured": "कोई क्षेत्र कॉन्फ़िगर नहीं किया गया",
+  "noAreasConfiguredSubtitle": "ग्राहक स्टॉप और रूट आवंटन व्यवस्थित करने के लिए वितरण क्षेत्र बनाएं।",
+
+  "publicationsSubtitle": "समाचार पत्रों, पत्रिकाओं और मानक कार्यदिवस/सप्ताहांत मूल्य निर्धारण का प्रबंधन करें।",
+  "dailyPricingSubtitle": "एकल-दिन या अवकाश के समाचार पत्र की कीमतें निर्धारित करें जो उस सुबह की सामान्य दरों को ओवरराइड करती हैं।",
+  "recordPrice": "कीमत दर्ज करें",
+  "standardPrice": "मानक मूल्य",
+
+  "teamSubtitle": "एजेंसी कर्मचारियों, आमंत्रण कोड और परिचालन अनुमतियों का प्रबंधन करें।",
+  "manageEmployee": "कर्मचारी प्रबंधित करें",
+  "employeeAccessUpdated": "कर्मचारी पहुंच अपडेट की गई।",
+  "invitationCreated": "आमंत्रण बनाया गया",
+  "invitationCodeCopied": "आमंत्रण कोड कॉपी किया गया।",
+  "invitationRevoked": "आमंत्रण रद्द किया गया।",
+  "copyCode": "कोड कॉपी करें",
+  "createInvitation": "आमंत्रण बनाएं",
+  "permissionsLabel": "अनुमतियाँ",
+  "initialAreasLabel": "प्रारंभिक क्षेत्र",
+  "activeAccess": "सक्रिय पहुंच",
+
+  "businessReports": "व्यावसायिक रिपोर्ट",
+  "reportsSubtitle": "सर्वर-साइड कुल और पृष्ठबद्ध रिकॉर्ड चयनित फ़िल्टर का सम्मान करते हैं। CSV निर्यात समान क्वेरी स्कोप का उपयोग करते हैं।",
+  "exportFilteredCsv": "फ़िल्टर किया हुआ CSV निर्यात करें",
+  "loadMoreResults": "और परिणाम लोड करें",
+  "applyFilters": "फ़िल्टर लागू करें",
+  "allEmployees": "सभी कर्मचारी",
+  "allNewspapers": "सभी समाचार पत्र",
+  "allMethods": "सभी विधियाँ",
+  "allBalances": "सभी शेष राशियाँ",
+  "allSubscriptions": "सभी सदस्यताएँ"
 }

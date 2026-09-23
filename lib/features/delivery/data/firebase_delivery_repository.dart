@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:paper_route/core/domain/local_date.dart';
 import 'package:paper_route/core/errors/app_exception.dart';
 import 'package:paper_route/features/delivery/domain/delivery_models.dart';
 import 'package:paper_route/features/delivery/domain/delivery_repository.dart';
+import 'package:paper_route/features/delivery/domain/route_order.dart';
 
 class FirebaseDeliveryRepository implements DeliveryRepository {
   FirebaseDeliveryRepository(this._firestore);
@@ -38,6 +41,16 @@ class FirebaseDeliveryRepository implements DeliveryRepository {
           .doc(routeId)
           .collection('drops');
 
+  DocumentReference<Map<String, dynamic>> _routeOrderRef({
+    required String businessId,
+    required String areaId,
+  }) =>
+      _firestore
+          .collection('businesses')
+          .doc(businessId)
+          .collection('routeOrders')
+          .doc(areaId);
+
   @override
   Future<void> recordDropStatus({
     required String businessId,
@@ -55,6 +68,31 @@ class FirebaseDeliveryRepository implements DeliveryRepository {
       customerId: customerId,
     );
 
+    final auditRef = _firestore
+        .collection('businesses')
+        .doc(businessId)
+        .collection('auditRecords')
+        .doc();
+
+    final batch = _firestore.batch();
+
+    // 1. Append-only audit record preserving complete transition history
+    batch.set(auditRef, {
+      'businessId': businessId,
+      'actorId': actorUid,
+      'action': 'deliveryDropStatusUpdated',
+      'entityType': 'deliveryDrop',
+      'entityId': customerId,
+      'routeId': routeId,
+      'areaId': areaId,
+      'date': date.toString(),
+      'status': status.value,
+      if (status == DeliveryStopStatus.exception && exceptionReason != null)
+        'exceptionReason': exceptionReason,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+
+    // 2. Mutable drop document paired with matching lastAuditId
     final payload = <String, dynamic>{
       'businessId': businessId,
       'routeId': routeId,
@@ -62,15 +100,21 @@ class FirebaseDeliveryRepository implements DeliveryRepository {
       'areaId': areaId,
       'customerId': customerId,
       'status': status.value,
-      'exceptionReason': status == DeliveryStopStatus.exception ? exceptionReason : null,
+      'exceptionReason':
+          status == DeliveryStopStatus.exception ? exceptionReason : null,
       'actorUid': actorUid,
       'updatedAt': FieldValue.serverTimestamp(),
+      'lastAuditId': auditRef.id,
     };
 
+    batch.set(ref, payload, SetOptions(merge: true));
+
     try {
-      await ref.set(payload, SetOptions(merge: true));
+      await batch.commit();
     } on FirebaseException catch (e) {
-      throw AppException('Could not update delivery status: ${e.message ?? e.code}');
+      throw AppException(
+        'Could not update delivery status: ${e.message ?? e.code}',
+      );
     }
   }
 
@@ -93,7 +137,9 @@ class FirebaseDeliveryRepository implements DeliveryRepository {
       }
       return drops;
     } on FirebaseException catch (e) {
-      throw AppException('Could not load delivery records: ${e.message ?? e.code}');
+      throw AppException(
+        'Could not load delivery records: ${e.message ?? e.code}',
+      );
     }
   }
 
@@ -122,8 +168,6 @@ class FirebaseDeliveryRepository implements DeliveryRepository {
     required LocalDate date,
   }) async {
     try {
-      // In Firestore, collection group or querying dailyRoutes subcollections
-      // Query areas first to check routes
       final areasSnap = await _firestore
           .collection('businesses')
           .doc(businessId)
@@ -150,13 +194,118 @@ class FirebaseDeliveryRepository implements DeliveryRepository {
       throw AppException('Could not load exceptions: ${e.message ?? e.code}');
     }
   }
+
+  @override
+  Future<RouteOrder?> getRouteOrder({
+    required String businessId,
+    required String areaId,
+  }) async {
+    try {
+      final snap = await _routeOrderRef(businessId: businessId, areaId: areaId).get();
+      if (!snap.exists || snap.data() == null) {
+        return null;
+      }
+      return RouteOrder.fromMap(snap.data()!);
+    } on FirebaseException catch (e) {
+      throw AppException('Could not fetch route order: ${e.message ?? e.code}');
+    }
+  }
+
+  @override
+  Stream<RouteOrder?> watchRouteOrder({
+    required String businessId,
+    required String areaId,
+  }) {
+    return _routeOrderRef(businessId: businessId, areaId: areaId)
+        .snapshots()
+        .map((snap) {
+      if (!snap.exists || snap.data() == null) {
+        return null;
+      }
+      return RouteOrder.fromMap(snap.data()!);
+    });
+  }
+
+  @override
+  Future<void> saveRouteOrder({
+    required String businessId,
+    required String areaId,
+    required List<String> customerIds,
+    required String actorUid,
+  }) async {
+    try {
+      await _routeOrderRef(businessId: businessId, areaId: areaId).set({
+        'businessId': businessId,
+        'areaId': areaId,
+        'customerIds': customerIds,
+        'updatedBy': actorUid,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    } on FirebaseException catch (e) {
+      throw AppException('Could not save route order: ${e.message ?? e.code}');
+    }
+  }
+
+  @override
+  Future<void> insertCustomerInRoute({
+    required String businessId,
+    required String areaId,
+    required String customerId,
+    required RoutePlacement placement,
+    String? afterCustomerId,
+    required String actorUid,
+  }) async {
+    final currentOrder = await getRouteOrder(
+      businessId: businessId,
+      areaId: areaId,
+    );
+    final List<String> list = currentOrder != null
+        ? List<String>.from(currentOrder.customerIds)
+        : <String>[];
+
+    // Remove if already present
+    list.remove(customerId);
+
+    switch (placement) {
+      case RoutePlacement.first:
+        list.insert(0, customerId);
+        break;
+      case RoutePlacement.afterCustomer:
+        if (afterCustomerId != null) {
+          final index = list.indexOf(afterCustomerId);
+          if (index != -1) {
+            list.insert(index + 1, customerId);
+            break;
+          }
+        }
+        list.add(customerId);
+        break;
+      case RoutePlacement.last:
+        list.add(customerId);
+        break;
+    }
+
+    await saveRouteOrder(
+      businessId: businessId,
+      areaId: areaId,
+      customerIds: list,
+      actorUid: actorUid,
+    );
+  }
 }
 
 class InMemoryDeliveryRepository implements DeliveryRepository {
   final Map<String, Map<String, DeliveryDropRecord>> _store = {};
+  final Map<String, RouteOrder> _routeOrders = {};
+  final List<Map<String, dynamic>> _auditRecords = [];
+
+  List<Map<String, dynamic>> get auditRecords =>
+      List.unmodifiable(_auditRecords);
 
   String _key(String businessId, String areaId, LocalDate date) =>
       '$businessId/${date.toString()}_$areaId';
+
+  String _orderKey(String businessId, String areaId) => '$businessId/$areaId';
 
   @override
   Future<void> recordDropStatus({
@@ -170,6 +319,23 @@ class InMemoryDeliveryRepository implements DeliveryRepository {
   }) async {
     final key = _key(businessId, areaId, date);
     final map = _store.putIfAbsent(key, () => {});
+
+    final auditId = 'audit_${DateTime.now().microsecondsSinceEpoch}';
+    _auditRecords.add({
+      'auditId': auditId,
+      'businessId': businessId,
+      'actorId': actorUid,
+      'action': 'deliveryDropStatusUpdated',
+      'entityType': 'deliveryDrop',
+      'entityId': customerId,
+      'routeId': '${date.toString()}_$areaId',
+      'areaId': areaId,
+      'date': date.toString(),
+      'status': status.value,
+      'exceptionReason': exceptionReason,
+      'createdAt': DateTime.now(),
+    });
+
     map[customerId] = DeliveryDropRecord(
       businessId: businessId,
       routeId: '${date.toString()}_$areaId',
@@ -180,6 +346,7 @@ class InMemoryDeliveryRepository implements DeliveryRepository {
       exceptionReason: exceptionReason,
       actorUid: actorUid,
       updatedAt: DateTime.now(),
+      lastAuditId: auditId,
     );
   }
 
@@ -223,5 +390,82 @@ class InMemoryDeliveryRepository implements DeliveryRepository {
       }
     }
     return list;
+  }
+
+  @override
+  Future<RouteOrder?> getRouteOrder({
+    required String businessId,
+    required String areaId,
+  }) async {
+    return _routeOrders[_orderKey(businessId, areaId)];
+  }
+
+  @override
+  Stream<RouteOrder?> watchRouteOrder({
+    required String businessId,
+    required String areaId,
+  }) {
+    return Stream.value(_routeOrders[_orderKey(businessId, areaId)]);
+  }
+
+  @override
+  Future<void> saveRouteOrder({
+    required String businessId,
+    required String areaId,
+    required List<String> customerIds,
+    required String actorUid,
+  }) async {
+    _routeOrders[_orderKey(businessId, areaId)] = RouteOrder(
+      businessId: businessId,
+      areaId: areaId,
+      customerIds: customerIds,
+      updatedBy: actorUid,
+      updatedAt: DateTime.now(),
+    );
+  }
+
+  @override
+  Future<void> insertCustomerInRoute({
+    required String businessId,
+    required String areaId,
+    required String customerId,
+    required RoutePlacement placement,
+    String? afterCustomerId,
+    required String actorUid,
+  }) async {
+    final current = await getRouteOrder(
+      businessId: businessId,
+      areaId: areaId,
+    );
+    final List<String> list =
+        current != null ? List<String>.from(current.customerIds) : [];
+
+    list.remove(customerId);
+
+    switch (placement) {
+      case RoutePlacement.first:
+        list.insert(0, customerId);
+        break;
+      case RoutePlacement.afterCustomer:
+        if (afterCustomerId != null) {
+          final index = list.indexOf(afterCustomerId);
+          if (index != -1) {
+            list.insert(index + 1, customerId);
+            break;
+          }
+        }
+        list.add(customerId);
+        break;
+      case RoutePlacement.last:
+        list.add(customerId);
+        break;
+    }
+
+    await saveRouteOrder(
+      businessId: businessId,
+      areaId: areaId,
+      customerIds: list,
+      actorUid: actorUid,
+    );
   }
 }

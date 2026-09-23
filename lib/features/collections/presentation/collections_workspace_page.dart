@@ -7,6 +7,7 @@ import 'package:paper_route/features/auth/domain/app_user.dart';
 import 'package:paper_route/features/billing/domain/monthly_bill.dart';
 import 'package:paper_route/features/collections/domain/collection_models.dart';
 import 'package:paper_route/features/collections/presentation/collections_providers.dart';
+import 'package:paper_route/l10n/app_localizations.dart';
 
 class CollectionsWorkspacePage extends ConsumerStatefulWidget {
   const CollectionsWorkspacePage({
@@ -73,10 +74,11 @@ class _CollectionsWorkspacePageState
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
       appBar: AppBar(
         leading: BackButton(onPressed: () => context.go('/')),
-        title: const Text('Collections'),
+        title: Text(l10n?.collectionsTitle ?? 'Collections'),
       ),
       body: RefreshIndicator(
         onRefresh: () => _load(reset: true),
@@ -86,10 +88,10 @@ class _CollectionsWorkspacePageState
           children: [
             Text(
               widget.customerId != null
-                  ? 'Customer payment history'
+                  ? (l10n?.customerPaymentHistory ?? 'Customer payment history')
                   : widget.user.isHead
-                  ? 'Payment history'
-                  : 'My collections',
+                  ? (l10n?.paymentHistory ?? 'Payment history')
+                  : (l10n?.myCollections ?? 'My collections'),
               style: Theme.of(
                 context,
               ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
@@ -97,20 +99,24 @@ class _CollectionsWorkspacePageState
             const SizedBox(height: 6),
             Text(
               widget.customerId != null
-                  ? 'Confirmed payments for this customer, including reversal status and immutable allocations.'
+                  ? (l10n?.customerPaymentHistorySubtitle ??
+                      'Confirmed payments for this customer, including reversal status and immutable allocations.')
                   : widget.user.isHead
-                  ? 'Confirmed payments and reversals are retained as an immutable financial trail.'
-                  : 'Your own immutable collection receipts remain available after a customer is reassigned.',
+                  ? (l10n?.headPaymentHistorySubtitle ??
+                      'Confirmed payments and reversals are retained as an immutable financial trail.')
+                  : (l10n?.employeeCollectionsSubtitle ??
+                      'Your own immutable collection receipts remain available after a customer is reassigned.'),
               style: const TextStyle(color: Color(0xFF486581), height: 1.4),
             ),
             const SizedBox(height: 12),
             Card(
               color: const Color(0xFFFFF8E8),
-              child: const ListTile(
-                leading: Icon(Icons.info_outline),
-                title: Text('Collect from a customer record'),
+              child: ListTile(
+                leading: const Icon(Icons.info_outline),
+                title: Text(l10n?.collectFromCustomerRecord ?? 'Collect from a customer record'),
                 subtitle: Text(
-                  'Open an active customer to confirm cash, UPI, bank-transfer, or other manual collection.',
+                  l10n?.collectFromCustomerRecordSubtitle ??
+                      'Open an active customer to confirm cash, UPI, bank-transfer, or other manual collection.',
                 ),
               ),
             ),
@@ -128,10 +134,11 @@ class _CollectionsWorkspacePageState
                 onRetry: () => _load(reset: true),
               )
             else if (_payments.isEmpty)
-              const EmptyStateCard(
+              EmptyStateCard(
                 icon: Icons.payments_outlined,
-                title: 'No confirmed payments',
+                title: l10n?.noConfirmedPayments ?? 'No confirmed payments',
                 message:
+                    l10n?.noConfirmedPaymentsMessage ??
                     'A payment appears here only after an authorized collector confirms receipt.',
               )
             else ...[

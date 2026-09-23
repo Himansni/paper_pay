@@ -15,6 +15,8 @@ import 'package:paper_route/features/employees/domain/employee_member.dart';
 import 'package:paper_route/features/employees/presentation/employee_providers.dart';
 import 'package:paper_route/features/subscriptions/presentation/subscription_detail_page.dart';
 
+import 'package:paper_route/l10n/app_localizations.dart';
+
 class CustomerDetailPage extends ConsumerWidget {
   const CustomerDetailPage({
     required this.user,
@@ -27,6 +29,7 @@ class CustomerDetailPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
     final key = (businessId: user.businessId!, customerId: customerId);
     final customer = ref.watch(customerProvider(key));
     return customer.when(
@@ -37,7 +40,7 @@ class CustomerDetailPage extends ConsumerWidget {
           (error, _) => Scaffold(
             appBar: AppBar(
               leading: BackButton(onPressed: () => _back(context)),
-              title: const Text('Customer'),
+              title: Text(l10n?.customerDetailsTitle ?? 'Customer'),
             ),
             body: Padding(
               padding: const EdgeInsets.all(20),
@@ -53,14 +56,16 @@ class CustomerDetailPage extends ConsumerWidget {
                   ? Scaffold(
                     appBar: AppBar(
                       leading: BackButton(onPressed: () => _back(context)),
-                      title: const Text('Customer'),
+                      title: Text(l10n?.customerDetailsTitle ?? 'Customer'),
                     ),
-                    body: const Padding(
-                      padding: EdgeInsets.all(20),
+                    body: Padding(
+                      padding: const EdgeInsets.all(20),
                       child: EmptyStateCard(
                         icon: Icons.person_off_outlined,
-                        title: 'Customer not found',
-                        message: 'This customer record is not available.',
+                        title: l10n?.customerNotFound ?? 'Customer not found',
+                        message:
+                            l10n?.customerNotFoundMessage ??
+                            'This customer record is not available.',
                       ),
                     ),
                   )
@@ -94,6 +99,7 @@ class _CustomerDetailViewState extends ConsumerState<_CustomerDetailView> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final user = widget.user;
     final customer = widget.customer;
     final businessId = user.businessId!;
@@ -125,7 +131,7 @@ class _CustomerDetailViewState extends ConsumerState<_CustomerDetailView> {
                       ? context.pop(true)
                       : context.go('/customers'),
         ),
-        title: const Text('Customer details'),
+        title: Text(l10n?.customerDetailsTitle ?? 'Customer details'),
         actions: [
           if (canEdit)
             IconButton(
@@ -135,7 +141,7 @@ class _CustomerDetailViewState extends ConsumerState<_CustomerDetailView> {
                       : () => context.push<bool>(
                         '/customers/${Uri.encodeComponent(customer.id)}/edit',
                       ),
-              tooltip: 'Edit customer',
+              tooltip: l10n?.commonEdit ?? 'Edit customer',
               icon: const Icon(Icons.edit_outlined),
             ),
           const SizedBox(width: 8),
@@ -187,13 +193,13 @@ class _CustomerDetailViewState extends ConsumerState<_CustomerDetailView> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Row(
+                    Row(
                       children: [
-                        Icon(Icons.location_on_outlined),
-                        SizedBox(width: 8),
+                        const Icon(Icons.location_on_outlined),
+                        const SizedBox(width: 8),
                         Text(
-                          'Find the house',
-                          style: TextStyle(fontWeight: FontWeight.w800),
+                          l10n?.findTheHouse ?? 'Find the house',
+                          style: const TextStyle(fontWeight: FontWeight.w800),
                         ),
                       ],
                     ),
@@ -220,7 +226,7 @@ class _CustomerDetailViewState extends ConsumerState<_CustomerDetailView> {
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      'LANDMARK: ${customer.landmark}',
+                      '${l10n?.landmarkPrefix ?? 'LANDMARK: '}${customer.landmark}',
                       style: const TextStyle(
                         fontWeight: FontWeight.w900,
                         color: Color(0xFF8A4B00),
@@ -239,12 +245,12 @@ class _CustomerDetailViewState extends ConsumerState<_CustomerDetailView> {
             ),
             const SizedBox(height: 14),
             _DetailCard(
-              title: 'Contact',
+              title: l10n?.contactSection ?? 'Contact',
               rows: [
-                _DetailRow('Primary phone', customer.phone, selectable: true),
+                _DetailRow(l10n?.primaryPhone ?? 'Primary phone', customer.phone, selectable: true),
                 if (customer.alternatePhone.isNotEmpty)
                   _DetailRow(
-                    'Alternate phone',
+                    l10n?.alternatePhone ?? 'Alternate phone',
                     customer.alternatePhone,
                     selectable: true,
                   ),
@@ -252,12 +258,12 @@ class _CustomerDetailViewState extends ConsumerState<_CustomerDetailView> {
             ),
             const SizedBox(height: 14),
             _DetailCard(
-              title: 'Delivery assignment',
+              title: l10n?.deliveryAssignment ?? 'Delivery assignment',
               rows: [
-                _DetailRow('Area', areaName),
-                _DetailRow('Employee', employeeName),
-                _DetailRow('Placement', customer.deliveryPlacement.label),
-                _DetailRow('Billing preference', customer.billingCycle.label),
+                _DetailRow(l10n?.areaLabel ?? 'Area', areaName),
+                _DetailRow(l10n?.employeeLabel ?? 'Employee', employeeName),
+                _DetailRow(l10n?.placementLabel ?? 'Placement', customer.deliveryPlacement.label),
+                _DetailRow(l10n?.billingPreference ?? 'Billing preference', customer.billingCycle.label),
               ],
               action:
                   user.isHead && !customer.isArchived
@@ -268,7 +274,7 @@ class _CustomerDetailViewState extends ConsumerState<_CustomerDetailView> {
                                 : () =>
                                     _changeAssignment(areaItems, memberItems),
                         icon: const Icon(Icons.swap_horiz),
-                        label: const Text('Change assignment'),
+                        label: Text(l10n?.changeAssignment ?? 'Change assignment'),
                       )
                       : null,
             ),
@@ -279,15 +285,15 @@ class _CustomerDetailViewState extends ConsumerState<_CustomerDetailView> {
             if (customer.locationConsent && customer.coordinates != null) ...[
               const SizedBox(height: 14),
               _DetailCard(
-                title: 'Consented GPS location',
+                title: l10n?.consentedGpsLocation ?? 'Consented GPS location',
                 rows: [
                   _DetailRow(
-                    'Latitude',
+                    l10n?.latitude ?? 'Latitude',
                     customer.coordinates!.latitude.toStringAsFixed(6),
                     selectable: true,
                   ),
                   _DetailRow(
-                    'Longitude',
+                    l10n?.longitude ?? 'Longitude',
                     customer.coordinates!.longitude.toStringAsFixed(6),
                     selectable: true,
                   ),
@@ -297,25 +303,26 @@ class _CustomerDetailViewState extends ConsumerState<_CustomerDetailView> {
             if (customer.notes.isNotEmpty) ...[
               const SizedBox(height: 14),
               _DetailCard(
-                title: 'Operational notes',
+                title: l10n?.operationalNotes ?? 'Operational notes',
                 rows: [_DetailRow('', customer.notes)],
               ),
             ],
             if (user.isHead) ...[
               const SizedBox(height: 14),
               _DetailCard(
-                title: 'Financial opening',
+                title: l10n?.financialOpening ?? 'Financial opening',
                 rows: [
                   _DetailRow(
-                    'Opening balance',
+                    l10n?.openingBalance ?? 'Opening balance',
                     NumberFormat.currency(
                       locale: 'en_IN',
                       symbol: '₹',
                     ).format(customer.openingBalancePaise / 100),
                   ),
-                  const _DetailRow(
-                    'Protection',
-                    'Immutable after creation; future corrections require an audited adjustment.',
+                  _DetailRow(
+                    l10n?.commonNotice ?? 'Protection',
+                    l10n?.immutableOpeningNotice ??
+                        'Immutable after creation; future corrections require an audited adjustment.',
                   ),
                 ],
               ),
@@ -331,8 +338,8 @@ class _CustomerDetailViewState extends ConsumerState<_CustomerDetailView> {
                 ),
                 label: Text(
                   customer.isArchived
-                      ? 'Reactivate customer'
-                      : 'Archive customer',
+                      ? (l10n?.reactivateCustomer ?? 'Reactivate customer')
+                      : (l10n?.archiveCustomer ?? 'Archive customer'),
                 ),
               ),
             ],
@@ -356,6 +363,7 @@ class _CustomerDetailViewState extends ConsumerState<_CustomerDetailView> {
       areas: areas,
     );
     if (draft == null || !mounted) return;
+    final l10n = AppLocalizations.of(context);
     setState(() => _isBusy = true);
     try {
       await ref
@@ -368,7 +376,11 @@ class _CustomerDetailViewState extends ConsumerState<_CustomerDetailView> {
           );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Customer assignment updated.')),
+          SnackBar(
+            content: Text(
+              l10n?.customerAssignmentUpdated ?? 'Customer assignment updated.',
+            ),
+          ),
         );
       }
     } on Object catch (error) {
@@ -380,28 +392,35 @@ class _CustomerDetailViewState extends ConsumerState<_CustomerDetailView> {
 
   Future<void> _toggleArchived() async {
     final customer = widget.customer;
+    final l10n = AppLocalizations.of(context);
     final shouldChange = await showDialog<bool>(
       context: context,
       builder:
           (context) => AlertDialog(
             title: Text(
               customer.isArchived
-                  ? 'Reactivate customer?'
-                  : 'Archive customer?',
+                  ? (l10n?.reactivateCustomerConfirm ?? 'Reactivate customer?')
+                  : (l10n?.archiveCustomerConfirm ?? 'Archive customer?'),
             ),
             content: Text(
               customer.isArchived
-                  ? 'The customer will return to active operational lists.'
-                  : 'The record and all history will be preserved. Delivery and billing records will not be deleted.',
+                  ? (l10n?.reactivateCustomerDesc ??
+                      'The customer will return to active operational lists.')
+                  : (l10n?.archiveCustomerDesc ??
+                      'The record and all history will be preserved. Delivery and billing records will not be deleted.'),
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context, false),
-                child: const Text('Cancel'),
+                child: Text(l10n?.commonCancel ?? 'Cancel'),
               ),
               FilledButton(
                 onPressed: () => Navigator.pop(context, true),
-                child: Text(customer.isArchived ? 'Reactivate' : 'Archive'),
+                child: Text(
+                  customer.isArchived
+                      ? (l10n?.reactivateCustomer ?? 'Reactivate')
+                      : (l10n?.archiveCustomer ?? 'Archive'),
+                ),
               ),
             ],
           ),
@@ -421,8 +440,9 @@ class _CustomerDetailViewState extends ConsumerState<_CustomerDetailView> {
           SnackBar(
             content: Text(
               customer.isArchived
-                  ? 'Customer reactivated.'
-                  : 'Customer archived without deleting history.',
+                  ? (l10n?.customerReactivated ?? 'Customer reactivated.')
+                  : (l10n?.customerArchivedNotice ??
+                      'Customer archived without deleting history.'),
             ),
           ),
         );
@@ -525,6 +545,7 @@ class _CustomerHistory extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
     final history = ref.watch(
       customerAuditProvider((businessId: businessId, customerId: customerId)),
     );
@@ -535,7 +556,7 @@ class _CustomerHistory extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Assignment and change history',
+              l10n?.assignmentAndChangeHistory ?? 'Assignment and change history',
               style: Theme.of(
                 context,
               ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
@@ -545,7 +566,8 @@ class _CustomerHistory extends ConsumerWidget {
               loading: () => const Center(child: CircularProgressIndicator()),
               error:
                   (error, _) => Text(
-                    'Could not load audit history. $error',
+                    l10n?.couldNotLoadAuditHistory(error.toString()) ??
+                        'Could not load audit history. $error',
                     style: TextStyle(
                       color: Theme.of(context).colorScheme.error,
                     ),
@@ -553,9 +575,10 @@ class _CustomerHistory extends ConsumerWidget {
               data:
                   (items) =>
                       items.isEmpty
-                          ? const Text(
-                            'No customer audit entries are available yet.',
-                            style: TextStyle(color: Color(0xFF486581)),
+                          ? Text(
+                            l10n?.noCustomerAuditEntries ??
+                                'No customer audit entries are available yet.',
+                            style: const TextStyle(color: Color(0xFF486581)),
                           )
                           : Column(
                             children: [
@@ -563,7 +586,7 @@ class _CustomerHistory extends ConsumerWidget {
                                 ListTile(
                                   contentPadding: EdgeInsets.zero,
                                   leading: Icon(_iconFor(entry.action)),
-                                  title: Text(_labelFor(entry.action)),
+                                  title: Text(_labelFor(entry.action, l10n)),
                                   subtitle: Text(_historySubtitle(entry)),
                                 ),
                             ],
@@ -589,12 +612,12 @@ class _CustomerHistory extends ConsumerWidget {
     return parts.isEmpty ? 'Recorded by ${entry.actorId}' : parts.join('\n');
   }
 
-  String _labelFor(String action) => switch (action) {
-    'customerCreated' => 'Customer created',
-    'customerUpdated' => 'Customer details updated',
-    'customerArchived' => 'Customer archived',
-    'customerReactivated' => 'Customer reactivated',
-    'customerAssignmentUpdated' => 'Assignment transferred',
+  String _labelFor(String action, AppLocalizations? l10n) => switch (action) {
+    'customerCreated' => l10n?.auditCustomerCreated ?? 'Customer created',
+    'customerUpdated' => l10n?.auditCustomerUpdated ?? 'Customer details updated',
+    'customerArchived' => l10n?.auditCustomerArchived ?? 'Customer archived',
+    'customerReactivated' => l10n?.auditCustomerReactivated ?? 'Customer reactivated',
+    'customerAssignmentUpdated' => l10n?.auditCustomerAssignmentTransferred ?? 'Assignment transferred',
     _ => action,
   };
 

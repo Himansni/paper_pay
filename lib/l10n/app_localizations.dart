@@ -1138,6 +1138,888 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Add Publication'**
   String get addNewspaper;
+
+  /// No description provided for @arrangeDeliveryRoute.
+  ///
+  /// In en, this message translates to:
+  /// **'Arrange Delivery Route'**
+  String get arrangeDeliveryRoute;
+
+  /// No description provided for @routeOrderSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Route order saved successfully.'**
+  String get routeOrderSaved;
+
+  /// No description provided for @placeInRoute.
+  ///
+  /// In en, this message translates to:
+  /// **'Place in delivery route'**
+  String get placeInRoute;
+
+  /// No description provided for @placeInRouteFirst.
+  ///
+  /// In en, this message translates to:
+  /// **'At start of route (First)'**
+  String get placeInRouteFirst;
+
+  /// No description provided for @placeInRouteAfter.
+  ///
+  /// In en, this message translates to:
+  /// **'After an existing customer'**
+  String get placeInRouteAfter;
+
+  /// No description provided for @placeInRouteLast.
+  ///
+  /// In en, this message translates to:
+  /// **'At end of route (Last)'**
+  String get placeInRouteLast;
+
+  /// No description provided for @precedingCustomer.
+  ///
+  /// In en, this message translates to:
+  /// **'Preceding customer'**
+  String get precedingCustomer;
+
+  /// No description provided for @selectAreaFirst.
+  ///
+  /// In en, this message translates to:
+  /// **'Select an area first to choose preceding customer.'**
+  String get selectAreaFirst;
+
+  /// No description provided for @noCustomersInArea.
+  ///
+  /// In en, this message translates to:
+  /// **'No existing customers in this area.'**
+  String get noCustomersInArea;
+
+  /// No description provided for @dragHandleHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Long-press or drag the handle on the right to reorder delivery stops.'**
+  String get dragHandleHint;
+
+  /// No description provided for @permissionDeniedArrangeRoute.
+  ///
+  /// In en, this message translates to:
+  /// **'You do not have permission to rearrange route stops for this area.'**
+  String get permissionDeniedArrangeRoute;
+
+  /// No description provided for @noCustomersToArrange.
+  ///
+  /// In en, this message translates to:
+  /// **'No active customers in this area to arrange.'**
+  String get noCustomersToArrange;
+
+  /// No description provided for @customerEditTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit Customer'**
+  String get customerEditTitle;
+
+  /// No description provided for @customerNewTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'New Customer'**
+  String get customerNewTitle;
+
+  /// No description provided for @customerDetailsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer Details'**
+  String get customerDetailsTitle;
+
+  /// No description provided for @customerNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer not found'**
+  String get customerNotFound;
+
+  /// No description provided for @customerNotFoundMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The record may no longer be available.'**
+  String get customerNotFoundMessage;
+
+  /// No description provided for @customerCreated.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer {code} created.'**
+  String customerCreated(String code);
+
+  /// No description provided for @customerDetailsUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer details updated.'**
+  String get customerDetailsUpdated;
+
+  /// No description provided for @customerAssignmentUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer assignment updated.'**
+  String get customerAssignmentUpdated;
+
+  /// No description provided for @assignCustomerTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Assign {name}'**
+  String assignCustomerTitle(String name);
+
+  /// No description provided for @selectAnArea.
+  ///
+  /// In en, this message translates to:
+  /// **'Select an area'**
+  String get selectAnArea;
+
+  /// No description provided for @keepUnassigned.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep unassigned'**
+  String get keepUnassigned;
+
+  /// No description provided for @saveAssignment.
+  ///
+  /// In en, this message translates to:
+  /// **'Save assignment'**
+  String get saveAssignment;
+
+  /// No description provided for @loadMoreCustomers.
+  ///
+  /// In en, this message translates to:
+  /// **'Load more customers'**
+  String get loadMoreCustomers;
+
+  /// No description provided for @allAreas.
+  ///
+  /// In en, this message translates to:
+  /// **'All areas'**
+  String get allAreas;
+
+  /// No description provided for @clearSearch.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear search'**
+  String get clearSearch;
+
+  /// No description provided for @customerConsentRecorded.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer consent recorded'**
+  String get customerConsentRecorded;
+
+  /// No description provided for @changeAssignment.
+  ///
+  /// In en, this message translates to:
+  /// **'Change assignment'**
+  String get changeAssignment;
+
+  /// No description provided for @upiSettingsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'UPI Settings'**
+  String get upiSettingsTitle;
+
+  /// No description provided for @enableUpiRequests.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable UPI collection requests'**
+  String get enableUpiRequests;
+
+  /// No description provided for @upiSettingsUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'UPI collection settings updated.'**
+  String get upiSettingsUpdated;
+
+  /// No description provided for @collectFromCustomerRecord.
+  ///
+  /// In en, this message translates to:
+  /// **'Collect from a customer record'**
+  String get collectFromCustomerRecord;
+
+  /// No description provided for @loadMorePayments.
+  ///
+  /// In en, this message translates to:
+  /// **'Load more payments'**
+  String get loadMorePayments;
+
+  /// No description provided for @oldestOutstandingFirst.
+  ///
+  /// In en, this message translates to:
+  /// **'Oldest outstanding first'**
+  String get oldestOutstandingFirst;
+
+  /// No description provided for @receiptMustBeVerified.
+  ///
+  /// In en, this message translates to:
+  /// **'Receipt must be verified manually'**
+  String get receiptMustBeVerified;
+
+  /// No description provided for @retryConfirmation.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry confirmation'**
+  String get retryConfirmation;
+
+  /// No description provided for @confirmReceiptOfPayment.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm receipt of payment?'**
+  String get confirmReceiptOfPayment;
+
+  /// No description provided for @goBack.
+  ///
+  /// In en, this message translates to:
+  /// **'Go back'**
+  String get goBack;
+
+  /// No description provided for @iVerifiedReceipt.
+  ///
+  /// In en, this message translates to:
+  /// **'I verified receipt'**
+  String get iVerifiedReceipt;
+
+  /// No description provided for @generateAmountUpiQr.
+  ///
+  /// In en, this message translates to:
+  /// **'Generate amount-specific UPI QR'**
+  String get generateAmountUpiQr;
+
+  /// No description provided for @paymentReceiptTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment Receipt'**
+  String get paymentReceiptTitle;
+
+  /// No description provided for @notYetConfirmedReceipt.
+  ///
+  /// In en, this message translates to:
+  /// **'Not yet a confirmed receipt'**
+  String get notYetConfirmedReceipt;
+
+  /// No description provided for @serverConfirmedLedger.
+  ///
+  /// In en, this message translates to:
+  /// **'Server-confirmed ledger entry'**
+  String get serverConfirmedLedger;
+
+  /// No description provided for @remainingOutstanding.
+  ///
+  /// In en, this message translates to:
+  /// **'Remaining outstanding'**
+  String get remainingOutstanding;
+
+  /// No description provided for @recordPaymentReversal.
+  ///
+  /// In en, this message translates to:
+  /// **'Record Payment Reversal'**
+  String get recordPaymentReversal;
+
+  /// No description provided for @recordReversal.
+  ///
+  /// In en, this message translates to:
+  /// **'Record reversal'**
+  String get recordReversal;
+
+  /// No description provided for @finalizedBill.
+  ///
+  /// In en, this message translates to:
+  /// **'Finalized Bill'**
+  String get finalizedBill;
+
+  /// No description provided for @immutableFinancialSnapshot.
+  ///
+  /// In en, this message translates to:
+  /// **'Immutable financial snapshot'**
+  String get immutableFinancialSnapshot;
+
+  /// No description provided for @deliveryLinesCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} delivery lines'**
+  String deliveryLinesCount(int count);
+
+  /// No description provided for @noAdjustmentsApplied.
+  ///
+  /// In en, this message translates to:
+  /// **'No adjustments were applied.'**
+  String get noAdjustmentsApplied;
+
+  /// No description provided for @loadMoreDailyLines.
+  ///
+  /// In en, this message translates to:
+  /// **'Load more daily lines'**
+  String get loadMoreDailyLines;
+
+  /// No description provided for @finalizeBillQuestion.
+  ///
+  /// In en, this message translates to:
+  /// **'Finalize immutable bill?'**
+  String get finalizeBillQuestion;
+
+  /// No description provided for @finalizeBillAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Finalize bill'**
+  String get finalizeBillAction;
+
+  /// No description provided for @finalizeImmutableBill.
+  ///
+  /// In en, this message translates to:
+  /// **'Finalize immutable bill'**
+  String get finalizeImmutableBill;
+
+  /// No description provided for @readOnlyCalculation.
+  ///
+  /// In en, this message translates to:
+  /// **'Read-only calculation'**
+  String get readOnlyCalculation;
+
+  /// No description provided for @signedBillingAdjustment.
+  ///
+  /// In en, this message translates to:
+  /// **'Signed billing adjustment'**
+  String get signedBillingAdjustment;
+
+  /// No description provided for @recordAdjustment.
+  ///
+  /// In en, this message translates to:
+  /// **'Record adjustment'**
+  String get recordAdjustment;
+
+  /// No description provided for @adjustmentRecorded.
+  ///
+  /// In en, this message translates to:
+  /// **'Adjustment recorded with audit history.'**
+  String get adjustmentRecorded;
+
+  /// No description provided for @monthPreview.
+  ///
+  /// In en, this message translates to:
+  /// **'{month} preview'**
+  String monthPreview(String month);
+
+  /// No description provided for @monthBill.
+  ///
+  /// In en, this message translates to:
+  /// **'{month} bill'**
+  String monthBill(String month);
+
+  /// No description provided for @todayOperationsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Today\'s Operations'**
+  String get todayOperationsTitle;
+
+  /// No description provided for @circulationSummaryTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Circulation Tally'**
+  String get circulationSummaryTitle;
+
+  /// No description provided for @findTheHouse.
+  ///
+  /// In en, this message translates to:
+  /// **'Find the house'**
+  String get findTheHouse;
+
+  /// No description provided for @landmarkPrefix.
+  ///
+  /// In en, this message translates to:
+  /// **'LANDMARK: '**
+  String get landmarkPrefix;
+
+  /// No description provided for @contactSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Contact'**
+  String get contactSection;
+
+  /// No description provided for @primaryPhone.
+  ///
+  /// In en, this message translates to:
+  /// **'Primary phone'**
+  String get primaryPhone;
+
+  /// No description provided for @deliveryAssignment.
+  ///
+  /// In en, this message translates to:
+  /// **'Delivery assignment'**
+  String get deliveryAssignment;
+
+  /// No description provided for @areaLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Area'**
+  String get areaLabel;
+
+  /// No description provided for @employeeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Employee'**
+  String get employeeLabel;
+
+  /// No description provided for @placementLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Placement'**
+  String get placementLabel;
+
+  /// No description provided for @billingPreference.
+  ///
+  /// In en, this message translates to:
+  /// **'Billing preference'**
+  String get billingPreference;
+
+  /// No description provided for @consentedGpsLocation.
+  ///
+  /// In en, this message translates to:
+  /// **'Consented GPS location'**
+  String get consentedGpsLocation;
+
+  /// No description provided for @latitude.
+  ///
+  /// In en, this message translates to:
+  /// **'Latitude'**
+  String get latitude;
+
+  /// No description provided for @longitude.
+  ///
+  /// In en, this message translates to:
+  /// **'Longitude'**
+  String get longitude;
+
+  /// No description provided for @operationalNotes.
+  ///
+  /// In en, this message translates to:
+  /// **'Operational notes'**
+  String get operationalNotes;
+
+  /// No description provided for @financialOpening.
+  ///
+  /// In en, this message translates to:
+  /// **'Financial opening'**
+  String get financialOpening;
+
+  /// No description provided for @immutableOpeningNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'Immutable after creation; future corrections require an audited adjustment.'**
+  String get immutableOpeningNotice;
+
+  /// No description provided for @assignmentAndChangeHistory.
+  ///
+  /// In en, this message translates to:
+  /// **'Assignment and change history'**
+  String get assignmentAndChangeHistory;
+
+  /// No description provided for @noCustomerAuditEntries.
+  ///
+  /// In en, this message translates to:
+  /// **'No customer audit entries are available yet.'**
+  String get noCustomerAuditEntries;
+
+  /// No description provided for @couldNotLoadAuditHistory.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load audit history: {error}'**
+  String couldNotLoadAuditHistory(String error);
+
+  /// No description provided for @reactivateCustomer.
+  ///
+  /// In en, this message translates to:
+  /// **'Reactivate customer'**
+  String get reactivateCustomer;
+
+  /// No description provided for @reactivateCustomerConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Reactivate customer?'**
+  String get reactivateCustomerConfirm;
+
+  /// No description provided for @archiveCustomerConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Archive customer?'**
+  String get archiveCustomerConfirm;
+
+  /// No description provided for @reactivateCustomerDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'The customer will return to active operational lists.'**
+  String get reactivateCustomerDesc;
+
+  /// No description provided for @archiveCustomerDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'The record and all history will be preserved. Delivery and billing records will not be deleted.'**
+  String get archiveCustomerDesc;
+
+  /// No description provided for @customerReactivated.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer reactivated.'**
+  String get customerReactivated;
+
+  /// No description provided for @customerArchivedNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer archived without deleting history.'**
+  String get customerArchivedNotice;
+
+  /// No description provided for @auditCustomerCreated.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer created'**
+  String get auditCustomerCreated;
+
+  /// No description provided for @auditCustomerUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer details updated'**
+  String get auditCustomerUpdated;
+
+  /// No description provided for @auditCustomerArchived.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer archived'**
+  String get auditCustomerArchived;
+
+  /// No description provided for @auditCustomerReactivated.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer reactivated'**
+  String get auditCustomerReactivated;
+
+  /// No description provided for @auditCustomerAssignmentTransferred.
+  ///
+  /// In en, this message translates to:
+  /// **'Assignment transferred'**
+  String get auditCustomerAssignmentTransferred;
+
+  /// No description provided for @customerPaymentHistory.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer payment history'**
+  String get customerPaymentHistory;
+
+  /// No description provided for @paymentHistory.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment history'**
+  String get paymentHistory;
+
+  /// No description provided for @myCollections.
+  ///
+  /// In en, this message translates to:
+  /// **'My collections'**
+  String get myCollections;
+
+  /// No description provided for @customerPaymentHistorySubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirmed payments for this customer, including reversal status and immutable allocations.'**
+  String get customerPaymentHistorySubtitle;
+
+  /// No description provided for @headPaymentHistorySubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirmed payments and reversals are retained as an immutable financial trail.'**
+  String get headPaymentHistorySubtitle;
+
+  /// No description provided for @employeeCollectionsSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Your own immutable collection receipts remain available after a customer is reassigned.'**
+  String get employeeCollectionsSubtitle;
+
+  /// No description provided for @collectFromCustomerRecordSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Open an active customer to confirm cash, UPI, bank-transfer, or other manual collection.'**
+  String get collectFromCustomerRecordSubtitle;
+
+  /// No description provided for @noConfirmedPayments.
+  ///
+  /// In en, this message translates to:
+  /// **'No confirmed payments'**
+  String get noConfirmedPayments;
+
+  /// No description provided for @noConfirmedPaymentsMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'A payment appears here only after an authorized collector confirms receipt.'**
+  String get noConfirmedPaymentsMessage;
+
+  /// No description provided for @paymentReversedBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'REVERSED'**
+  String get paymentReversedBadge;
+
+  /// No description provided for @reversalReasonPrefix.
+  ///
+  /// In en, this message translates to:
+  /// **'Reversal reason: {reason}'**
+  String reversalReasonPrefix(String reason);
+
+  /// No description provided for @collectedByPrefix.
+  ///
+  /// In en, this message translates to:
+  /// **'Collected by {name} • {method}'**
+  String collectedByPrefix(String name, String method);
+
+  /// No description provided for @paymentReversalSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment reversed with immutable financial audit record.'**
+  String get paymentReversalSuccess;
+
+  /// No description provided for @collectionUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Collection unavailable'**
+  String get collectionUnavailable;
+
+  /// No description provided for @billingWorkspace.
+  ///
+  /// In en, this message translates to:
+  /// **'Billing workspace'**
+  String get billingWorkspace;
+
+  /// No description provided for @assignedBills.
+  ///
+  /// In en, this message translates to:
+  /// **'Assigned bills'**
+  String get assignedBills;
+
+  /// No description provided for @billingWorkspaceSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Review deterministic daily charges before finalization. Previews never write data.'**
+  String get billingWorkspaceSubtitle;
+
+  /// No description provided for @assignedBillsSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'You can read finalized bills only for customers currently assigned to you.'**
+  String get assignedBillsSubtitle;
+
+  /// No description provided for @noActiveCustomers.
+  ///
+  /// In en, this message translates to:
+  /// **'No active customers'**
+  String get noActiveCustomers;
+
+  /// No description provided for @noActiveCustomersDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'There are no accessible active customers to bill.'**
+  String get noActiveCustomersDesc;
+
+  /// No description provided for @routeCoverage.
+  ///
+  /// In en, this message translates to:
+  /// **'Route coverage'**
+  String get routeCoverage;
+
+  /// No description provided for @routeCoverageSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Create operational areas and keep employee coverage synchronized with authoritative member records.'**
+  String get routeCoverageSubtitle;
+
+  /// No description provided for @newArea.
+  ///
+  /// In en, this message translates to:
+  /// **'New area'**
+  String get newArea;
+
+  /// No description provided for @editArea.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit area'**
+  String get editArea;
+
+  /// No description provided for @areaName.
+  ///
+  /// In en, this message translates to:
+  /// **'Area name'**
+  String get areaName;
+
+  /// No description provided for @areaDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Description (optional)'**
+  String get areaDescription;
+
+  /// No description provided for @assignEmployees.
+  ///
+  /// In en, this message translates to:
+  /// **'Assign employees'**
+  String get assignEmployees;
+
+  /// No description provided for @noAreasConfigured.
+  ///
+  /// In en, this message translates to:
+  /// **'No areas configured'**
+  String get noAreasConfigured;
+
+  /// No description provided for @noAreasConfiguredSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Create delivery areas to organize customer stops and route assignments.'**
+  String get noAreasConfiguredSubtitle;
+
+  /// No description provided for @publicationsSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Manage newspapers, periodicals, and standard weekday/weekend pricing schedules.'**
+  String get publicationsSubtitle;
+
+  /// No description provided for @dailyPricingSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Set single-day or holiday paper prices that override recurring subscription rates for that morning.'**
+  String get dailyPricingSubtitle;
+
+  /// No description provided for @recordPrice.
+  ///
+  /// In en, this message translates to:
+  /// **'Record price'**
+  String get recordPrice;
+
+  /// No description provided for @standardPrice.
+  ///
+  /// In en, this message translates to:
+  /// **'Standard price'**
+  String get standardPrice;
+
+  /// No description provided for @teamSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Manage agency staff, invitation codes, and operational permissions.'**
+  String get teamSubtitle;
+
+  /// No description provided for @manageEmployee.
+  ///
+  /// In en, this message translates to:
+  /// **'Manage employee'**
+  String get manageEmployee;
+
+  /// No description provided for @employeeAccessUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'Employee access updated.'**
+  String get employeeAccessUpdated;
+
+  /// No description provided for @invitationCreated.
+  ///
+  /// In en, this message translates to:
+  /// **'Invitation created'**
+  String get invitationCreated;
+
+  /// No description provided for @invitationCodeCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Invitation code copied.'**
+  String get invitationCodeCopied;
+
+  /// No description provided for @invitationRevoked.
+  ///
+  /// In en, this message translates to:
+  /// **'Invitation revoked.'**
+  String get invitationRevoked;
+
+  /// No description provided for @copyCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy code'**
+  String get copyCode;
+
+  /// No description provided for @createInvitation.
+  ///
+  /// In en, this message translates to:
+  /// **'Create invitation'**
+  String get createInvitation;
+
+  /// No description provided for @permissionsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Permissions'**
+  String get permissionsLabel;
+
+  /// No description provided for @initialAreasLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Initial areas'**
+  String get initialAreasLabel;
+
+  /// No description provided for @activeAccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Active access'**
+  String get activeAccess;
+
+  /// No description provided for @businessReports.
+  ///
+  /// In en, this message translates to:
+  /// **'Business reports'**
+  String get businessReports;
+
+  /// No description provided for @reportsSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Server-side totals and paginated records respect the selected filters. CSV exports use the same query scope.'**
+  String get reportsSubtitle;
+
+  /// No description provided for @exportFilteredCsv.
+  ///
+  /// In en, this message translates to:
+  /// **'Export filtered CSV'**
+  String get exportFilteredCsv;
+
+  /// No description provided for @loadMoreResults.
+  ///
+  /// In en, this message translates to:
+  /// **'Load more results'**
+  String get loadMoreResults;
+
+  /// No description provided for @applyFilters.
+  ///
+  /// In en, this message translates to:
+  /// **'Apply filters'**
+  String get applyFilters;
+
+  /// No description provided for @allEmployees.
+  ///
+  /// In en, this message translates to:
+  /// **'All employees'**
+  String get allEmployees;
+
+  /// No description provided for @allNewspapers.
+  ///
+  /// In en, this message translates to:
+  /// **'All newspapers'**
+  String get allNewspapers;
+
+  /// No description provided for @allMethods.
+  ///
+  /// In en, this message translates to:
+  /// **'All methods'**
+  String get allMethods;
+
+  /// No description provided for @allBalances.
+  ///
+  /// In en, this message translates to:
+  /// **'All balances'**
+  String get allBalances;
+
+  /// No description provided for @allSubscriptions.
+  ///
+  /// In en, this message translates to:
+  /// **'All subscriptions'**
+  String get allSubscriptions;
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

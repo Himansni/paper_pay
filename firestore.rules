@@ -47,6 +47,18 @@ service cloud.firestore {
       return /databases/$(database)/documents/businesses/$(businessId)/auditRecords/$(auditId);
     }
 
+    function deliveryDropPath(businessId, routeId, customerId) {
+      return /databases/$(database)/documents/businesses/$(businessId)/dailyRoutes/$(routeId)/drops/$(customerId);
+    }
+
+    function deliveryDropReferencesAuditAfter(businessId, routeId, customerId, auditId) {
+      let path = deliveryDropPath(businessId, routeId, customerId);
+      return existsAfter(path)
+        && getAfter(path).data.lastAuditId == auditId
+        && getAfter(path).data.actorUid == request.auth.uid
+        && getAfter(path).data.updatedAt == request.time;
+    }
+
     function canReadCustomerData(businessId, data) {
       return activeMember(businessId)
         && data.businessId == businessId
@@ -1907,7 +1919,7 @@ service cloud.firestore {
     ) {
       return data.keys().hasOnly([
           'businessId', 'routeId', 'date', 'areaId', 'customerId',
-          'status', 'exceptionReason', 'actorUid', 'updatedAt'
+          'status', 'exceptionReason', 'actorUid', 'updatedAt', 'lastAuditId'
         ])
         && data.businessId == businessId
         && data.routeId == routeId
@@ -1921,7 +1933,8 @@ service cloud.firestore {
           || (data.status != 'exception' && (!('exceptionReason' in data.keys()) || data.exceptionReason == null))
         )
         && data.actorUid is string
-        && data.actorUid.size() > 0;
+        && data.actorUid.size() > 0
+        && (!('lastAuditId' in data.keys()) || (data.lastAuditId is string && data.lastAuditId.size() > 0));
     }
 
     function validServiceBillingSourceAdvance(
@@ -3576,6 +3589,32 @@ service cloud.firestore {
                 auditId
               )
             )
+            || (
+              request.resource.data.entityType == 'deliveryDrop'
+              && request.resource.data.action in [
+                'deliveryDropStatusUpdated',
+                'deliveryDropDelivered',
+                'deliveryDropPending',
+                'deliveryDropException'
+              ]
+              && request.resource.data.entityId is string
+              && request.resource.data.routeId is string
+              && request.resource.data.areaId is string
+              && (
+                head(businessId)
+                || (
+                  memberData(businessId).role == 'employee'
+                  && memberData(businessId).areaIds is list
+                  && memberData(businessId).areaIds.hasAny([request.resource.data.areaId])
+                )
+              )
+              && deliveryDropReferencesAuditAfter(
+                businessId,
+                request.resource.data.routeId,
+                request.resource.data.entityId,
+                auditId
+              )
+            )
           );
         allow update, delete: if false;
       }
@@ -3615,6 +3654,26 @@ service cloud.firestore {
 
           allow delete: if false;
         }
+      }
+
+      match /routeOrders/{areaId} {
+        allow read: if activeMember(businessId);
+        allow create, update: if activeMember(businessId)
+          && request.resource.data.businessId == businessId
+          && request.resource.data.areaId == areaId
+          && request.resource.data.customerIds is list
+          && request.resource.data.updatedBy == request.auth.uid
+          && request.resource.data.updatedAt == request.time
+          && (
+            head(businessId)
+            || (
+              memberData(businessId).role == 'employee'
+              && memberData(businessId).areaIds is list
+              && memberData(businessId).areaIds.hasAny([areaId])
+              && permission(businessId, 'arrangeDeliveryRoutes')
+            )
+          );
+        allow delete: if false;
       }
 
     }

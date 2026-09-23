@@ -573,4 +573,461 @@ class AppLocalizationsHi extends AppLocalizations {
 
   @override
   String get addNewspaper => 'नया प्रकाशन जोड़ें';
+
+  @override
+  String get arrangeDeliveryRoute => 'वितरण मार्ग क्रम व्यवस्थित करें';
+
+  @override
+  String get routeOrderSaved => 'मार्ग क्रम सफलतापूर्वक सहेजा गया।';
+
+  @override
+  String get placeInRoute => 'वितरण मार्ग में स्थान';
+
+  @override
+  String get placeInRouteFirst => 'मार्ग की शुरुआत में (पहला)';
+
+  @override
+  String get placeInRouteAfter => 'किसी मौजूदा ग्राहक के बाद';
+
+  @override
+  String get placeInRouteLast => 'मार्ग के अंत में (अंतिम)';
+
+  @override
+  String get precedingCustomer => 'पूर्ववर्ती ग्राहक';
+
+  @override
+  String get selectAreaFirst => 'पूर्ववर्ती ग्राहक चुनने के लिए पहले क्षेत्र चुनें।';
+
+  @override
+  String get noCustomersInArea => 'इस क्षेत्र में कोई ग्राहक नहीं हैं।';
+
+  @override
+  String get dragHandleHint => 'स्टॉप्स को पुनर्व्यवस्थित करने के लिए दाईं ओर के हैंडल को खींचें।';
+
+  @override
+  String get permissionDeniedArrangeRoute => 'आपको इस क्षेत्र के मार्ग क्रम को बदलने की अनुमति नहीं है।';
+
+  @override
+  String get noCustomersToArrange => 'इस क्षेत्र में व्यवस्थित करने के लिए कोई सक्रिय ग्राहक नहीं हैं।';
+
+  @override
+  String get customerEditTitle => 'ग्राहक संपादित करें';
+
+  @override
+  String get customerNewTitle => 'नया ग्राहक';
+
+  @override
+  String get customerDetailsTitle => 'ग्राहक विवरण';
+
+  @override
+  String get customerNotFound => 'ग्राहक नहीं मिला';
+
+  @override
+  String get customerNotFoundMessage => 'रिकॉर्ड अब उपलब्ध नहीं हो सकता है।';
+
+  @override
+  String customerCreated(String code) {
+    return 'ग्राहक $code बन गया।';
+  }
+
+  @override
+  String get customerDetailsUpdated => 'ग्राहक विवरण अपडेट कर दिया गया।';
+
+  @override
+  String get customerAssignmentUpdated => 'ग्राहक असाइनमेंट अपडेट किया गया।';
+
+  @override
+  String assignCustomerTitle(String name) {
+    return '$name को असाइन करें';
+  }
+
+  @override
+  String get selectAnArea => 'एक क्षेत्र चुनें';
+
+  @override
+  String get keepUnassigned => 'अनावंटित रखें';
+
+  @override
+  String get saveAssignment => 'असाइनमेंट सहेजें';
+
+  @override
+  String get loadMoreCustomers => 'और ग्राहक लोड करें';
+
+  @override
+  String get allAreas => 'सभी क्षेत्र';
+
+  @override
+  String get clearSearch => 'खोज साफ़ करें';
+
+  @override
+  String get customerConsentRecorded => 'ग्राहक सहमति दर्ज की गई';
+
+  @override
+  String get changeAssignment => 'असाइनमेंट बदलें';
+
+  @override
+  String get upiSettingsTitle => 'UPI सेटिंग्स';
+
+  @override
+  String get enableUpiRequests => 'UPI संग्रह अनुरोध सक्षम करें';
+
+  @override
+  String get upiSettingsUpdated => 'UPI सेटिंग्स अपडेट की गईं।';
+
+  @override
+  String get collectFromCustomerRecord => 'ग्राहक रिकॉर्ड से संग्रह करें';
+
+  @override
+  String get loadMorePayments => 'और भुगतान लोड करें';
+
+  @override
+  String get oldestOutstandingFirst => 'सबसे पुराना बकाया पहले';
+
+  @override
+  String get receiptMustBeVerified => 'रसीद मैन्युअल रूप से सत्यापित की जानी चाहिए';
+
+  @override
+  String get retryConfirmation => 'पुष्टिकरण पुनः प्रयास करें';
+
+  @override
+  String get confirmReceiptOfPayment => 'भुगतान प्राप्ति की पुष्टि करें?';
+
+  @override
+  String get goBack => 'वापस जाएं';
+
+  @override
+  String get iVerifiedReceipt => 'मैंने प्राप्ति सत्यापित की';
+
+  @override
+  String get generateAmountUpiQr => 'राशि-विशिष्ट UPI QR बनाएं';
+
+  @override
+  String get paymentReceiptTitle => 'भुगतान रसीद';
+
+  @override
+  String get notYetConfirmedReceipt => 'अभी तक पुष्ट रसीद नहीं है';
+
+  @override
+  String get serverConfirmedLedger => 'सर्वर-पुष्ट खाता प्रविष्टि';
+
+  @override
+  String get remainingOutstanding => 'शेष बकाया';
+
+  @override
+  String get recordPaymentReversal => 'भुगतान उलटाव (रिवर्सल) दर्ज करें';
+
+  @override
+  String get recordReversal => 'रिवर्सल दर्ज करें';
+
+  @override
+  String get finalizedBill => 'अंतिम बिल';
+
+  @override
+  String get immutableFinancialSnapshot => 'अपरिवर्तनीय वित्तीय विवरण';
+
+  @override
+  String deliveryLinesCount(int count) {
+    return '$count वितरण लाइनें';
+  }
+
+  @override
+  String get noAdjustmentsApplied => 'कोई समायोजन लागू नहीं किया गया।';
+
+  @override
+  String get loadMoreDailyLines => 'और दैनिक लाइनें लोड करें';
+
+  @override
+  String get finalizeBillQuestion => 'क्या अपरिवर्तनीय बिल को अंतिम रूप दें?';
+
+  @override
+  String get finalizeBillAction => 'बिल अंतिम रूप दें';
+
+  @override
+  String get finalizeImmutableBill => 'अपरिवर्तनीय बिल अंतिम रूप दें';
+
+  @override
+  String get readOnlyCalculation => 'केवल-पठन गणना';
+
+  @override
+  String get signedBillingAdjustment => 'हस्ताक्षरित बिलिंग समायोजन';
+
+  @override
+  String get recordAdjustment => 'समायोजन दर्ज करें';
+
+  @override
+  String get adjustmentRecorded => 'ऑडिट इतिहास के साथ समायोजन दर्ज किया गया।';
+
+  @override
+  String monthPreview(String month) {
+    return '$month पूर्वावलोकन';
+  }
+
+  @override
+  String monthBill(String month) {
+    return '$month बिल';
+  }
+
+  @override
+  String get todayOperationsTitle => 'आज का संचालन';
+
+  @override
+  String get circulationSummaryTitle => 'वितरण गणना';
+
+  @override
+  String get findTheHouse => 'घर का पता';
+
+  @override
+  String get landmarkPrefix => 'लैंडमार्क: ';
+
+  @override
+  String get contactSection => 'संपर्क';
+
+  @override
+  String get primaryPhone => 'मुख्य फ़ोन';
+
+  @override
+  String get deliveryAssignment => 'वितरण आवंटन';
+
+  @override
+  String get areaLabel => 'क्षेत्र';
+
+  @override
+  String get employeeLabel => 'कर्मचारी';
+
+  @override
+  String get placementLabel => 'वितरण स्थान';
+
+  @override
+  String get billingPreference => 'बिलिंग प्राथमिकता';
+
+  @override
+  String get consentedGpsLocation => 'सहमति प्राप्त GPS स्थान';
+
+  @override
+  String get latitude => 'अक्षांश';
+
+  @override
+  String get longitude => 'देशांतर';
+
+  @override
+  String get operationalNotes => 'परिचालन टिप्पणियाँ';
+
+  @override
+  String get financialOpening => 'प्रारंभिक वित्तीय विवरण';
+
+  @override
+  String get immutableOpeningNotice => 'बनाने के बाद अपरिवर्तनीय; भविष्य के सुधारों के लिए ऑडिट किए गए समायोजन की आवश्यकता है।';
+
+  @override
+  String get assignmentAndChangeHistory => 'आवंटन और परिवर्तन इतिहास';
+
+  @override
+  String get noCustomerAuditEntries => 'अभी तक कोई ग्राहक ऑडिट प्रविष्टि उपलब्ध नहीं है।';
+
+  @override
+  String couldNotLoadAuditHistory(String error) {
+    return 'ऑडिट इतिहास लोड नहीं किया जा सका: $error';
+  }
+
+  @override
+  String get reactivateCustomer => 'ग्राहक पुनः सक्रिय करें';
+
+  @override
+  String get reactivateCustomerConfirm => 'क्या ग्राहक को पुनः सक्रिय करें?';
+
+  @override
+  String get archiveCustomerConfirm => 'क्या ग्राहक को संग्रहित (आर्काइव) करें?';
+
+  @override
+  String get reactivateCustomerDesc => 'ग्राहक सक्रिय परिचालन सूचियों में वापस आ जाएगा।';
+
+  @override
+  String get archiveCustomerDesc => 'रिकॉर्ड और सारा इतिहास सुरक्षित रहेगा। वितरण और बिलिंग रिकॉर्ड हटाए नहीं जाएंगे।';
+
+  @override
+  String get customerReactivated => 'ग्राहक पुनः सक्रिय किया गया।';
+
+  @override
+  String get customerArchivedNotice => 'इतिहास हटाए बिना ग्राहक संग्रहित किया गया।';
+
+  @override
+  String get auditCustomerCreated => 'ग्राहक बनाया गया';
+
+  @override
+  String get auditCustomerUpdated => 'ग्राहक विवरण अपडेट किया गया';
+
+  @override
+  String get auditCustomerArchived => 'ग्राहक संग्रहित किया गया';
+
+  @override
+  String get auditCustomerReactivated => 'ग्राहक पुनः सक्रिय किया गया';
+
+  @override
+  String get auditCustomerAssignmentTransferred => 'आवंटन स्थानांतरित किया गया';
+
+  @override
+  String get customerPaymentHistory => 'ग्राहक भुगतान इतिहास';
+
+  @override
+  String get paymentHistory => 'भुगतान इतिहास';
+
+  @override
+  String get myCollections => 'मेरी प्राप्तियां';
+
+  @override
+  String get customerPaymentHistorySubtitle => 'इस ग्राहक के लिए पुष्ट भुगतान, जिसमें रिवर्सल स्थिति और अपरिवर्तनीय आवंटन शामिल हैं।';
+
+  @override
+  String get headPaymentHistorySubtitle => 'पुष्ट भुगतान और रिवर्सल एक अपरिवर्तनीय वित्तीय रिकॉर्ड के रूप में सुरक्षित रखे जाते हैं।';
+
+  @override
+  String get employeeCollectionsSubtitle => 'ग्राहक को पुनः आवंटित करने के बाद भी आपकी अपनी अपरिवर्तनीय भुगतान रसीदें उपलब्ध रहती हैं।';
+
+  @override
+  String get collectFromCustomerRecordSubtitle => 'नकद, UPI, बैंक ट्रांसफर, या अन्य संग्रह की पुष्टि करने के लिए सक्रिय ग्राहक खोलें।';
+
+  @override
+  String get noConfirmedPayments => 'कोई पुष्ट भुगतान नहीं';
+
+  @override
+  String get noConfirmedPaymentsMessage => 'अधिकृत संग्रहकर्ता द्वारा प्राप्ति की पुष्टि के बाद ही भुगतान यहां दिखाई देता है।';
+
+  @override
+  String get paymentReversedBadge => 'रिवर्स किया गया';
+
+  @override
+  String reversalReasonPrefix(String reason) {
+    return 'रिवर्सल का कारण: $reason';
+  }
+
+  @override
+  String collectedByPrefix(String name, String method) {
+    return '$name द्वारा प्राप्त • $method';
+  }
+
+  @override
+  String get paymentReversalSuccess => 'अपरिवर्तनीय वित्तीय ऑडिट रिकॉर्ड के साथ भुगतान रिवर्स किया गया।';
+
+  @override
+  String get collectionUnavailable => 'संग्रह अनुपलब्ध';
+
+  @override
+  String get billingWorkspace => 'बिलिंग कार्यक्षेत्र';
+
+  @override
+  String get assignedBills => 'आवंटित बिल';
+
+  @override
+  String get billingWorkspaceSubtitle => 'अंतिम रूप देने से पहले दैनिक शुल्कों की समीक्षा करें। पूर्वावलोकन कभी डेटा नहीं लिखता।';
+
+  @override
+  String get assignedBillsSubtitle => 'आप केवल उन ग्राहकों के अंतिम बिल पढ़ सकते हैं जो वर्तमान में आपको आवंटित हैं।';
+
+  @override
+  String get noActiveCustomers => 'कोई सक्रिय ग्राहक नहीं';
+
+  @override
+  String get noActiveCustomersDesc => 'बिल करने के लिए कोई सुलभ सक्रिय ग्राहक नहीं है।';
+
+  @override
+  String get routeCoverage => 'मार्ग कवरेज';
+
+  @override
+  String get routeCoverageSubtitle => 'परिचालन क्षेत्र बनाएं और कर्मचारी कवरेज को आधिकारिक सदस्य रिकॉर्ड के साथ समन्वयित रखें।';
+
+  @override
+  String get newArea => 'नया क्षेत्र';
+
+  @override
+  String get editArea => 'क्षेत्र संपादित करें';
+
+  @override
+  String get areaName => 'क्षेत्र का नाम';
+
+  @override
+  String get areaDescription => 'विवरण (वैकल्पिक)';
+
+  @override
+  String get assignEmployees => 'कर्मचारी आवंटित करें';
+
+  @override
+  String get noAreasConfigured => 'कोई क्षेत्र कॉन्फ़िगर नहीं किया गया';
+
+  @override
+  String get noAreasConfiguredSubtitle => 'ग्राहक स्टॉप और रूट आवंटन व्यवस्थित करने के लिए वितरण क्षेत्र बनाएं।';
+
+  @override
+  String get publicationsSubtitle => 'समाचार पत्रों, पत्रिकाओं और मानक कार्यदिवस/सप्ताहांत मूल्य निर्धारण का प्रबंधन करें।';
+
+  @override
+  String get dailyPricingSubtitle => 'एकल-दिन या अवकाश के समाचार पत्र की कीमतें निर्धारित करें जो उस सुबह की सामान्य दरों को ओवरराइड करती हैं।';
+
+  @override
+  String get recordPrice => 'कीमत दर्ज करें';
+
+  @override
+  String get standardPrice => 'मानक मूल्य';
+
+  @override
+  String get teamSubtitle => 'एजेंसी कर्मचारियों, आमंत्रण कोड और परिचालन अनुमतियों का प्रबंधन करें।';
+
+  @override
+  String get manageEmployee => 'कर्मचारी प्रबंधित करें';
+
+  @override
+  String get employeeAccessUpdated => 'कर्मचारी पहुंच अपडेट की गई।';
+
+  @override
+  String get invitationCreated => 'आमंत्रण बनाया गया';
+
+  @override
+  String get invitationCodeCopied => 'आमंत्रण कोड कॉपी किया गया।';
+
+  @override
+  String get invitationRevoked => 'आमंत्रण रद्द किया गया।';
+
+  @override
+  String get copyCode => 'कोड कॉपी करें';
+
+  @override
+  String get createInvitation => 'आमंत्रण बनाएं';
+
+  @override
+  String get permissionsLabel => 'अनुमतियाँ';
+
+  @override
+  String get initialAreasLabel => 'प्रारंभिक क्षेत्र';
+
+  @override
+  String get activeAccess => 'सक्रिय पहुंच';
+
+  @override
+  String get businessReports => 'व्यावसायिक रिपोर्ट';
+
+  @override
+  String get reportsSubtitle => 'सर्वर-साइड कुल और पृष्ठबद्ध रिकॉर्ड चयनित फ़िल्टर का सम्मान करते हैं। CSV निर्यात समान क्वेरी स्कोप का उपयोग करते हैं।';
+
+  @override
+  String get exportFilteredCsv => 'फ़िल्टर किया हुआ CSV निर्यात करें';
+
+  @override
+  String get loadMoreResults => 'और परिणाम लोड करें';
+
+  @override
+  String get applyFilters => 'फ़िल्टर लागू करें';
+
+  @override
+  String get allEmployees => 'सभी कर्मचारी';
+
+  @override
+  String get allNewspapers => 'सभी समाचार पत्र';
+
+  @override
+  String get allMethods => 'सभी विधियाँ';
+
+  @override
+  String get allBalances => 'सभी शेष राशियाँ';
+
+  @override
+  String get allSubscriptions => 'सभी सदस्यताएँ';
 }

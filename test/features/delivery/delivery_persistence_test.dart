@@ -3,6 +3,7 @@ import 'package:paper_route/core/domain/local_date.dart';
 import 'package:paper_route/features/delivery/data/firebase_delivery_repository.dart';
 import 'package:paper_route/features/delivery/domain/delivery_models.dart';
 import 'package:paper_route/features/delivery/domain/delivery_repository.dart';
+import 'package:paper_route/features/delivery/domain/route_order.dart';
 
 void main() {
   group('Delivery Persistence & State Invariants', () {
@@ -175,6 +176,142 @@ void main() {
         drops[customerId]!.status,
         isIn([DeliveryStopStatus.delivered, DeliveryStopStatus.exception]),
       );
+    });
+
+    test('Drop status updates append to immutable audit history preserving all transitions', () async {
+      final inMemoryRepo = repository as InMemoryDeliveryRepository;
+      expect(inMemoryRepo.auditRecords, isEmpty);
+
+      // Transition 1: Mark delivered
+      await repository.recordDropStatus(
+        businessId: businessId,
+        areaId: areaId,
+        date: date,
+        customerId: customerId,
+        status: DeliveryStopStatus.delivered,
+        actorUid: actorUid,
+      );
+      expect(inMemoryRepo.auditRecords.length, 1);
+      expect(inMemoryRepo.auditRecords.first['action'], 'deliveryDropStatusUpdated');
+      expect(inMemoryRepo.auditRecords.first['entityType'], 'deliveryDrop');
+      expect(inMemoryRepo.auditRecords.first['actorId'], actorUid);
+      expect(inMemoryRepo.auditRecords.first['entityId'], customerId);
+      expect(inMemoryRepo.auditRecords.first['status'], 'delivered');
+
+      // Transition 2: Report issue
+      await repository.recordDropStatus(
+        businessId: businessId,
+        areaId: areaId,
+        date: date,
+        customerId: customerId,
+        status: DeliveryStopStatus.exception,
+        exceptionReason: 'House Locked',
+        actorUid: actorUid,
+      );
+      expect(inMemoryRepo.auditRecords.length, 2);
+      expect(inMemoryRepo.auditRecords.last['action'], 'deliveryDropStatusUpdated');
+      expect(inMemoryRepo.auditRecords.last['status'], 'exception');
+      expect(inMemoryRepo.auditRecords.last['exceptionReason'], 'House Locked');
+
+      // Transition 3: Re-deliver
+      await repository.recordDropStatus(
+        businessId: businessId,
+        areaId: areaId,
+        date: date,
+        customerId: customerId,
+        status: DeliveryStopStatus.delivered,
+        actorUid: actorUid,
+      );
+      expect(inMemoryRepo.auditRecords.length, 3);
+      expect(inMemoryRepo.auditRecords.last['action'], 'deliveryDropStatusUpdated');
+      expect(inMemoryRepo.auditRecords.last['status'], 'delivered');
+
+      // The drop record points to the latest audit ID
+      final drops = await repository.fetchRouteDrops(
+        businessId: businessId,
+        areaId: areaId,
+        date: date,
+      );
+      expect(drops[customerId]!.lastAuditId, inMemoryRepo.auditRecords.last['auditId']);
+    });
+
+    test('RouteOrder saves and retrieves sequence correctly', () async {
+      final initialOrder = await repository.getRouteOrder(
+        businessId: businessId,
+        areaId: areaId,
+      );
+      expect(initialOrder, isNull);
+
+      // Save custom ordering
+      final customSequence = ['cust-3', 'cust-1', 'cust-2'];
+      await repository.saveRouteOrder(
+        businessId: businessId,
+        areaId: areaId,
+        customerIds: customSequence,
+        actorUid: actorUid,
+      );
+
+      final retrieved = await repository.getRouteOrder(
+        businessId: businessId,
+        areaId: areaId,
+      );
+      expect(retrieved, isNotNull);
+      expect(retrieved!.customerIds, ['cust-3', 'cust-1', 'cust-2']);
+      expect(retrieved.updatedBy, actorUid);
+    });
+
+    test('insertCustomerInRoute respects First, After, and Last placement', () async {
+      // Start with initial sequence
+      await repository.saveRouteOrder(
+        businessId: businessId,
+        areaId: areaId,
+        customerIds: ['cust-A', 'cust-B', 'cust-C'],
+        actorUid: actorUid,
+      );
+
+      // 1. Insert First
+      await repository.insertCustomerInRoute(
+        businessId: businessId,
+        areaId: areaId,
+        customerId: 'cust-FIRST',
+        placement: RoutePlacement.first,
+        actorUid: actorUid,
+      );
+      var order = await repository.getRouteOrder(businessId: businessId, areaId: areaId);
+      expect(order, isNotNull);
+      expect(order!.customerIds, ['cust-FIRST', 'cust-A', 'cust-B', 'cust-C']);
+
+      // 2. Insert After cust-A
+      await repository.insertCustomerInRoute(
+        businessId: businessId,
+        areaId: areaId,
+        customerId: 'cust-AFTER-A',
+        placement: RoutePlacement.afterCustomer,
+        afterCustomerId: 'cust-A',
+        actorUid: actorUid,
+      );
+      order = await repository.getRouteOrder(businessId: businessId, areaId: areaId);
+      expect(order, isNotNull);
+      expect(order!.customerIds, ['cust-FIRST', 'cust-A', 'cust-AFTER-A', 'cust-B', 'cust-C']);
+
+      // 3. Insert Last
+      await repository.insertCustomerInRoute(
+        businessId: businessId,
+        areaId: areaId,
+        customerId: 'cust-LAST',
+        placement: RoutePlacement.last,
+        actorUid: actorUid,
+      );
+      order = await repository.getRouteOrder(businessId: businessId, areaId: areaId);
+      expect(order, isNotNull);
+      expect(order!.customerIds, [
+        'cust-FIRST',
+        'cust-A',
+        'cust-AFTER-A',
+        'cust-B',
+        'cust-C',
+        'cust-LAST',
+      ]);
     });
   });
 }

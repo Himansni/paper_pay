@@ -28,3 +28,22 @@ final customerAuditProvider = StreamProvider.autoDispose
             customerId: key.customerId,
           );
     });
+
+typedef AreaCustomersKey = ({String businessId, String areaId});
+
+final areaCustomersProvider = FutureProvider.autoDispose
+    .family<List<Customer>, AreaCustomersKey>((ref, key) async {
+  if (key.areaId.isEmpty) return const [];
+  final repo = ref.watch(customerRepositoryProvider);
+  final result = await repo.fetchCustomers(
+    CustomerListRequest(
+      businessId: key.businessId,
+      requesterId: '',
+      isHead: true,
+      status: CustomerStatus.active,
+      areaId: key.areaId,
+      pageSize: 250,
+    ),
+  );
+  return result.customers;
+});

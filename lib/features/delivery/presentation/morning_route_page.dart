@@ -5,8 +5,10 @@ import 'package:paper_route/core/domain/local_date.dart';
 import 'package:paper_route/core/presentation/async_state_cards.dart';
 import 'package:paper_route/core/theme/app_theme.dart';
 import 'package:paper_route/features/areas/presentation/area_providers.dart';
+import 'package:paper_route/features/auth/domain/access_policy.dart';
 import 'package:paper_route/features/auth/domain/app_user.dart';
 import 'package:paper_route/features/delivery/domain/delivery_models.dart';
+import 'package:paper_route/features/delivery/presentation/arrange_route_page.dart';
 import 'package:paper_route/features/delivery/presentation/delivery_providers.dart';
 import 'package:paper_route/l10n/app_localizations.dart';
 
@@ -20,6 +22,7 @@ class MorningRoutePage extends ConsumerStatefulWidget {
 }
 
 class _MorningRoutePageState extends ConsumerState<MorningRoutePage> {
+  static const _accessPolicy = AccessPolicy();
   String _filter = 'all'; // all | pending | delivered | paused
 
   @override
@@ -29,6 +32,26 @@ class _MorningRoutePageState extends ConsumerState<MorningRoutePage> {
     final areasAsync = ref.watch(deliveryAreasProvider(businessId));
     final selectedDate = ref.watch(morningRouteDateProvider);
     final stopsAsync = ref.watch(morningRouteStopsProvider(user));
+    final selectedAreaId = ref.watch(selectedRouteAreaProvider);
+    final areas = areasAsync.asData?.value ?? [];
+
+    String activeAreaId = selectedAreaId;
+    if (activeAreaId.isEmpty) {
+      if (user.areaIds.isNotEmpty) {
+        activeAreaId = user.areaIds.first;
+      } else if (areas.isNotEmpty) {
+        activeAreaId = areas.first.id;
+      }
+    }
+
+    final activeAreaName = areas
+            .where((a) => a.id == activeAreaId)
+            .map((a) => a.name)
+            .firstOrNull ??
+        'Route';
+
+    final canArrange =
+        _accessPolicy.canArrangeRoutes(member: user, areaId: activeAreaId);
 
     final l10n = AppLocalizations.of(context);
 
@@ -44,6 +67,22 @@ class _MorningRoutePageState extends ConsumerState<MorningRoutePage> {
           ],
         ),
         actions: [
+          if (canArrange && activeAreaId.isNotEmpty)
+            IconButton(
+              icon: const Icon(Icons.swap_vert),
+              tooltip: l10n?.arrangeDeliveryRoute ?? 'Arrange Route',
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (context) => ArrangeRoutePage(
+                      user: user,
+                      areaId: activeAreaId,
+                      areaName: activeAreaName,
+                    ),
+                  ),
+                );
+              },
+            ),
           IconButton(
             icon: const Icon(Icons.calendar_today_outlined),
             tooltip: l10n?.selectRouteDate ?? 'Select Route Date',

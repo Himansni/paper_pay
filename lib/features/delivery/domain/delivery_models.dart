@@ -122,6 +122,7 @@ class DeliveryDropRecord {
     this.exceptionReason,
     required this.actorUid,
     required this.updatedAt,
+    this.lastAuditId,
   });
 
   final String businessId;
@@ -133,6 +134,7 @@ class DeliveryDropRecord {
   final String? exceptionReason;
   final String actorUid;
   final DateTime updatedAt;
+  final String? lastAuditId;
 
   Map<String, dynamic> toMap() => {
     'businessId': businessId,
@@ -144,6 +146,7 @@ class DeliveryDropRecord {
     if (exceptionReason != null) 'exceptionReason': exceptionReason,
     'actorUid': actorUid,
     'updatedAt': updatedAt,
+    if (lastAuditId != null) 'lastAuditId': lastAuditId,
   };
 
   factory DeliveryDropRecord.fromMap(Map<String, dynamic> map) {
@@ -174,6 +177,7 @@ class DeliveryDropRecord {
       exceptionReason: map['exceptionReason'] as String?,
       actorUid: map['actorUid'] as String? ?? '',
       updatedAt: updated,
+      lastAuditId: map['lastAuditId'] as String?,
     );
   }
 }

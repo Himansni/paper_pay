@@ -8,8 +8,11 @@ import 'package:paper_route/features/auth/domain/access_policy.dart';
 import 'package:paper_route/features/auth/domain/app_user.dart';
 import 'package:paper_route/features/customers/domain/customer.dart';
 import 'package:paper_route/features/customers/presentation/customer_providers.dart';
+import 'package:paper_route/features/delivery/domain/route_order.dart';
+import 'package:paper_route/features/delivery/presentation/delivery_providers.dart';
 import 'package:paper_route/features/employees/domain/employee_member.dart';
 import 'package:paper_route/features/employees/presentation/employee_providers.dart';
+import 'package:paper_route/l10n/app_localizations.dart';
 
 class CustomerFormRoutePage extends ConsumerWidget {
   const CustomerFormRoutePage({required this.user, this.customerId, super.key});
@@ -23,13 +26,14 @@ class CustomerFormRoutePage extends ConsumerWidget {
     if (id == null) return CustomerFormPage(user: user);
     final key = (businessId: user.businessId!, customerId: id);
     final customer = ref.watch(customerProvider(key));
+    final l10n = AppLocalizations.of(context);
     return customer.when(
       loading:
           () =>
               const Scaffold(body: Center(child: CircularProgressIndicator())),
       error:
           (error, _) => Scaffold(
-            appBar: AppBar(title: const Text('Edit customer')),
+            appBar: AppBar(title: Text(l10n?.customerEditTitle ?? 'Edit Customer')),
             body: Padding(
               padding: const EdgeInsets.all(20),
               child: AsyncErrorCard(
@@ -42,13 +46,13 @@ class CustomerFormRoutePage extends ConsumerWidget {
           (value) =>
               value == null
                   ? Scaffold(
-                    appBar: AppBar(title: const Text('Edit customer')),
-                    body: const Padding(
-                      padding: EdgeInsets.all(20),
+                    appBar: AppBar(title: Text(l10n?.customerEditTitle ?? 'Edit Customer')),
+                    body: Padding(
+                      padding: const EdgeInsets.all(20),
                       child: EmptyStateCard(
                         icon: Icons.person_off_outlined,
-                        title: 'Customer not found',
-                        message: 'The record may no longer be available.',
+                        title: l10n?.customerNotFound ?? 'Customer not found',
+                        message: l10n?.customerNotFoundMessage ?? 'The record may no longer be available.',
                       ),
                     ),
                   )
@@ -87,6 +91,8 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
   late bool _locationConsent;
   late DeliveryPlacement _deliveryPlacement;
   late BillingCyclePreference _billingCycle;
+  RoutePlacement _routePlacement = RoutePlacement.last;
+  String? _afterCustomerId;
   bool _isBusy = false;
 
   bool get _isEditing => widget.customer != null;
@@ -469,6 +475,91 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
                       if (value != null) setState(() => _billingCycle = value);
                     },
                   ),
+                  if (!_isEditing) ...[
+                    const SizedBox(height: 14),
+                    DropdownButtonFormField<RoutePlacement>(
+                      value: _routePlacement,
+                      decoration: const InputDecoration(
+                        labelText: 'Place in delivery route',
+                      ),
+                      items: const [
+                        DropdownMenuItem(
+                          value: RoutePlacement.first,
+                          child: Text('At start of route (First)'),
+                        ),
+                        DropdownMenuItem(
+                          value: RoutePlacement.afterCustomer,
+                          child: Text('After an existing customer'),
+                        ),
+                        DropdownMenuItem(
+                          value: RoutePlacement.last,
+                          child: Text('At end of route (Last)'),
+                        ),
+                      ],
+                      onChanged: (value) {
+                        if (value != null) {
+                          setState(() => _routePlacement = value);
+                        }
+                      },
+                    ),
+                    if (_routePlacement == RoutePlacement.afterCustomer) ...[
+                      const SizedBox(height: 14),
+                      Consumer(
+                        builder: (context, ref, _) {
+                          if (_areaId.isEmpty) {
+                            return const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 4),
+                              child: Text(
+                                'Select an area above to choose preceding customer.',
+                                style: TextStyle(color: Color(0xFF627D98), fontSize: 13),
+                              ),
+                            );
+                          }
+                          final areaCustomersAsync = ref.watch(
+                            areaCustomersProvider((
+                              businessId: widget.user.businessId!,
+                              areaId: _areaId,
+                            ),),
+                          );
+                          return areaCustomersAsync.when(
+                            loading: () => const LinearProgressIndicator(),
+                            error: (e, _) => Text('Could not load customers: $e'),
+                            data: (customers) {
+                              final active = customers
+                                  .where((c) => c.status == CustomerStatus.active)
+                                  .toList();
+                              if (active.isEmpty) {
+                                return const Text(
+                                  'No existing customers in this area. Customer will be placed first.',
+                                  style: TextStyle(color: Color(0xFF627D98), fontSize: 13),
+                                );
+                              }
+                              final selectedValue = _afterCustomerId != null &&
+                                      active.any((c) => c.id == _afterCustomerId)
+                                  ? _afterCustomerId
+                                  : active.first.id;
+                              return DropdownButtonFormField<String>(
+                                value: selectedValue,
+                                decoration: const InputDecoration(
+                                  labelText: 'Preceding customer',
+                                ),
+                                items: [
+                                  for (final c in active)
+                                    DropdownMenuItem(
+                                      value: c.id,
+                                      child: Text('${c.name} (${c.customerCode})'),
+                                    ),
+                                ],
+                                onChanged: (val) {
+                                  setState(() => _afterCustomerId = val);
+                                },
+                              );
+                            },
+                          );
+                        },
+                      ),
+                    ],
+                  ],
                 ],
               ),
               const SizedBox(height: 14),
@@ -642,10 +733,24 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
           actor: widget.user,
           input: input,
         );
+        try {
+          await ref.read(deliveryRepositoryProvider).insertCustomerInRoute(
+                businessId: widget.user.businessId!,
+                areaId: input.areaId,
+                customerId: id,
+                placement: _routePlacement,
+                afterCustomerId: _afterCustomerId,
+                actorUid: widget.user.uid,
+              );
+          ref.invalidate(morningRouteStopsProvider(widget.user));
+        } catch (_) {
+          // Route placement error non-fatal to customer creation
+        }
         if (!mounted) return;
+        final l10n = AppLocalizations.of(context);
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('Customer $id created.')));
+        ).showSnackBar(SnackBar(content: Text(l10n?.customerCreated(id) ?? 'Customer $id created.')));
       } else {
         await repository.updateCustomerProfile(
           actor: widget.user,
@@ -653,8 +758,9 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
           input: input,
         );
         if (!mounted) return;
+        final l10n = AppLocalizations.of(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Customer details updated.')),
+          SnackBar(content: Text(l10n?.customerDetailsUpdated ?? 'Customer details updated.')),
         );
       }
       if (context.canPop()) {

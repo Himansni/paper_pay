@@ -6,12 +6,23 @@ abstract final class PermissionKey {
   static const manageAssignedSubscriptions = 'manageAssignedSubscriptions';
   static const recordPayments = 'recordPayments';
   static const recordDeliveryExceptions = 'recordDeliveryExceptions';
+  static const arrangeDeliveryRoutes = 'arrangeDeliveryRoutes';
 }
 
 /// Mirrors important client-side visibility checks. Firestore Rules remain the
 /// authority; this policy only prevents presenting actions that will be denied.
 class AccessPolicy {
   const AccessPolicy();
+
+  bool canArrangeRoutes({
+    required AppUser member,
+    required String areaId,
+  }) {
+    if (!member.hasActiveAccess) return false;
+    if (member.isHead) return true;
+    return member.areaIds.contains(areaId) &&
+        member.permissions.contains(PermissionKey.arrangeDeliveryRoutes);
+  }
 
   bool canReadCustomer({
     required AppUser member,

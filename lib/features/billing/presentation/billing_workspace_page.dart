@@ -7,6 +7,7 @@ import 'package:paper_route/core/presentation/async_state_cards.dart';
 import 'package:paper_route/features/auth/domain/app_user.dart';
 import 'package:paper_route/features/billing/domain/monthly_bill.dart';
 import 'package:paper_route/features/billing/presentation/billing_providers.dart';
+import 'package:paper_route/l10n/app_localizations.dart';
 
 class BillingWorkspacePage extends ConsumerStatefulWidget {
   const BillingWorkspacePage({required this.user, super.key});
@@ -94,11 +95,12 @@ class _BillingWorkspacePageState extends ConsumerState<BillingWorkspacePage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final monthLabel = DateFormat.yMMMM().format(_month.toDateTime());
     return Scaffold(
       appBar: AppBar(
         leading: BackButton(onPressed: () => context.go('/')),
-        title: const Text('Monthly billing'),
+        title: Text(l10n?.billingTitle ?? 'Monthly billing'),
       ),
       body: RefreshIndicator(
         onRefresh: () => _load(reset: true),
@@ -107,7 +109,9 @@ class _BillingWorkspacePageState extends ConsumerState<BillingWorkspacePage> {
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
           children: [
             Text(
-              widget.user.isHead ? 'Billing workspace' : 'Assigned bills',
+              widget.user.isHead
+                  ? (l10n?.billingWorkspace ?? 'Billing workspace')
+                  : (l10n?.assignedBills ?? 'Assigned bills'),
               style: Theme.of(
                 context,
               ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
@@ -115,8 +119,10 @@ class _BillingWorkspacePageState extends ConsumerState<BillingWorkspacePage> {
             const SizedBox(height: 6),
             Text(
               widget.user.isHead
-                  ? 'Review deterministic daily charges before finalization. Previews never write data.'
-                  : 'You can read finalized bills only for customers currently assigned to you.',
+                  ? (l10n?.billingWorkspaceSubtitle ??
+                      'Review deterministic daily charges before finalization. Previews never write data.')
+                  : (l10n?.assignedBillsSubtitle ??
+                      'You can read finalized bills only for customers currently assigned to you.'),
               style: const TextStyle(color: Color(0xFF486581), height: 1.4),
             ),
             const SizedBox(height: 16),
@@ -140,10 +146,12 @@ class _BillingWorkspacePageState extends ConsumerState<BillingWorkspacePage> {
                 ),
               )
             else if (_rows.isEmpty)
-              const EmptyStateCard(
+              EmptyStateCard(
                 icon: Icons.receipt_long_outlined,
-                title: 'No active customers',
-                message: 'There are no accessible active customers to bill.',
+                title: l10n?.noActiveCustomers ?? 'No active customers',
+                message:
+                    l10n?.noActiveCustomersDesc ??
+                    'There are no accessible active customers to bill.',
               )
             else ...[
               for (final row in _rows)
@@ -183,7 +191,7 @@ class _BillingWorkspacePageState extends ConsumerState<BillingWorkspacePage> {
                             dimension: 20,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
-                          : const Text('Load more customers'),
+                          : Text(l10n?.loadMoreCustomers ?? 'Load more customers'),
                 ),
             ],
           ],

@@ -183,7 +183,26 @@ final morningRouteStopsProvider =
             ),
           );
 
-  final customers = customerPage.customers;
+  List<Customer> customers = customerPage.customers;
+  final routeOrder = await ref.read(deliveryRepositoryProvider).getRouteOrder(
+        businessId: businessId,
+        areaId: activeAreaId,
+      );
+  if (routeOrder != null && routeOrder.customerIds.isNotEmpty) {
+    final Map<String, Customer> customerMap = {
+      for (final c in customers) c.id: c,
+    };
+    final List<Customer> sorted = [];
+    for (final id in routeOrder.customerIds) {
+      final c = customerMap.remove(id);
+      if (c != null) {
+        sorted.add(c);
+      }
+    }
+    sorted.addAll(customerMap.values);
+    customers = sorted;
+  }
+
   final List<DailyRouteStop> stops = [];
 
   for (var i = 0; i < customers.length; i++) {

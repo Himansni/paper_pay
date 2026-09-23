@@ -305,5 +305,205 @@
   "areasTitle": "Delivery Areas",
   "addArea": "Add Delivery Area",
   "newspapersTitle": "Newspapers & Publications",
-  "addNewspaper": "Add Publication"
+  "addNewspaper": "Add Publication",
+
+  "arrangeDeliveryRoute": "Arrange Delivery Route",
+  "routeOrderSaved": "Route order saved successfully.",
+  "placeInRoute": "Place in delivery route",
+  "placeInRouteFirst": "At start of route (First)",
+  "placeInRouteAfter": "After an existing customer",
+  "placeInRouteLast": "At end of route (Last)",
+  "precedingCustomer": "Preceding customer",
+  "selectAreaFirst": "Select an area first to choose preceding customer.",
+  "noCustomersInArea": "No existing customers in this area.",
+  "dragHandleHint": "Long-press or drag the handle on the right to reorder delivery stops.",
+  "permissionDeniedArrangeRoute": "You do not have permission to rearrange route stops for this area.",
+  "noCustomersToArrange": "No active customers in this area to arrange.",
+
+  "customerEditTitle": "Edit Customer",
+  "customerNewTitle": "New Customer",
+  "customerDetailsTitle": "Customer Details",
+  "customerNotFound": "Customer not found",
+  "customerNotFoundMessage": "The record may no longer be available.",
+  "customerCreated": "Customer {code} created.",
+  "@customerCreated": {
+    "placeholders": {
+      "code": { "type": "String" }
+    }
+  },
+  "customerDetailsUpdated": "Customer details updated.",
+  "customerAssignmentUpdated": "Customer assignment updated.",
+  "assignCustomerTitle": "Assign {name}",
+  "@assignCustomerTitle": {
+    "placeholders": {
+      "name": { "type": "String" }
+    }
+  },
+  "selectAnArea": "Select an area",
+  "keepUnassigned": "Keep unassigned",
+  "saveAssignment": "Save assignment",
+  "loadMoreCustomers": "Load more customers",
+  "allAreas": "All areas",
+  "clearSearch": "Clear search",
+  "customerConsentRecorded": "Customer consent recorded",
+  "changeAssignment": "Change assignment",
+
+  "upiSettingsTitle": "UPI Settings",
+  "enableUpiRequests": "Enable UPI collection requests",
+  "upiSettingsUpdated": "UPI collection settings updated.",
+  "collectFromCustomerRecord": "Collect from a customer record",
+  "loadMorePayments": "Load more payments",
+  "oldestOutstandingFirst": "Oldest outstanding first",
+  "receiptMustBeVerified": "Receipt must be verified manually",
+  "retryConfirmation": "Retry confirmation",
+  "confirmReceiptOfPayment": "Confirm receipt of payment?",
+  "goBack": "Go back",
+  "iVerifiedReceipt": "I verified receipt",
+  "generateAmountUpiQr": "Generate amount-specific UPI QR",
+  "paymentReceiptTitle": "Payment Receipt",
+  "notYetConfirmedReceipt": "Not yet a confirmed receipt",
+  "serverConfirmedLedger": "Server-confirmed ledger entry",
+  "remainingOutstanding": "Remaining outstanding",
+  "recordPaymentReversal": "Record Payment Reversal",
+  "recordReversal": "Record reversal",
+
+  "finalizedBill": "Finalized Bill",
+  "immutableFinancialSnapshot": "Immutable financial snapshot",
+  "deliveryLinesCount": "{count} delivery lines",
+  "@deliveryLinesCount": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "noAdjustmentsApplied": "No adjustments were applied.",
+  "loadMoreDailyLines": "Load more daily lines",
+  "finalizeBillQuestion": "Finalize immutable bill?",
+  "finalizeBillAction": "Finalize bill",
+  "finalizeImmutableBill": "Finalize immutable bill",
+  "readOnlyCalculation": "Read-only calculation",
+  "signedBillingAdjustment": "Signed billing adjustment",
+  "recordAdjustment": "Record adjustment",
+  "adjustmentRecorded": "Adjustment recorded with audit history.",
+  "monthPreview": "{month} preview",
+  "@monthPreview": {
+    "placeholders": {
+      "month": { "type": "String" }
+    }
+  },
+  "monthBill": "{month} bill",
+  "@monthBill": {
+    "placeholders": {
+      "month": { "type": "String" }
+    }
+  },
+
+  "todayOperationsTitle": "Today's Operations",
+  "circulationSummaryTitle": "Circulation Tally",
+
+  "findTheHouse": "Find the house",
+  "landmarkPrefix": "LANDMARK: ",
+  "contactSection": "Contact",
+  "primaryPhone": "Primary phone",
+  "deliveryAssignment": "Delivery assignment",
+  "areaLabel": "Area",
+  "employeeLabel": "Employee",
+  "placementLabel": "Placement",
+  "billingPreference": "Billing preference",
+  "consentedGpsLocation": "Consented GPS location",
+  "latitude": "Latitude",
+  "longitude": "Longitude",
+  "operationalNotes": "Operational notes",
+  "financialOpening": "Financial opening",
+  "immutableOpeningNotice": "Immutable after creation; future corrections require an audited adjustment.",
+  "assignmentAndChangeHistory": "Assignment and change history",
+  "noCustomerAuditEntries": "No customer audit entries are available yet.",
+  "couldNotLoadAuditHistory": "Could not load audit history: {error}",
+  "@couldNotLoadAuditHistory": {
+    "placeholders": {
+      "error": { "type": "String" }
+    }
+  },
+  "reactivateCustomer": "Reactivate customer",
+  "reactivateCustomerConfirm": "Reactivate customer?",
+  "archiveCustomerConfirm": "Archive customer?",
+  "reactivateCustomerDesc": "The customer will return to active operational lists.",
+  "archiveCustomerDesc": "The record and all history will be preserved. Delivery and billing records will not be deleted.",
+  "customerReactivated": "Customer reactivated.",
+  "customerArchivedNotice": "Customer archived without deleting history.",
+  "auditCustomerCreated": "Customer created",
+  "auditCustomerUpdated": "Customer details updated",
+  "auditCustomerArchived": "Customer archived",
+  "auditCustomerReactivated": "Customer reactivated",
+  "auditCustomerAssignmentTransferred": "Assignment transferred",
+
+  "customerPaymentHistory": "Customer payment history",
+  "paymentHistory": "Payment history",
+  "myCollections": "My collections",
+  "customerPaymentHistorySubtitle": "Confirmed payments for this customer, including reversal status and immutable allocations.",
+  "headPaymentHistorySubtitle": "Confirmed payments and reversals are retained as an immutable financial trail.",
+  "employeeCollectionsSubtitle": "Your own immutable collection receipts remain available after a customer is reassigned.",
+  "collectFromCustomerRecordSubtitle": "Open an active customer to confirm cash, UPI, bank-transfer, or other manual collection.",
+  "noConfirmedPayments": "No confirmed payments",
+  "noConfirmedPaymentsMessage": "A payment appears here only after an authorized collector confirms receipt.",
+  "paymentReversedBadge": "REVERSED",
+  "reversalReasonPrefix": "Reversal reason: {reason}",
+  "@reversalReasonPrefix": {
+    "placeholders": {
+      "reason": { "type": "String" }
+    }
+  },
+  "collectedByPrefix": "Collected by {name} • {method}",
+  "@collectedByPrefix": {
+    "placeholders": {
+      "name": { "type": "String" },
+      "method": { "type": "String" }
+    }
+  },
+  "paymentReversalSuccess": "Payment reversed with immutable financial audit record.",
+  "collectionUnavailable": "Collection unavailable",
+
+  "billingWorkspace": "Billing workspace",
+  "assignedBills": "Assigned bills",
+  "billingWorkspaceSubtitle": "Review deterministic daily charges before finalization. Previews never write data.",
+  "assignedBillsSubtitle": "You can read finalized bills only for customers currently assigned to you.",
+  "noActiveCustomers": "No active customers",
+  "noActiveCustomersDesc": "There are no accessible active customers to bill.",
+
+  "routeCoverage": "Route coverage",
+  "routeCoverageSubtitle": "Create operational areas and keep employee coverage synchronized with authoritative member records.",
+  "newArea": "New area",
+  "editArea": "Edit area",
+  "areaName": "Area name",
+  "areaDescription": "Description (optional)",
+  "assignEmployees": "Assign employees",
+  "noAreasConfigured": "No areas configured",
+  "noAreasConfiguredSubtitle": "Create delivery areas to organize customer stops and route assignments.",
+
+  "publicationsSubtitle": "Manage newspapers, periodicals, and standard weekday/weekend pricing schedules.",
+  "dailyPricingSubtitle": "Set single-day or holiday paper prices that override recurring subscription rates for that morning.",
+  "recordPrice": "Record price",
+  "standardPrice": "Standard price",
+
+  "teamSubtitle": "Manage agency staff, invitation codes, and operational permissions.",
+  "manageEmployee": "Manage employee",
+  "employeeAccessUpdated": "Employee access updated.",
+  "invitationCreated": "Invitation created",
+  "invitationCodeCopied": "Invitation code copied.",
+  "invitationRevoked": "Invitation revoked.",
+  "copyCode": "Copy code",
+  "createInvitation": "Create invitation",
+  "permissionsLabel": "Permissions",
+  "initialAreasLabel": "Initial areas",
+  "activeAccess": "Active access",
+
+  "businessReports": "Business reports",
+  "reportsSubtitle": "Server-side totals and paginated records respect the selected filters. CSV exports use the same query scope.",
+  "exportFilteredCsv": "Export filtered CSV",
+  "loadMoreResults": "Load more results",
+  "applyFilters": "Apply filters",
+  "allEmployees": "All employees",
+  "allNewspapers": "All newspapers",
+  "allMethods": "All methods",
+  "allBalances": "All balances",
+  "allSubscriptions": "All subscriptions"
 }

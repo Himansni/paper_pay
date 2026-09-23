@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:paper_route/features/areas/domain/delivery_area.dart';
 import 'package:paper_route/features/employees/domain/employee_member.dart';
+import 'package:paper_route/l10n/app_localizations.dart';
 
 class CustomerAssignmentDraft {
   const CustomerAssignmentDraft({
@@ -80,9 +81,10 @@ class _CustomerAssignmentDialogState extends State<_CustomerAssignmentDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final availableEmployees = _availableEmployees;
     return AlertDialog(
-      title: Text('Assign ${widget.customerName}'),
+      title: Text(l10n?.assignCustomerTitle(widget.customerName) ?? 'Assign ${widget.customerName}'),
       content: SizedBox(
         width: 460,
         child: Column(
@@ -93,9 +95,9 @@ class _CustomerAssignmentDialogState extends State<_CustomerAssignmentDialog> {
               value: _areaId,
               decoration: const InputDecoration(labelText: 'Delivery area'),
               items: [
-                const DropdownMenuItem(
+                DropdownMenuItem(
                   value: '',
-                  child: Text('Select an area'),
+                  child: Text(l10n?.selectAnArea ?? 'Select an area'),
                 ),
                 for (final area in widget.areas)
                   DropdownMenuItem(value: area.id, child: Text(area.name)),
@@ -115,9 +117,9 @@ class _CustomerAssignmentDialogState extends State<_CustomerAssignmentDialog> {
               value: _employeeId,
               decoration: const InputDecoration(labelText: 'Employee'),
               items: [
-                const DropdownMenuItem(
+                DropdownMenuItem(
                   value: '',
-                  child: Text('Keep unassigned'),
+                  child: Text(l10n?.keepUnassigned ?? 'Keep unassigned'),
                 ),
                 for (final employee in availableEmployees)
                   DropdownMenuItem(
@@ -148,7 +150,7 @@ class _CustomerAssignmentDialogState extends State<_CustomerAssignmentDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
+          child: Text(l10n?.commonCancel ?? 'Cancel'),
         ),
         FilledButton(
           onPressed:
@@ -161,7 +163,7 @@ class _CustomerAssignmentDialogState extends State<_CustomerAssignmentDialog> {
                       areaId: _areaId,
                     ),
                   ),
-          child: const Text('Save assignment'),
+          child: Text(l10n?.saveAssignment ?? 'Save assignment'),
         ),
       ],
     );

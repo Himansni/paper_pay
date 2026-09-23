@@ -23,6 +23,7 @@ class EmployeesPage extends ConsumerWidget {
         'Manage assigned customer subscriptions',
     PermissionKey.recordPayments: 'Record payments',
     PermissionKey.recordDeliveryExceptions: 'Record delivery exceptions',
+    PermissionKey.arrangeDeliveryRoutes: 'Arrange delivery routes',
   };
 
   @override

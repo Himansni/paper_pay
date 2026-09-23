@@ -10,6 +10,7 @@ import 'package:paper_route/features/customers/domain/customer.dart';
 import 'package:paper_route/features/customers/presentation/customer_providers.dart';
 import 'package:paper_route/features/employees/domain/employee_member.dart';
 import 'package:paper_route/features/employees/presentation/employee_providers.dart';
+import 'package:paper_route/l10n/app_localizations.dart';
 
 class CustomersPage extends ConsumerStatefulWidget {
   const CustomersPage({required this.user, this.initialSearch = '', super.key});
@@ -123,18 +124,19 @@ class _CustomersPageState extends ConsumerState<CustomersPage> {
             : const AsyncData<List<EmployeeMember>>([]);
     final areaItems = areas.asData?.value ?? const <DeliveryArea>[];
     final memberItems = members.asData?.value ?? const <EmployeeMember>[];
+    final l10n = AppLocalizations.of(context);
 
     return Scaffold(
       appBar: AppBar(
         leading: BackButton(onPressed: () => context.go('/')),
-        title: Text(widget.user.isHead ? 'Customers' : 'My customers'),
+        title: Text(widget.user.isHead ? (l10n?.customersTitle ?? 'Customers') : 'My customers'),
       ),
       floatingActionButton:
           _accessPolicy.canCreateCustomer(widget.user)
               ? FloatingActionButton.extended(
                 onPressed: () => _open('/customers/new'),
                 icon: const Icon(Icons.person_add_alt_1),
-                label: const Text('New customer'),
+                label: Text(l10n?.customerNewTitle ?? 'New customer'),
               )
               : null,
       body: SafeArea(
@@ -263,7 +265,7 @@ class _CustomersPageState extends ConsumerState<CustomersPage> {
                     child: OutlinedButton.icon(
                       onPressed: _load,
                       icon: const Icon(Icons.expand_more),
-                      label: const Text('Load more customers'),
+                      label: Text(l10n?.loadMoreCustomers ?? 'Load more customers'),
                     ),
                   )
                 else
@@ -337,6 +339,7 @@ class _SearchAndFilterCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -404,9 +407,9 @@ class _SearchAndFilterCard extends StatelessWidget {
                     value: areaId,
                     decoration: const InputDecoration(labelText: 'Area'),
                     items: [
-                      const DropdownMenuItem(
+                      DropdownMenuItem(
                         value: '',
-                        child: Text('All areas'),
+                        child: Text(l10n?.allAreas ?? 'All areas'),
                       ),
                       for (final area in areas)
                         DropdownMenuItem(
@@ -426,13 +429,13 @@ class _SearchAndFilterCard extends StatelessWidget {
                 if (hasActiveSearch)
                   TextButton(
                     onPressed: isSearching ? null : onClear,
-                    child: const Text('Clear search'),
+                    child: Text(l10n?.clearSearch ?? 'Clear search'),
                   ),
                 const SizedBox(width: 8),
                 FilledButton.icon(
                   onPressed: isSearching ? null : onSearch,
                   icon: const Icon(Icons.search),
-                  label: const Text('Search'),
+                  label: Text(l10n?.commonSearch ?? 'Search'),
                 ),
               ],
             ),

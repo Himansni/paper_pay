@@ -3590,6 +3590,13 @@ service cloud.firestore {
         allow create, update, delete: if false;
       }
 
+      match /saasCheckoutSessions/{sessionId} {
+        // Heads can read their agency's checkout sessions to track status
+        allow read: if head(businessId);
+        // Mutations are strictly server-authoritative
+        allow create, update, delete: if false;
+      }
+
       match /auditRecords/{auditId} {
         allow read: if head(businessId);
         allow create: if activeMember(businessId)

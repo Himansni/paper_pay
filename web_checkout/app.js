@@ -231,15 +231,24 @@ async function initiateCheckout(planId) {
     const session = result.data;
     console.log("Checkout session created:", session);
 
-    // Launch Razorpay Standard Checkout
+    // If server issued an explicitly isolated simulator session (no live credentials configured)
+    if (session.isSimulated) {
+      showPaymentModal(
+        "Isolated Sandbox Mode Activated",
+        `Created server-authenticated simulated checkout session: ${session.subscriptionId}. Razorpay credentials are not configured on this environment. To activate entitlements in dev, invoke the signed webhook simulator with this session ID.`,
+        false,
+      );
+      closeModalBtn.classList.remove("hidden");
+      return;
+    }
+
+    // Launch Razorpay Recurring Subscriptions Checkout
     const options = {
       key: session.keyId,
-      amount: session.amountPaise,
-      currency: session.currency || "INR",
+      subscription_id: session.subscriptionId,
       name: "PaperRoute SaaS",
       description: `${session.planId.toUpperCase()} Plan (${session.billingCycle})`,
       image: "https://paperroutedev.web.app/favicon.ico",
-      order_id: session.subscriptionId.startsWith("order_") ? session.subscriptionId : undefined,
       notes: session.notes,
       prefill: {
         email: session.customerEmail || currentUser.email,
@@ -249,8 +258,8 @@ async function initiateCheckout(planId) {
       },
       handler: function (response) {
         showPaymentModal(
-          "Payment Successful! 🎉",
-          "Your transaction is confirmed. PaperRoute billing servers are activating your entitlements in real-time.",
+          "Subscription Authorized! 🎉",
+          `Payment authorization complete (${response.razorpay_payment_id || response.razorpay_subscription_id}). PaperRoute billing servers are activating your agency entitlements.`,
           false,
         );
         closeModalBtn.classList.remove("hidden");
@@ -271,10 +280,9 @@ async function initiateCheckout(planId) {
       hidePaymentModal();
       rzp.open();
     } else {
-      // Fallback sandbox simulation if Razorpay JS SDK is unavailable
       showPaymentModal(
-        "Sandbox Mode Activated",
-        `Created test checkout session: ${session.subscriptionId}. In test environments without Razorpay modal, webhook simulator updates Firestore directly.`,
+        "Checkout Ready",
+        `Created Razorpay subscription: ${session.subscriptionId}. Razorpay Checkout JS modal will open upon SDK initialization.`,
         false,
       );
       closeModalBtn.classList.remove("hidden");

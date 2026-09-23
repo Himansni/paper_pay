@@ -24,12 +24,10 @@ export interface SaasSubscriptionContract {
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
-/** Default fallback activation date for migrations if not configured in environment. */
-export const DEFAULT_SAAS_ACTIVATION_DATE_ISO = "2026-09-24T00:00:00.000Z";
-
 /**
  * Returns the controlled SaaS activation date for legacy agency migration.
- * Reads from process.env.SAAS_ACTIVATION_DATE if provided.
+ * Requires an explicit parameter or process.env.SAAS_ACTIVATION_DATE.
+ * Throws an error if no activation date is configured.
  */
 export function getSaasActivationDate(customDate?: Date | string): Date {
   if (customDate instanceof Date && !isNaN(customDate.getTime())) {
@@ -44,19 +42,22 @@ export function getSaasActivationDate(customDate?: Date | string): Date {
     const parsed = new Date(envDate);
     if (!isNaN(parsed.getTime())) return parsed;
   }
-  return new Date(DEFAULT_SAAS_ACTIVATION_DATE_ISO);
+  throw new Error(
+    "SAAS_ACTIVATION_DATE is not configured. An explicit launch date must be provided for legacy agency migration.",
+  );
 }
 
 /**
  * Evaluates the authoritative SaaS subscription/trial state for an agency.
  *
  * Migration policy for legacy agencies (created before activationDate):
- *   effectiveTrialStart = max(businessCreatedAt, activationDate)
+ *   If activationDate is explicitly configured:
+ *     effectiveTrialStart = max(businessCreatedAt, activationDate)
+ *   Otherwise, standard creation date is used.
  *
  * This guarantees:
  * - Newly registered agencies always get exactly 30 days from activation.
- * - Pre-launch agencies are not immediately expired; they get 30 days from
- *   the controlled activation date.
+ * - Pre-launch agencies are not immediately expired when an activation date is provided.
  * - Trial resets are impossible: the cutoff is a fixed server configuration and
  *   clients cannot delete or recreate the subscription document.
  */
@@ -75,7 +76,7 @@ export function evaluateAgencySubscriptionState(
     employeeLimit?: number;
   },
   now: Date = new Date(),
-  activationDate: Date = getSaasActivationDate(),
+  activationDate?: Date,
 ): SaasSubscriptionContract {
   const graceDays = existingSubscription?.graceDays ?? 7;
   const graceDurationMs = graceDays * ONE_DAY_MS;
@@ -91,12 +92,14 @@ export function evaluateAgencySubscriptionState(
   if (existingSubscription?.trialStartsAt) {
     // Existing subscription document: always honour the stored trialStartsAt.
     trialStart = existingSubscription.trialStartsAt;
-  } else {
-    // No subscription document (legacy or new agency):
-    // Apply migration policy — anchor to max(createdAt, activationDate).
+  } else if (activationDate) {
+    // Legacy migration with explicit activation cutoff
     trialStart = businessCreatedAt < activationDate
       ? activationDate
       : businessCreatedAt;
+  } else {
+    // Standard registration policy without migration override
+    trialStart = businessCreatedAt;
   }
 
   const trialEnd = existingSubscription?.trialEndsAt

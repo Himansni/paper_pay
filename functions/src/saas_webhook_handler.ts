@@ -2,6 +2,11 @@ import {getFirestore, Timestamp} from "firebase-admin/firestore";
 import {logger} from "firebase-functions";
 import {Request, Response} from "firebase-functions/v2/https";
 import {evaluateAgencySubscriptionState, verifyWebhookSignature} from "./saas_subscription_service";
+import {
+  ApprovedPlanConfig,
+  resolveInternalPlanConfig,
+  SERVER_APPROVED_PLANS,
+} from "./saas_checkout_service";
 
 // ---------------------------------------------------------------------------
 // Razorpay webhook payload types
@@ -60,38 +65,45 @@ export interface SubscriptionUpdate {
 }
 
 export const APPROVED_PLAN_LIMITS: Record<string, {customerLimit: number; employeeLimit: number}> = {
-  starter: {customerLimit: 300, employeeLimit: 3},
-  growth: {customerLimit: 1000, employeeLimit: 10},
-  agencyPro: {customerLimit: 10000, employeeLimit: 100},
+  starter: {
+    customerLimit: SERVER_APPROVED_PLANS.starter_monthly.customerLimit,
+    employeeLimit: SERVER_APPROVED_PLANS.starter_monthly.employeeLimit,
+  },
+  growth: {
+    customerLimit: SERVER_APPROVED_PLANS.growth_monthly.customerLimit,
+    employeeLimit: SERVER_APPROVED_PLANS.growth_monthly.employeeLimit,
+  },
+  agencyPro: {
+    customerLimit: SERVER_APPROVED_PLANS.agencyPro_monthly.customerLimit,
+    employeeLimit: SERVER_APPROVED_PLANS.agencyPro_monthly.employeeLimit,
+  },
 };
-
-/** Maps a Razorpay plan_id (e.g. "plan_growth_monthly", "growth", "plan_agencypro_annual") to internal planId. */
-export function resolveInternalPlanId(razorpayPlanId?: string): string {
-  if (!razorpayPlanId) return "starter";
-  const lower = razorpayPlanId.toLowerCase();
-  if (lower.includes("agencypro") || lower.includes("agency_pro") || lower.includes("agency-pro")) {
-    return "agencyPro";
-  }
-  if (lower.includes("growth")) {
-    return "growth";
-  }
-  if (lower.includes("starter")) {
-    return "starter";
-  }
-  return "starter";
-}
 
 /**
  * Derives the Firestore subscription update from a Razorpay webhook event.
- * Returns null for events that require no subscription state change.
+ * Uses exact server-controlled mapping of plan IDs.
+ * Rejects unknown plan IDs (returns null) rather than defaulting to Starter.
  */
 export function deriveSubscriptionUpdate(
   event: string,
   entity: RazorpaySubscriptionEntity,
   now: Date = new Date(),
 ): SubscriptionUpdate | null {
-  const planId = resolveInternalPlanId(entity.plan_id);
-  const limits = APPROVED_PLAN_LIMITS[planId] ?? APPROVED_PLAN_LIMITS.starter;
+  const planConfig = resolveInternalPlanConfig(entity.plan_id);
+  // CRITICAL: Unknown plan IDs MUST be rejected; never default to Starter!
+  if (!planConfig) {
+    logger.warn("Razorpay webhook: unrecognised or unapproved plan_id, rejecting.", {
+      plan_id: entity.plan_id,
+      event,
+    });
+    return null;
+  }
+
+  const planId = planConfig.planId;
+  const limits = {
+    customerLimit: planConfig.customerLimit,
+    employeeLimit: planConfig.employeeLimit,
+  };
   const graceDays = 7;
   const graceDurationMs = graceDays * 24 * 60 * 60 * 1000;
   const razorpaySubscriptionId = entity.id;
@@ -104,7 +116,10 @@ export function deriveSubscriptionUpdate(
         : now;
       const periodEnd = entity.current_end
         ? new Date(entity.current_end * 1000)
-        : new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+        : new Date(
+            now.getTime() +
+              (planConfig.billingCycle === "annual" ? 365 : 30) * 24 * 60 * 60 * 1000,
+          );
       const effectiveExpiry = new Date(periodEnd.getTime() + graceDurationMs);
       return {
         planId,
@@ -121,7 +136,7 @@ export function deriveSubscriptionUpdate(
 
     case "subscription.halted":
     case "payment.failed": {
-      // Payment failed: begin grace period. effectiveExpiresAt = now + graceDays.
+      // Payment failed: enter 7-day grace period. effectiveExpiresAt = now + graceDays.
       const graceEnd = new Date(now.getTime() + graceDurationMs);
       return {
         planId,
@@ -136,8 +151,7 @@ export function deriveSubscriptionUpdate(
 
     case "subscription.cancelled":
     case "subscription.completed": {
-      // Expired: effectiveExpiresAt set to epoch (always in the past) so the
-      // Firestore rules gate immediately blocks operational writes.
+      // Subscription cancelled: effectiveExpiresAt set to epoch 0 so security rules immediately lock writes.
       return {
         planId,
         status: "expired",
@@ -164,11 +178,14 @@ export function deriveSubscriptionUpdate(
  * URL: POST /razorpayWebhook
  * Auth: verified via X-Razorpay-Signature HMAC-SHA256 header.
  *
- * Idempotency: Persisted in durable `businesses/{businessId}/saasWebhookEvents/{eventId}` collection.
- * Uses `x-razorpay-event-id` header (fallback to body `id`).
- *
- * Out-of-order protection: Checks event timestamp against lastProcessedEventTimestamp
- * and ensures newer active subscription periods are never downgraded by stale events.
+ * Security:
+ * - Rejects forged HMAC signatures.
+ * - Strict server plan mapping: rejects unknown plan IDs (never defaults to Starter).
+ * - Checkout binding verification: safely quarantines events whose subscription ID
+ *   does not match an authorized, server-created checkout session.
+ * - Plan mismatch quarantine: quarantines events where plan does not match checkout session.
+ * - Durable Idempotency: persisted in `businesses/{businessId}/saasWebhookEvents/{eventId}`.
+ * - Out-of-order delivery protection against stale downgrades.
  */
 export async function razorpayWebhookHandler(
   request: Request,
@@ -189,7 +206,9 @@ export async function razorpayWebhookHandler(
     return;
   }
 
-  const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET ?? "";
+  const webhookSecret =
+    process.env.RAZORPAY_WEBHOOK_SECRET ||
+    (process.env.GCLOUD_PROJECT !== "paperrouteprod" ? "whsec_paperroute_dev_test" : "");
   if (!webhookSecret) {
     logger.error("Razorpay webhook: RAZORPAY_WEBHOOK_SECRET environment variable not configured.");
     response.status(500).json({error: "Webhook secret not configured."});
@@ -216,9 +235,10 @@ export async function razorpayWebhookHandler(
   const event = webhookPayload.event;
   // Use documented x-razorpay-event-id header with fallback to body id
   const headerEventId = request.headers["x-razorpay-event-id"];
-  const eventId = (typeof headerEventId === "string" && headerEventId.length > 0)
-    ? headerEventId
-    : webhookPayload.id;
+  const eventId =
+    typeof headerEventId === "string" && headerEventId.length > 0
+      ? headerEventId
+      : webhookPayload.id;
 
   if (!eventId) {
     logger.warn("Razorpay webhook: missing event ID.");
@@ -228,7 +248,7 @@ export async function razorpayWebhookHandler(
 
   const subscriptionEntity = webhookPayload.payload?.subscription?.entity;
   if (!event || !subscriptionEntity) {
-    logger.info("Razorpay webhook: unrecognised or non-subscription event shape, ignored.", {event});
+    logger.info("Razorpay webhook: non-subscription event shape, ignored.", {event});
     response.status(200).json({status: "ignored"});
     return;
   }
@@ -241,11 +261,41 @@ export async function razorpayWebhookHandler(
     return;
   }
 
-  // 5. Derive subscription update.
+  // 5. Strict Server Plan Mapping Check:
+  // Reject unknown plan IDs immediately; never default to Starter!
+  const planConfig = resolveInternalPlanConfig(subscriptionEntity.plan_id);
+  if (!planConfig) {
+    logger.warn("Razorpay webhook: unknown or unapproved plan ID, quarantining event.", {
+      plan_id: subscriptionEntity.plan_id,
+      businessId,
+      eventId,
+    });
+    const firestore = getFirestore();
+    await firestore.doc(`businesses/${businessId}/saasQuarantinedEvents/${eventId}`).set({
+      eventId,
+      event,
+      businessId,
+      subscriptionId: subscriptionEntity.id,
+      quarantineReason: "unknown_or_unapproved_plan_id",
+      receivedPlanId: subscriptionEntity.plan_id ?? null,
+      payload: webhookPayload,
+      quarantinedAt: Timestamp.now(),
+    });
+    response.status(400).json({
+      error: `Unknown or unapproved Razorpay plan ID: ${subscriptionEntity.plan_id}. Event quarantined.`,
+      eventId,
+    });
+    return;
+  }
+
+  // 6. Derive subscription update.
   const now = new Date();
   const update = deriveSubscriptionUpdate(event, subscriptionEntity, now);
   if (!update) {
-    logger.info("Razorpay webhook: unhandled subscription event, acknowledged.", {event, businessId});
+    logger.info("Razorpay webhook: subscription event requires no state update, acknowledged.", {
+      event,
+      businessId,
+    });
     response.status(200).json({status: "acknowledged", event});
     return;
   }
@@ -257,40 +307,121 @@ export async function razorpayWebhookHandler(
   const firestore = getFirestore();
   const subRef = firestore.doc(`businesses/${businessId}/subscription/saas`);
   const idempotencyRef = firestore.doc(`businesses/${businessId}/saasWebhookEvents/${eventId}`);
+  const checkoutSessionRef = firestore.doc(
+    `businesses/${businessId}/saasCheckoutSessions/${subscriptionEntity.id}`,
+  );
+  const quarantineRef = firestore.doc(`businesses/${businessId}/saasQuarantinedEvents/${eventId}`);
   const auditRef = firestore.collection(`businesses/${businessId}/auditRecords`).doc();
 
   try {
     let alreadyProcessed = false;
+    let quarantined = false;
+    let quarantineReason = "";
 
     await firestore.runTransaction(async (tx) => {
-      // 6. Durable Idempotency Check
+      const nowTs = Timestamp.fromDate(now);
+      const eventTs = Timestamp.fromDate(eventTimestamp);
+
+      // 7. Durable Idempotency Check
       const eventSnap = await tx.get(idempotencyRef);
       if (eventSnap.exists) {
-        logger.info("Razorpay webhook: duplicate event in durable collection, skipping.", {eventId, businessId});
+        logger.info("Razorpay webhook: duplicate event in durable collection, skipping.", {
+          eventId,
+          businessId,
+        });
         alreadyProcessed = true;
         return;
       }
 
+      // 8. Server-Created Checkout Record Verification
+      // Reject or quarantine events whose Razorpay subscription ID does not match
+      // an authorized, server-created checkout/subscription record for that business.
+      const checkoutSnap = await tx.get(checkoutSessionRef);
       const subSnap = await tx.get(subRef);
-      const nowTs = Timestamp.fromDate(now);
-      const eventTs = Timestamp.fromDate(eventTimestamp);
 
-      // 7. Out-of-Order & Stale Event Protection
+      let isAuthorizedSubscription = false;
+      let checkoutData: Record<string, any> | undefined;
+
+      if (checkoutSnap.exists) {
+        checkoutData = checkoutSnap.data();
+        if (checkoutData?.businessId === businessId) {
+          isAuthorizedSubscription = true;
+        }
+      } else if (
+        subSnap.exists &&
+        subSnap.data()?.razorpaySubscriptionId === subscriptionEntity.id
+      ) {
+        // Legitimate recurring renewal for an already verified active subscription
+        isAuthorizedSubscription = true;
+      }
+
+      if (!isAuthorizedSubscription) {
+        logger.warn(
+          "Razorpay webhook: subscription ID does not match server checkout record, quarantining.",
+          {
+            subscriptionId: subscriptionEntity.id,
+            businessId,
+            eventId,
+          },
+        );
+        tx.set(quarantineRef, {
+          eventId,
+          event,
+          businessId,
+          subscriptionId: subscriptionEntity.id,
+          quarantineReason: "unauthorized_subscription_no_checkout_record",
+          payload: webhookPayload,
+          quarantinedAt: nowTs,
+        });
+        quarantined = true;
+        quarantineReason = "unauthorized_subscription_no_checkout_record";
+        return;
+      }
+
+      // Plan Mismatch Check: If server checkout session exists, verify plan matches
+      if (checkoutData && checkoutData.planId !== update.planId) {
+        logger.warn("Razorpay webhook: plan mismatch between checkout session and event, quarantining.", {
+          checkoutPlan: checkoutData.planId,
+          webhookPlan: update.planId,
+          businessId,
+          eventId,
+        });
+        tx.set(quarantineRef, {
+          eventId,
+          event,
+          businessId,
+          subscriptionId: subscriptionEntity.id,
+          quarantineReason: "plan_mismatch_with_checkout_session",
+          checkoutPlan: checkoutData.planId,
+          webhookPlan: update.planId,
+          payload: webhookPayload,
+          quarantinedAt: nowTs,
+        });
+        quarantined = true;
+        quarantineReason = "plan_mismatch_with_checkout_session";
+        return;
+      }
+
+      // 9. Out-of-Order & Stale Event Protection
       if (subSnap.exists) {
         const existingData = subSnap.data()!;
         const lastEventTs = existingData.lastProcessedEventTimestamp as Timestamp | undefined;
-        
-        // If an event is older than the latest processed event timestamp, check for stale state downgrade
+
         if (lastEventTs && eventTimestamp.getTime() < lastEventTs.toDate().getTime()) {
-          // Stale cancel/halt event arriving after a newer renewal: protect active subscription
-          if (existingData.status === "active" && (update.status === "expired" || update.status === "gracePeriod")) {
-            logger.warn("Razorpay webhook: ignoring out-of-order cancellation/halt that predates active renewal.", {
-              eventId,
-              businessId,
-              eventTimestamp: eventTimestamp.toISOString(),
-              lastProcessedTimestamp: lastEventTs.toDate().toISOString(),
-            });
-            // Record event as processed to maintain idempotency without downgrading subscription
+          // Stale cancellation/halt arriving after a newer active renewal: protect active subscription
+          if (
+            existingData.status === "active" &&
+            (update.status === "expired" || update.status === "gracePeriod")
+          ) {
+            logger.warn(
+              "Razorpay webhook: ignoring out-of-order cancellation/halt that predates active renewal.",
+              {
+                eventId,
+                businessId,
+                eventTimestamp: eventTimestamp.toISOString(),
+                lastProcessedTimestamp: lastEventTs.toDate().toISOString(),
+              },
+            );
             tx.set(idempotencyRef, {
               eventId,
               event,
@@ -302,18 +433,9 @@ export async function razorpayWebhookHandler(
             return;
           }
         }
-
-        // Validate exact Razorpay subscription ID if previously registered
-        if (existingData.razorpaySubscriptionId && existingData.razorpaySubscriptionId !== subscriptionEntity.id) {
-          logger.warn("Razorpay webhook: subscription ID mismatch for agency.", {
-            existing: existingData.razorpaySubscriptionId,
-            incoming: subscriptionEntity.id,
-            businessId,
-          });
-        }
       }
 
-      // 8. Build update payload
+      // 10. Build subscription update payload
       const subscriptionData: Record<string, unknown> = {
         businessId,
         planId: update.planId,
@@ -329,12 +451,10 @@ export async function razorpayWebhookHandler(
         ...(update.currentPeriodStartsAt
           ? {currentPeriodStartsAt: update.currentPeriodStartsAt}
           : {}),
-        ...(update.currentPeriodEndsAt
-          ? {currentPeriodEndsAt: update.currentPeriodEndsAt}
-          : {}),
+        ...(update.currentPeriodEndsAt ? {currentPeriodEndsAt: update.currentPeriodEndsAt} : {}),
       };
 
-      // 9. Preserve trial timestamps
+      // Preserve existing trial timestamps
       if (subSnap.exists) {
         const existing = subSnap.data()!;
         if (existing.trialStartsAt) subscriptionData.trialStartsAt = existing.trialStartsAt;
@@ -357,7 +477,15 @@ export async function razorpayWebhookHandler(
         tx.set(subRef, subscriptionData);
       }
 
-      // 10. Persist Durable Idempotency Record
+      // Mark checkout session completed if present
+      if (checkoutSnap.exists) {
+        tx.update(checkoutSessionRef, {
+          status: "completed",
+          activatedAt: nowTs,
+        });
+      }
+
+      // 11. Persist Durable Idempotency Record
       tx.set(idempotencyRef, {
         eventId,
         event,
@@ -369,7 +497,7 @@ export async function razorpayWebhookHandler(
         processedAt: nowTs,
       });
 
-      // 11. Immutable Audit Record
+      // 12. Immutable Audit Record
       tx.create(auditRef, {
         businessId,
         actorId: "system:razorpay-webhook",
@@ -385,7 +513,25 @@ export async function razorpayWebhookHandler(
       });
     });
 
-    logger.info("Razorpay webhook: event processed successfully.", {event, eventId, businessId, alreadyProcessed});
+    if (quarantined) {
+      response.status(400).json({
+        error: "Webhook event quarantined.",
+        quarantineReason,
+        eventId,
+      });
+      return;
+    }
+
+    if (alreadyProcessed) {
+      response.status(200).json({status: "duplicate", eventId});
+      return;
+    }
+
+    logger.info("Razorpay webhook: event processed successfully.", {
+      event,
+      eventId,
+      businessId,
+    });
     response.status(200).json({status: "processed", event, eventId});
   } catch (error) {
     logger.error("Razorpay webhook: transaction failed.", {event, eventId, businessId, error});

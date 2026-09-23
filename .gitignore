@@ -74,3 +74,4 @@ firebase-tools.json
 /node_modules/
 /functions/node_modules/
 /functions/lib/
+/scripts/backups/

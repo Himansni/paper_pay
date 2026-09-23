@@ -37,14 +37,38 @@ export interface ApprovedPlanConfig {
 }
 
 /**
+ * Provisional default plan pricing (in paise).
+ * Configurable via environment variables (e.g. PLAN_PRICE_STARTER_MONTHLY).
+ */
+export const PROVISIONAL_DEFAULT_PRICING_PAISE = {
+  starter: { monthly: 29900, annual: 299900 },
+  growth: { monthly: 59900, annual: 599900 },
+  agencyPro: { monthly: 129900, annual: 1299900 },
+};
+
+export function getProvisionalPlanPrice(
+  planId: SaasPlanId,
+  billingCycle: SaasBillingCycle,
+): number {
+  const envVar = `PLAN_PRICE_${planId.toUpperCase()}_${billingCycle.toUpperCase()}`;
+  const envVal = process.env[envVar];
+  if (envVal) {
+    const parsed = parseInt(envVal, 10);
+    if (!isNaN(parsed) && parsed > 0) return parsed;
+  }
+  return PROVISIONAL_DEFAULT_PRICING_PAISE[planId][billingCycle];
+}
+
+/**
  * Authoritative server-approved SaaS plan configurations and Razorpay plan mappings.
  * Razorpay recurring subscriptions require server-approved plan IDs and cycle counts.
+ * Prices remain configurable and provisional.
  */
 export const SERVER_APPROVED_PLANS: Record<string, ApprovedPlanConfig> = {
   starter_monthly: {
     planId: "starter",
     billingCycle: "monthly",
-    amountPaise: 29900,
+    amountPaise: getProvisionalPlanPrice("starter", "monthly"),
     currency: "INR",
     totalCount: 120, // 10 years monthly recurring
     razorpayPlanId: process.env.RAZORPAY_PLAN_STARTER_MONTHLY || "plan_starter_monthly",
@@ -54,7 +78,7 @@ export const SERVER_APPROVED_PLANS: Record<string, ApprovedPlanConfig> = {
   starter_annual: {
     planId: "starter",
     billingCycle: "annual",
-    amountPaise: 299900,
+    amountPaise: getProvisionalPlanPrice("starter", "annual"),
     currency: "INR",
     totalCount: 10, // 10 years annual recurring
     razorpayPlanId: process.env.RAZORPAY_PLAN_STARTER_ANNUAL || "plan_starter_annual",
@@ -64,7 +88,7 @@ export const SERVER_APPROVED_PLANS: Record<string, ApprovedPlanConfig> = {
   growth_monthly: {
     planId: "growth",
     billingCycle: "monthly",
-    amountPaise: 59900,
+    amountPaise: getProvisionalPlanPrice("growth", "monthly"),
     currency: "INR",
     totalCount: 120,
     razorpayPlanId: process.env.RAZORPAY_PLAN_GROWTH_MONTHLY || "plan_growth_monthly",
@@ -74,7 +98,7 @@ export const SERVER_APPROVED_PLANS: Record<string, ApprovedPlanConfig> = {
   growth_annual: {
     planId: "growth",
     billingCycle: "annual",
-    amountPaise: 599900,
+    amountPaise: getProvisionalPlanPrice("growth", "annual"),
     currency: "INR",
     totalCount: 10,
     razorpayPlanId: process.env.RAZORPAY_PLAN_GROWTH_ANNUAL || "plan_growth_annual",
@@ -84,7 +108,7 @@ export const SERVER_APPROVED_PLANS: Record<string, ApprovedPlanConfig> = {
   agencyPro_monthly: {
     planId: "agencyPro",
     billingCycle: "monthly",
-    amountPaise: 129900,
+    amountPaise: getProvisionalPlanPrice("agencyPro", "monthly"),
     currency: "INR",
     totalCount: 120,
     razorpayPlanId: process.env.RAZORPAY_PLAN_AGENCYPRO_MONTHLY || "plan_agencypro_monthly",
@@ -94,7 +118,7 @@ export const SERVER_APPROVED_PLANS: Record<string, ApprovedPlanConfig> = {
   agencyPro_annual: {
     planId: "agencyPro",
     billingCycle: "annual",
-    amountPaise: 1299900,
+    amountPaise: getProvisionalPlanPrice("agencyPro", "annual"),
     currency: "INR",
     totalCount: 10,
     razorpayPlanId: process.env.RAZORPAY_PLAN_AGENCYPRO_ANNUAL || "plan_agencypro_annual",
@@ -122,16 +146,16 @@ export function resolveInternalPlanConfig(razorpayPlanId?: string): ApprovedPlan
 
 export const PLAN_PRICING_PAISE: Record<string, {monthly: number; annual: number}> = {
   starter: {
-    monthly: SERVER_APPROVED_PLANS.starter_monthly.amountPaise,
-    annual: SERVER_APPROVED_PLANS.starter_annual.amountPaise,
+    monthly: getProvisionalPlanPrice("starter", "monthly"),
+    annual: getProvisionalPlanPrice("starter", "annual"),
   },
   growth: {
-    monthly: SERVER_APPROVED_PLANS.growth_monthly.amountPaise,
-    annual: SERVER_APPROVED_PLANS.growth_annual.amountPaise,
+    monthly: getProvisionalPlanPrice("growth", "monthly"),
+    annual: getProvisionalPlanPrice("growth", "annual"),
   },
   agencyPro: {
-    monthly: SERVER_APPROVED_PLANS.agencyPro_monthly.amountPaise,
-    annual: SERVER_APPROVED_PLANS.agencyPro_annual.amountPaise,
+    monthly: getProvisionalPlanPrice("agencyPro", "monthly"),
+    annual: getProvisionalPlanPrice("agencyPro", "annual"),
   },
 };
 

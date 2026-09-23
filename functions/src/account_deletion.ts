@@ -218,7 +218,7 @@ export async function requestAccountDeletionHandler(
     }
 
     const ownerInvites = await firestore
-      .collection(`businesses/${businessId}/invitations`)
+      .collectionGroup("invitations")
       .where("email", "==", identity.email)
       .get();
     for (const inviteDoc of ownerInvites.docs) {
@@ -358,7 +358,7 @@ export async function requestAccountDeletionHandler(
 
     // Anonymize any invitations referencing this employee's email
     const employeeInvites = await firestore
-      .collection(`businesses/${businessId}/invitations`)
+      .collectionGroup("invitations")
       .where("email", "==", identity.email)
       .get();
     for (const inviteDoc of employeeInvites.docs) {

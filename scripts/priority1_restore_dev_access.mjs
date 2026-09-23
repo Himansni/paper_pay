@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { initializeApp } from 'firebase/app';
 import {
   getAuth,
+  createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
 } from 'firebase/auth';
 import {
@@ -20,6 +22,18 @@ import {
 } from 'firebase/firestore';
 
 const projectId = 'paperroutedev';
+
+// Production safety guard: strictly prevent execution against any production environment
+if (
+  projectId !== 'paperroutedev' ||
+  process.env.GCLOUD_PROJECT === 'paperroute-production' ||
+  process.env.GCLOUD_PROJECT === 'paperroute-production-in' ||
+  process.env.FIREBASE_PROJECT === 'paperroute-production'
+) {
+  throw new Error(
+    'CRITICAL SAFETY FAILURE: This restoration script is restricted strictly to paperroutedev. Aborting to protect production.',
+  );
+}
 const apiKey = 'AIzaSyAiqXdkok8p84jUTYKA92eleqpJt4U5i00';
 const appId = '1:720004989036:web:89c7f8865549ef3c4c9849';
 
@@ -84,23 +98,6 @@ async function writeAdminFirestoreDoc(path, data) {
   }
 }
 
-async function setAdminUserPassword(uid, password) {
-  const res = await fetch(
-    `https://identitytoolkit.googleapis.com/v1/projects/${projectId}/accounts:update`,
-    {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${adminToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ localId: uid, password, emailVerified: true }),
-    },
-  );
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Failed to set password for ${uid}: ${err}`);
-  }
-}
 
 async function main() {
   console.log('================================================================');
@@ -282,16 +279,8 @@ async function main() {
   assert.equal(auditUnintentionallyLocked, 0, `Detected ${auditUnintentionallyLocked} unintentionally locked agencies!`);
   console.log('   ✔ Verification confirmed: 0 agencies remain unintentionally locked out.\n');
 
-  // STEP 6: Test Real Authenticated Operational Write on a Previously Locked Agency
-  console.log('STEP 6: Testing real authenticated operational write on previously locked legacy agency...');
-  const testBizId = 'xFHZnt4jaXFqe8Q4u8YL'; // One of the 44 legacy agencies
-  const testHeadUid = '30FkEiq3fhf76EX9D16tlzGMXZu2';
-  const testHeadEmail = 'synthetic-head1-1790142229374@paperroute.test';
-  const testPassword = 'Password123!';
-
-  console.log(`   Selected agency: ${testBizId}`);
-  console.log(`   Authenticating as Head: ${testHeadEmail} (UID: ${testHeadUid})...`);
-  await setAdminUserPassword(testHeadUid, testPassword);
+  // STEP 6: Test Real Authenticated Operational Write on a Development Agency
+  console.log('STEP 6: Testing real authenticated operational write on Development agency...');
 
   const clientApp = initializeApp(
     {
@@ -307,9 +296,76 @@ async function main() {
   const db = getFirestore(clientApp);
 
   try {
-    const cred = await signInWithEmailAndPassword(auth, testHeadEmail, testPassword);
-    assert.equal(cred.user.uid, testHeadUid);
-    console.log('   ✔ Head successfully signed in via Firebase Auth.');
+    let testBizId;
+    let testHeadUid;
+
+    if (process.env.DEV_TEST_HEAD_EMAIL && process.env.DEV_TEST_HEAD_PASSWORD) {
+      // Use externally supplied test credentials
+      const testHeadEmail = process.env.DEV_TEST_HEAD_EMAIL;
+      const testHeadPassword = process.env.DEV_TEST_HEAD_PASSWORD;
+      testBizId = process.env.DEV_TEST_BIZ_ID || 'xFHZnt4jaXFqe8Q4u8YL';
+      console.log(`   Authenticating as Head via externally supplied credentials: ${testHeadEmail}...`);
+      const cred = await signInWithEmailAndPassword(auth, testHeadEmail, testHeadPassword);
+      testHeadUid = cred.user.uid;
+      console.log(`   ✔ Head successfully signed in via Firebase Auth (UID: ${testHeadUid}).`);
+    } else {
+      // Use isolated ephemeral development fixture
+      console.log('   [i] No external credentials supplied via DEV_TEST_HEAD_PASSWORD.');
+      console.log('   [i] Provisioning isolated ephemeral test fixture in paperroutedev...');
+      const runId = `ephem_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
+      testBizId = `biz_${runId}`;
+      const ephemeralEmail = `head_${runId}@paperroute.test`;
+      const ephemeralPassword = `Dev!${crypto.randomBytes(16).toString('hex')}`;
+
+      const cred = await createUserWithEmailAndPassword(auth, ephemeralEmail, ephemeralPassword);
+      testHeadUid = cred.user.uid;
+
+      // Verify email via Admin API
+      await fetch(
+        `https://identitytoolkit.googleapis.com/v1/projects/${projectId}/accounts:update`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${adminToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ localId: testHeadUid, emailVerified: true }),
+        },
+      );
+      await cred.user.getIdToken(true);
+
+      // Provision business and active trial subscription doc via Admin API
+      const now = new Date();
+      const trialEnd = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+      const effectiveExpiresAt = new Date(trialEnd.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+      await writeAdminFirestoreDoc(`businesses/${testBizId}`, {
+        name: 'Ephemeral Dev Verification Agency',
+        status: 'active',
+        createdAt: now,
+      });
+      await writeAdminFirestoreDoc(`businesses/${testBizId}/members/${testHeadUid}`, {
+        businessId: testBizId,
+        email: ephemeralEmail,
+        role: 'head',
+        status: 'active',
+        createdAt: now,
+      });
+      await writeAdminFirestoreDoc(`businesses/${testBizId}/subscription/saas`, {
+        businessId: testBizId,
+        planId: 'trial',
+        status: 'trial',
+        trialStartsAt: now,
+        trialEndsAt: trialEnd,
+        graceDays: 7,
+        effectiveExpiresAt,
+        customerLimit: 500,
+        employeeLimit: 10,
+        createdAt: now,
+        updatedAt: now,
+      });
+      console.log(`   ✔ Ephemeral test fixture provisioned for agency ${testBizId} with active trial.`);
+    }
 
     // Execute real operational area creation and update via client Firestore SDK (evaluated by Firestore Security Rules)
     const areaId = `area_op_${Date.now()}`;

@@ -54,3 +54,54 @@ export const webhookRuntime = {
   enforceAppCheck: false,
 };
 
+/**
+ * Positively identifies whether the current runtime environment is a local emulator
+ * or an explicitly approved development project ("paperroutedev").
+ * Unsafe negative project-ID comparisons (e.g. `!== "..."`) are strictly prohibited.
+ */
+export function isExplicitDevOrEmulatorEnvironment(): boolean {
+  const projectId =
+    process.env.GCLOUD_PROJECT ||
+    process.env.GOOGLE_CLOUD_PROJECT ||
+    "";
+  const isEmulator =
+    process.env.FUNCTIONS_EMULATOR === "true" ||
+    Boolean(process.env.FIREBASE_EMULATOR_HUB);
+  const isDevProject = projectId === "paperroutedev";
+  return isEmulator || isDevProject;
+}
+
+/**
+ * Checks if simulated checkout is permitted.
+ * Simulation is ONLY permitted when:
+ * 1. An explicit Development or local emulator environment is positively identified, AND
+ * 2. Simulation has been deliberately enabled via ALLOW_SIMULATED_CHECKOUT === "true".
+ * In Production or any unverified environment, this strictly returns false.
+ */
+export function isSimulatedCheckoutPermitted(): boolean {
+  if (!isExplicitDevOrEmulatorEnvironment()) {
+    return false;
+  }
+  return process.env.ALLOW_SIMULATED_CHECKOUT === "true";
+}
+
+/**
+ * Resolves the Razorpay webhook signing secret.
+ * In deployed Production or any unverified environment, fallback secrets are strictly
+ * prohibited and a securely configured RAZORPAY_WEBHOOK_SECRET is required.
+ * Returns null (failing closed) when missing.
+ */
+export function getWebhookSigningSecret(): string | null {
+  if (process.env.RAZORPAY_WEBHOOK_SECRET) {
+    return process.env.RAZORPAY_WEBHOOK_SECRET;
+  }
+  // In deployed Production or any unverified environment, fallback secrets are strictly prohibited.
+  // Fail closed when missing.
+  if (!isExplicitDevOrEmulatorEnvironment()) {
+    return null;
+  }
+  // In positively identified Development or local emulator environments, allow dev test fallback secret
+  return "whsec_paperroute_dev_test";
+}
+
+

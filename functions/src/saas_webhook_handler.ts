@@ -7,6 +7,9 @@ import {
   resolveInternalPlanConfig,
   SERVER_APPROVED_PLANS,
 } from "./saas_checkout_service";
+import {getWebhookSigningSecret} from "./environment";
+
+export {getWebhookSigningSecret};
 
 // ---------------------------------------------------------------------------
 // Razorpay webhook payload types
@@ -206,9 +209,7 @@ export async function razorpayWebhookHandler(
     return;
   }
 
-  const webhookSecret =
-    process.env.RAZORPAY_WEBHOOK_SECRET ||
-    (process.env.GCLOUD_PROJECT !== "paperrouteprod" ? "whsec_paperroute_dev_test" : "");
+  const webhookSecret = getWebhookSigningSecret();
   if (!webhookSecret) {
     logger.error("Razorpay webhook: RAZORPAY_WEBHOOK_SECRET environment variable not configured.");
     response.status(500).json({error: "Webhook secret not configured."});

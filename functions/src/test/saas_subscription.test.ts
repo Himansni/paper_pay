@@ -14,6 +14,11 @@ import {
   SERVER_APPROVED_PLANS,
   resolveInternalPlanConfig,
 } from "../saas_checkout_service";
+import {
+  isExplicitDevOrEmulatorEnvironment,
+  isSimulatedCheckoutPermitted,
+  getWebhookSigningSecret,
+} from "../environment";
 import {createHmac} from "node:crypto";
 
 describe("SaaS Activation Date Configuration (Problem 3)", () => {
@@ -431,4 +436,138 @@ describe("Webhook Server Binding, Plan Verification & Quarantine Logic (Problem 
     assert.equal(isAuthorized, true);
   });
 });
+
+describe("Simulation Environment Isolation & Webhook Fallback Protection (Security Patch)", () => {
+  const envBackup = {
+    GCLOUD_PROJECT: process.env.GCLOUD_PROJECT,
+    GOOGLE_CLOUD_PROJECT: process.env.GOOGLE_CLOUD_PROJECT,
+    FUNCTIONS_EMULATOR: process.env.FUNCTIONS_EMULATOR,
+    FIREBASE_EMULATOR_HUB: process.env.FIREBASE_EMULATOR_HUB,
+    ALLOW_SIMULATED_CHECKOUT: process.env.ALLOW_SIMULATED_CHECKOUT,
+    RAZORPAY_WEBHOOK_SECRET: process.env.RAZORPAY_WEBHOOK_SECRET,
+  };
+
+  afterEach(() => {
+    for (const [key, val] of Object.entries(envBackup)) {
+      if (val !== undefined) {
+        process.env[key] = val;
+      } else {
+        delete process.env[key];
+      }
+    }
+  });
+
+  describe("isExplicitDevOrEmulatorEnvironment", () => {
+    it("returns false for Production project IDs", () => {
+      delete process.env.FUNCTIONS_EMULATOR;
+      delete process.env.FIREBASE_EMULATOR_HUB;
+
+      process.env.GCLOUD_PROJECT = "paperroute-production";
+      assert.equal(isExplicitDevOrEmulatorEnvironment(), false);
+
+      process.env.GCLOUD_PROJECT = "paperroute-production-in";
+      assert.equal(isExplicitDevOrEmulatorEnvironment(), false);
+
+      process.env.GCLOUD_PROJECT = "paperrouteprod";
+      assert.equal(isExplicitDevOrEmulatorEnvironment(), false);
+
+      process.env.GCLOUD_PROJECT = "unauthorized-custom-project";
+      assert.equal(isExplicitDevOrEmulatorEnvironment(), false);
+
+      delete process.env.GCLOUD_PROJECT;
+      assert.equal(isExplicitDevOrEmulatorEnvironment(), false);
+    });
+
+    it("returns true only for paperroutedev or active emulator", () => {
+      delete process.env.FUNCTIONS_EMULATOR;
+      delete process.env.FIREBASE_EMULATOR_HUB;
+
+      process.env.GCLOUD_PROJECT = "paperroutedev";
+      assert.equal(isExplicitDevOrEmulatorEnvironment(), true);
+
+      delete process.env.GCLOUD_PROJECT;
+      process.env.FUNCTIONS_EMULATOR = "true";
+      assert.equal(isExplicitDevOrEmulatorEnvironment(), true);
+
+      delete process.env.FUNCTIONS_EMULATOR;
+      process.env.FIREBASE_EMULATOR_HUB = "localhost:4400";
+      assert.equal(isExplicitDevOrEmulatorEnvironment(), true);
+    });
+  });
+
+  describe("isSimulatedCheckoutPermitted", () => {
+    it("strictly BLOCKS simulated checkout in Production even if deliberately enabled", () => {
+      delete process.env.FUNCTIONS_EMULATOR;
+      delete process.env.FIREBASE_EMULATOR_HUB;
+      process.env.ALLOW_SIMULATED_CHECKOUT = "true";
+
+      process.env.GCLOUD_PROJECT = "paperroute-production";
+      assert.equal(isSimulatedCheckoutPermitted(), false, "Production paperroute-production must NEVER permit simulated checkout");
+
+      process.env.GCLOUD_PROJECT = "paperroute-production-in";
+      assert.equal(isSimulatedCheckoutPermitted(), false, "Production paperroute-production-in must NEVER permit simulated checkout");
+    });
+
+    it("blocks simulated checkout in Development if not deliberately enabled", () => {
+      delete process.env.FUNCTIONS_EMULATOR;
+      delete process.env.FIREBASE_EMULATOR_HUB;
+      process.env.GCLOUD_PROJECT = "paperroutedev";
+      delete process.env.ALLOW_SIMULATED_CHECKOUT;
+
+      assert.equal(isSimulatedCheckoutPermitted(), false, "Dev environment must not simulate without explicit ALLOW_SIMULATED_CHECKOUT=true");
+
+      process.env.ALLOW_SIMULATED_CHECKOUT = "false";
+      assert.equal(isSimulatedCheckoutPermitted(), false);
+    });
+
+    it("permits simulated checkout ONLY when in Dev/Emulator AND deliberately enabled", () => {
+      delete process.env.FUNCTIONS_EMULATOR;
+      delete process.env.FIREBASE_EMULATOR_HUB;
+      process.env.GCLOUD_PROJECT = "paperroutedev";
+      process.env.ALLOW_SIMULATED_CHECKOUT = "true";
+
+      assert.equal(isSimulatedCheckoutPermitted(), true);
+    });
+  });
+
+  describe("getWebhookSigningSecret & Fallback Protection", () => {
+    it("strictly returns null and fails closed in Production when secret is missing (NEVER returns fallback)", () => {
+      delete process.env.FUNCTIONS_EMULATOR;
+      delete process.env.FIREBASE_EMULATOR_HUB;
+      delete process.env.RAZORPAY_WEBHOOK_SECRET;
+
+      process.env.GCLOUD_PROJECT = "paperroute-production";
+      assert.equal(getWebhookSigningSecret(), null, "Production must fail closed without fallback webhook secret");
+
+      process.env.GCLOUD_PROJECT = "paperroute-production-in";
+      assert.equal(getWebhookSigningSecret(), null, "Production must fail closed without fallback webhook secret");
+
+      process.env.GCLOUD_PROJECT = "unknown-project";
+      assert.equal(getWebhookSigningSecret(), null);
+    });
+
+    it("returns securely configured secret in Production when present", () => {
+      delete process.env.FUNCTIONS_EMULATOR;
+      delete process.env.FIREBASE_EMULATOR_HUB;
+      process.env.GCLOUD_PROJECT = "paperroute-production";
+      process.env.RAZORPAY_WEBHOOK_SECRET = "live_prod_webhook_secret_secure_99";
+
+      assert.equal(getWebhookSigningSecret(), "live_prod_webhook_secret_secure_99");
+    });
+
+    it("allows dev test fallback secret only in positively identified paperroutedev or emulator", () => {
+      delete process.env.FUNCTIONS_EMULATOR;
+      delete process.env.FIREBASE_EMULATOR_HUB;
+      delete process.env.RAZORPAY_WEBHOOK_SECRET;
+
+      process.env.GCLOUD_PROJECT = "paperroutedev";
+      assert.equal(getWebhookSigningSecret(), "whsec_paperroute_dev_test");
+
+      delete process.env.GCLOUD_PROJECT;
+      process.env.FUNCTIONS_EMULATOR = "true";
+      assert.equal(getWebhookSigningSecret(), "whsec_paperroute_dev_test");
+    });
+  });
+});
+
 

@@ -1,6 +1,9 @@
 import {getFirestore, Timestamp} from "firebase-admin/firestore";
 import {logger} from "firebase-functions";
 import {CallableRequest, HttpsError} from "firebase-functions/v2/https";
+import {isSimulatedCheckoutPermitted} from "./environment";
+
+export {isSimulatedCheckoutPermitted};
 
 export type SaasPlanId = "starter" | "growth" | "agencyPro";
 export type SaasBillingCycle = "monthly" | "annual";
@@ -279,11 +282,9 @@ export async function createSaasCheckoutSessionHandler(
     }
     subscriptionId = data.id;
   } else {
-    // Simulator explicitly isolated from genuine checkout
-    const allowSimulated =
-      process.env.GCLOUD_PROJECT !== "paperrouteprod" ||
-      process.env.ALLOW_SIMULATED_CHECKOUT === "true";
-    if (!allowSimulated) {
+    // Simulator strictly isolated: permitted ONLY when positive Dev/Emulator environment is identified
+    // AND simulation has been deliberately enabled. Never permitted in Production.
+    if (!isSimulatedCheckoutPermitted()) {
       throw new HttpsError(
         "failed-precondition",
         "Razorpay checkout credentials (RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET) are not configured.",

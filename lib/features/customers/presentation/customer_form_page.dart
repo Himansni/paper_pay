@@ -317,8 +317,9 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
                     keyboardType: TextInputType.phone,
                     decoration: const InputDecoration(
                       labelText: 'Primary phone',
+                      hintText: 'Optional',
                     ),
-                    validator: _requiredText,
+                    validator: _optionalPhone,
                   ),
                   if (!_quickAddMode) ...[
                     const SizedBox(height: 14),
@@ -878,6 +879,15 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
 
   String? _requiredText(String? value) =>
       value == null || value.trim().isEmpty ? 'This field is required.' : null;
+
+  String? _optionalPhone(String? value) {
+    if (value == null || value.trim().isEmpty) return null;
+    final digits = CustomerSearchIndex.normalizePhone(value);
+    if (value.length > 24 || digits.length < 7 || digits.length > 15) {
+      return 'Enter a valid phone number (7-15 digits).';
+    }
+    return null;
+  }
 
   Future<void> _submit({bool addNext = false}) async {
     if (!_formKey.currentState!.validate()) return;

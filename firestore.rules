@@ -151,10 +151,8 @@ service cloud.firestore {
         && data.searchName is string
         && data.searchName.size() >= 2
         && data.phone is string
-        && data.phone.size() >= 7
         && data.phone.size() <= 24
         && data.searchPhone is string
-        && data.searchPhone.size() >= 7
         && data.searchPhone.size() <= 15
         && data.alternatePhone is string
         && data.alternatePhone.size() <= 24

@@ -264,11 +264,14 @@ class CustomerInput {
         'Enter a customer name between 2 and 100 characters.',
       );
     }
-    _validatePhone(value.phone, label: 'primary phone');
+    if (value.phone.isNotEmpty) {
+      _validatePhone(value.phone, label: 'primary phone');
+    }
     if (value.alternatePhone.isNotEmpty) {
       _validatePhone(value.alternatePhone, label: 'alternate phone');
-      if (CustomerSearchIndex.normalizePhone(value.alternatePhone) ==
-          CustomerSearchIndex.normalizePhone(value.phone)) {
+      if (value.phone.isNotEmpty &&
+          CustomerSearchIndex.normalizePhone(value.alternatePhone) ==
+              CustomerSearchIndex.normalizePhone(value.phone)) {
         throw const AppException(
           'Alternate phone must be different from the primary phone.',
         );

@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:excel/excel.dart';
 import 'package:paper_route/core/domain/local_date.dart';
 import 'package:paper_route/features/areas/domain/delivery_area.dart';
 import 'package:paper_route/features/auth/domain/app_user.dart';
@@ -56,7 +58,7 @@ class CustomerImportService {
           inQuotes = true;
           i++;
           continue;
-        } else if (char == ',') {
+        } else if (char == ',' || char == '\t') {
           currentRow.add(currentField.toString().trim());
           currentField.clear();
           i++;
@@ -98,7 +100,39 @@ class CustomerImportService {
     return rows;
   }
 
-  /// Maps raw CSV rows to [CustomerImportRow] instances and validates them.
+  /// Parses Excel (.xlsx) file bytes into a 2D string grid.
+  static List<List<String>> parseExcelBytes(List<int> bytes) {
+    final excel = Excel.decodeBytes(bytes);
+    final rows = <List<String>>[];
+    for (final table in excel.tables.keys) {
+      final sheet = excel.tables[table];
+      if (sheet == null || sheet.rows.isEmpty) continue;
+      for (final row in sheet.rows) {
+        final stringRow =
+            row.map((cell) {
+              if (cell == null || cell.value == null) return '';
+              return cell.value.toString().trim();
+            }).toList();
+        if (stringRow.any((cell) => cell.isNotEmpty)) {
+          rows.add(stringRow);
+        }
+      }
+      if (rows.isNotEmpty) break;
+    }
+    return rows;
+  }
+
+  /// Parses either CSV or XLSX bytes dynamically based on header magic bytes or filename.
+  static List<List<String>> parseBytes(List<int> bytes, {String? fileName}) {
+    final lowerName = fileName?.toLowerCase() ?? '';
+    final isZip = bytes.length >= 4 && bytes[0] == 0x50 && bytes[1] == 0x4B;
+    if (lowerName.endsWith('.xlsx') || isZip) {
+      return parseExcelBytes(bytes);
+    }
+    return parseCsv(utf8.decode(bytes, allowMalformed: true));
+  }
+
+  /// Maps raw CSV/Excel rows to [CustomerImportRow] instances and validates them.
   Future<CustomerImportValidationResult> validateRows({
     required List<List<String>> csvTable,
     required List<DeliveryArea> availableAreas,
@@ -132,20 +166,61 @@ class CustomerImportService {
     }
 
     final nameIdx = findIndex(['customer name', 'name', 'ग्राहक', 'नाम']);
-    final phoneIdx = findIndex(['mobile', 'phone', 'contact', 'फ़ोन', 'मोबाइल', 'फोन']);
-    final altPhoneIdx = findIndex(['alt phone', 'alternate', 'secondary', 'दूसरा फोन']);
+    final phoneIdx = findIndex([
+      'mobile',
+      'phone',
+      'contact',
+      'फ़ोन',
+      'मोबाइल',
+      'फोन',
+    ]);
+    final altPhoneIdx = findIndex([
+      'alt phone',
+      'alternate',
+      'secondary',
+      'दूसरा फोन',
+    ]);
     final areaIdx = findIndex(['area', 'route', 'इलाका', 'क्षेत्र']);
-    final houseIdx = findIndex(['house', 'flat', 'flat no', 'house no', 'मकान', 'फ्लैट']);
-    final buildingIdx = findIndex(['building', 'floor', 'tower', 'सोसायटी', 'मंजिल']);
+    final houseIdx = findIndex([
+      'house',
+      'flat',
+      'flat no',
+      'house no',
+      'मकान',
+      'फ्लैट',
+    ]);
+    final buildingIdx = findIndex([
+      'building',
+      'floor',
+      'tower',
+      'सोसायटी',
+      'मंजिल',
+    ]);
     final addressIdx = findIndex(['address', 'full address', 'पता', 'पूरा पता']);
     final landmarkIdx = findIndex(['landmark', 'लैंडमार्क']);
-    final placementIdx = findIndex(['placement', 'delivery placement', 'डिलीवरी स्थान']);
-    final balanceIdx = findIndex(['opening balance', 'balance', 'बैलेंस', 'बकाया']);
+    final placementIdx = findIndex([
+      'placement',
+      'delivery placement',
+      'डिलीवरी स्थान',
+    ]);
+    final balanceIdx = findIndex([
+      'opening balance',
+      'balance',
+      'बैलेंस',
+      'बकाया',
+    ]);
     final notesIdx = findIndex(['notes', 'remark', 'टिप्पणी']);
-    final pubIdx = findIndex(['newspaper', 'publication', 'paper', 'अखबार', 'पत्रिका']);
+    final pubIdx = findIndex([
+      'newspaper',
+      'publication',
+      'paper',
+      'अखबार',
+      'पत्रिका',
+    ]);
 
     // Load existing phone numbers from DB if not provided
-    final existingPhones = preloadedExistingPhones ?? await _loadExistingPhones(businessId);
+    final existingPhones =
+        preloadedExistingPhones ?? await _loadExistingPhones(businessId);
     final seenPhonesInFile = <String, int>{};
     final parsedRows = <CustomerImportRow>[];
 
@@ -156,8 +231,14 @@ class CustomerImportService {
       String getField(int idx) =>
           idx >= 0 && idx < rawRow.length ? rawRow[idx].trim() : '';
 
-      final name = nameIdx >= 0 ? getField(nameIdx) : (rawRow.isNotEmpty ? rawRow[0] : '');
-      final phone = phoneIdx >= 0 ? getField(phoneIdx) : (rawRow.length > 1 ? rawRow[1] : '');
+      final name =
+          nameIdx >= 0
+              ? getField(nameIdx)
+              : (rawRow.isNotEmpty ? rawRow[0] : '');
+      final phone =
+          phoneIdx >= 0
+              ? getField(phoneIdx)
+              : (rawRow.length > 1 ? rawRow[1] : '');
       final altPhone = getField(altPhoneIdx);
       final rawArea = getField(areaIdx);
       final house = getField(houseIdx);
@@ -176,10 +257,23 @@ class CustomerImportService {
         rowErrors.add('Name must be at least 2 characters.');
       }
 
-      // Phone validation & normalization
+      // Phone validation & normalization (optional)
       final cleanPhone = CustomerSearchIndex.normalizePhone(phone);
-      if (cleanPhone.length < 7 || cleanPhone.length > 15) {
+      if (phone.isNotEmpty &&
+          (cleanPhone.length < 7 || cleanPhone.length > 15)) {
         rowErrors.add('Primary phone must be a valid number (7-15 digits).');
+      }
+
+      // Alternate phone validation (optional)
+      final cleanAltPhone = CustomerSearchIndex.normalizePhone(altPhone);
+      if (altPhone.isNotEmpty &&
+          (cleanAltPhone.length < 7 || cleanAltPhone.length > 15)) {
+        rowErrors.add('Alternate phone must be a valid number (7-15 digits).');
+      }
+      if (cleanPhone.isNotEmpty &&
+          cleanAltPhone.isNotEmpty &&
+          cleanPhone == cleanAltPhone) {
+        rowErrors.add('Alternate phone must be different from primary phone.');
       }
 
       // Area resolution
@@ -187,16 +281,17 @@ class CustomerImportService {
       if (rawArea.isNotEmpty) {
         final match = availableAreas.firstWhere(
           (a) =>
-              a.name.toLowerCase() == rawArea.toLowerCase() ||
-              a.id == rawArea,
-          orElse: () => availableAreas.isNotEmpty
-              ? availableAreas.first
-              : const DeliveryArea(
-                  id: '',
-                  name: '',
-                  isActive: true,
-                  assignedEmployeeIds: {},
-                ),
+              a.name.toLowerCase() == rawArea.toLowerCase() || a.id == rawArea,
+          orElse:
+              () =>
+                  availableAreas.isNotEmpty
+                      ? availableAreas.first
+                      : const DeliveryArea(
+                        id: '',
+                        name: '',
+                        isActive: true,
+                        assignedEmployeeIds: {},
+                      ),
         );
         resolvedAreaId = match.id;
       }
@@ -208,13 +303,18 @@ class CustomerImportService {
       }
 
       // Fallback address & landmark if empty
-      final areaName = availableAreas
-          .firstWhere((a) => a.id == resolvedAreaId, orElse: () => availableAreas.first)
-          .name;
+      final areaName =
+          availableAreas
+              .firstWhere(
+                (a) => a.id == resolvedAreaId,
+                orElse: () => availableAreas.first,
+              )
+              .name;
       if (address.length < 5) {
-        address = house.isNotEmpty
-            ? 'House / Flat $house, $areaName'
-            : '$name, $areaName';
+        address =
+            house.isNotEmpty
+                ? 'House / Flat $house, $areaName'
+                : '$name, $areaName';
       }
       if (landmark.length < 2) {
         landmark = 'Near $areaName';
@@ -233,7 +333,7 @@ class CustomerImportService {
         }
       }
 
-      // Duplicate checks
+      // Duplicate checks (ONLY for non-empty phone numbers)
       var isDuplicateInFile = false;
       if (cleanPhone.isNotEmpty) {
         if (seenPhonesInFile.containsKey(cleanPhone)) {
@@ -244,7 +344,8 @@ class CustomerImportService {
         }
       }
 
-      final isDuplicateInDb = cleanPhone.isNotEmpty && existingPhones.contains(cleanPhone);
+      final isDuplicateInDb =
+          cleanPhone.isNotEmpty && existingPhones.contains(cleanPhone);
       if (isDuplicateInDb) {
         rowErrors.add('Phone number already exists in your business database.');
       }

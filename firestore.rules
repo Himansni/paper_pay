@@ -3543,6 +3543,10 @@ service cloud.firestore {
           && request.resource.data.createdAt == request.time
           && (
             (
+              request.resource.data.action == 'customerRemovalRequested'
+              && request.resource.data.entityType == 'customerRemovalRequest'
+            )
+            || (
               phase4AuditAction(request.resource.data.action)
               && phase4AuditReferencedAfter(
                 businessId,
@@ -3671,6 +3675,40 @@ service cloud.firestore {
               && permission(businessId, 'arrangeDeliveryRoutes')
             )
           );
+        allow delete: if false;
+      }
+
+      match /removalRequests/{requestId} {
+        allow read: if activeMember(businessId)
+          && (
+            head(businessId)
+            || resource.data.assignedEmployeeId == request.auth.uid
+            || resource.data.requestedBy == request.auth.uid
+          );
+        allow create: if activeMember(businessId)
+          && request.resource.data.businessId == businessId
+          && request.resource.data.requestedBy == request.auth.uid
+          && request.resource.data.status == 'pending'
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time
+          && (
+            head(businessId)
+            || (
+              memberData(businessId).role == 'employee'
+              && (
+                request.resource.data.assignedEmployeeId == request.auth.uid
+                || (
+                  memberData(businessId).areaIds is list
+                  && memberData(businessId).areaIds.hasAny([request.resource.data.areaId])
+                )
+              )
+            )
+          );
+        allow update: if head(businessId)
+          && request.resource.data.businessId == businessId
+          && request.resource.data.status in ['approved', 'rejected']
+          && request.resource.data.reviewedBy == request.auth.uid
+          && request.resource.data.updatedAt == request.time;
         allow delete: if false;
       }
 

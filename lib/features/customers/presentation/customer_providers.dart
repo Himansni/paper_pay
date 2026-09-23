@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:paper_route/features/customers/data/firebase_customer_repository.dart';
 import 'package:paper_route/features/customers/domain/customer.dart';
+import 'package:paper_route/features/customers/domain/customer_removal_request.dart';
 import 'package:paper_route/features/customers/domain/customer_repository.dart';
 
 typedef CustomerDocumentKey = ({String businessId, String customerId});
@@ -47,3 +48,20 @@ final areaCustomersProvider = FutureProvider.autoDispose
   );
   return result.customers;
 });
+
+typedef PendingRemovalRequestsKey = ({
+  String businessId,
+  String requesterId,
+  bool isHead,
+});
+
+final pendingRemovalRequestsProvider = StreamProvider.autoDispose
+    .family<List<CustomerRemovalRequest>, PendingRemovalRequestsKey>((ref, key) {
+      return ref
+          .watch(customerRepositoryProvider)
+          .watchPendingRemovalRequests(
+            businessId: key.businessId,
+            requesterId: key.requesterId,
+            isHead: key.isHead,
+          );
+    });

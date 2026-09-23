@@ -205,5 +205,49 @@ Customer With Phone,9876543210,Civil Lines,B-1''';
       expect(result.duplicateRows, 0);
       expect(result.invalidRows, 0);
     });
+
+    test('Phase 3 acceptance: interrupted import retried safely detects already-created customers without duplicate creation', () async {
+      const csv = '''Name,Phone,Area,House No,Newspaper
+Customer Alpha,9811000001,Main Market,A-1,Times of India
+Customer Beta,,Main Market,A-2,Dainik Bhaskar
+Customer Gamma,9811000003,Civil Lines,A-3,Times of India
+Customer Delta,,Civil Lines,A-4,Dainik Bhaskar''';
+
+      final table = CustomerImportService.parseCsv(csv);
+
+      // Simulation Step 1: Initial import run creates first 2 customers (Alpha & Beta), then gets interrupted
+      final simulatedDbPhones = <String>{'9811000001'}; // Alpha exists in DB
+
+      // Simulation Step 2: User retries the import on the same CSV file
+      final retryValidation = await importService.validateRows(
+        csvTable: table,
+        availableAreas: testAreas,
+        availableNewspapers: testNewspapers,
+        businessId: 'biz-1',
+        isHead: true,
+        preloadedExistingPhones: simulatedDbPhones,
+      );
+
+      expect(retryValidation.totalRows, 4);
+      // Row 0 (Alpha) is detected as existing in database and flagged as duplicate
+      expect(retryValidation.rows[0].name, 'Customer Alpha');
+      expect(retryValidation.rows[0].isDuplicateInDb, isTrue);
+      expect(retryValidation.rows[0].isValid, isFalse);
+
+      // Row 1 (Beta - no phone) is valid for retry
+      expect(retryValidation.rows[1].name, 'Customer Beta');
+      expect(retryValidation.rows[1].phone, isEmpty);
+      expect(retryValidation.rows[1].isValid, isTrue);
+
+      // Rows 2 & 3 (Gamma & Delta) are uncreated and ready for import
+      expect(retryValidation.rows[2].name, 'Customer Gamma');
+      expect(retryValidation.rows[2].isValid, isTrue);
+      expect(retryValidation.rows[3].name, 'Customer Delta');
+      expect(retryValidation.rows[3].isValid, isTrue);
+
+      // Summary
+      expect(retryValidation.duplicateRows, 1);
+      expect(retryValidation.validRows, 3);
+    });
   });
 }

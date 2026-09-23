@@ -7,6 +7,7 @@ import 'package:paper_route/features/areas/presentation/area_providers.dart';
 import 'package:paper_route/features/auth/domain/access_policy.dart';
 import 'package:paper_route/features/auth/domain/app_user.dart';
 import 'package:paper_route/features/customers/domain/customer.dart';
+import 'package:paper_route/features/customers/domain/customer_removal_request.dart';
 import 'package:paper_route/features/customers/presentation/customer_providers.dart';
 import 'package:paper_route/features/employees/domain/employee_member.dart';
 import 'package:paper_route/features/employees/presentation/employee_providers.dart';
@@ -288,11 +289,152 @@ class _CustomersPageState extends ConsumerState<CustomersPage> {
                     ),
                   ),
               ],
+
+              // Pending Removal Requests section (positioned after active customers)
+              if (_status == CustomerStatus.active) ...[
+                Builder(
+                  builder: (context) {
+                    final pendingAsync = ref.watch(
+                      pendingRemovalRequestsProvider(
+                        (
+                          businessId: widget.user.businessId!,
+                          requesterId: widget.user.uid,
+                          isHead: widget.user.isHead,
+                        ),
+                      ),
+                    );
+                    final pendingList =
+                        pendingAsync.asData?.value ??
+                        const <CustomerRemovalRequest>[];
+                    if (pendingList.isEmpty) return const SizedBox.shrink();
+
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 24),
+                        const Divider(),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.warning_amber_rounded,
+                              color: Color(0xFFD32F2F),
+                              size: 22,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Pending Removal Requests (${pendingList.length})',
+                              style: const TextStyle(
+                                color: Color(0xFFD32F2F),
+                                fontWeight: FontWeight.w800,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        const Text(
+                          'Customers with requested cancellations. Head review is required before archiving.',
+                          style: TextStyle(
+                            color: Color(0xFF627D98),
+                            fontSize: 13,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        for (final req in pendingList) ...[
+                          _PendingRemovalRequestCard(
+                            request: req,
+                            isHead: widget.user.isHead,
+                            onApprove: () => _reviewRemoval(req, approved: true),
+                            onReject: () => _reviewRemoval(req, approved: false),
+                            onTapCustomer:
+                                () => _open(
+                                  '/customers/${Uri.encodeComponent(req.customerId)}',
+                                ),
+                          ),
+                          const SizedBox(height: 10),
+                        ],
+                      ],
+                    );
+                  },
+                ),
+              ],
             ],
           ),
         ),
       ),
     );
+  }
+
+  Future<void> _reviewRemoval(
+    CustomerRemovalRequest req, {
+    required bool approved,
+  }) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: Text(
+              approved
+                  ? 'Approve Customer Removal & Archive?'
+                  : 'Reject Removal Request?',
+            ),
+            content: Text(
+              approved
+                  ? 'Approving will archive "${req.customerName}" (${req.customerCode}). All historical bills, ledger lines, and payments will be safely preserved.'
+                  : 'Rejecting will keep "${req.customerName}" active on the delivery route.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                style:
+                    approved
+                        ? FilledButton.styleFrom(
+                          backgroundColor: const Color(0xFFD32F2F),
+                        )
+                        : null,
+                onPressed: () => Navigator.pop(context, true),
+                child: Text(approved ? 'Approve & Archive' : 'Reject Request'),
+              ),
+            ],
+          ),
+    );
+
+    if (confirm != true || !mounted) return;
+
+    try {
+      await ref
+          .read(customerRepositoryProvider)
+          .reviewRemovalRequest(
+            actor: widget.user,
+            requestId: req.id,
+            approved: approved,
+          );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              approved
+                  ? 'Customer removed and archived.'
+                  : 'Removal request rejected.',
+            ),
+          ),
+        );
+        _load(reset: true);
+      }
+    } on Object catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Action failed: $error'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    }
   }
 
   String _nameForArea(List<DeliveryArea> areas, String areaId) =>
@@ -314,6 +456,146 @@ class _CustomersPageState extends ConsumerState<CustomersPage> {
             )
             .firstOrNull ??
         'Unknown employee';
+  }
+}
+
+class _PendingRemovalRequestCard extends StatelessWidget {
+  const _PendingRemovalRequestCard({
+    required this.request,
+    required this.isHead,
+    required this.onApprove,
+    required this.onReject,
+    required this.onTapCustomer,
+  });
+
+  final CustomerRemovalRequest request;
+  final bool isHead;
+  final VoidCallback onApprove;
+  final VoidCallback onReject;
+  final VoidCallback onTapCustomer;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      color: const Color(0xFFFFEBEE),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: const BorderSide(color: Color(0xFFFFCDD2), width: 1.5),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFD32F2F),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Text(
+                    'REMOVAL REQUESTED',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 11,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ),
+                const Spacer(),
+                TextButton.icon(
+                  onPressed: onTapCustomer,
+                  icon: const Icon(Icons.open_in_new, size: 16),
+                  label: const Text('View Customer'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              request.customerName,
+              style: const TextStyle(
+                fontWeight: FontWeight.w800,
+                fontSize: 17,
+                color: Color(0xFF102A43),
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              'Code: ${request.customerCode} • Requested by: ${request.requestedByName}',
+              style: const TextStyle(color: Color(0xFF486581), fontSize: 13),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFFFCDD2)),
+              ),
+              child: Text(
+                'Reason: ${request.reason}',
+                style: const TextStyle(
+                  color: Color(0xFF334E68),
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            if (isHead) ...[
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  OutlinedButton(
+                    onPressed: onReject,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF486581),
+                    ),
+                    child: const Text('Reject Request'),
+                  ),
+                  const SizedBox(width: 10),
+                  FilledButton.icon(
+                    onPressed: onApprove,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFFD32F2F),
+                    ),
+                    icon: const Icon(Icons.archive_outlined, size: 18),
+                    label: const Text('Approve & Archive'),
+                  ),
+                ],
+              ),
+            ] else ...[
+              const SizedBox(height: 8),
+              const Row(
+                children: [
+                  Icon(
+                    Icons.hourglass_empty_rounded,
+                    size: 16,
+                    color: Color(0xFFD32F2F),
+                  ),
+                  SizedBox(width: 6),
+                  Text(
+                    'Awaiting Agency Head review and approval',
+                    style: TextStyle(
+                      color: Color(0xFFD32F2F),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
   }
 }
 

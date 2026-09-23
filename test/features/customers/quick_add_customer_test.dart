@@ -5,6 +5,7 @@ import 'package:paper_route/features/areas/domain/delivery_area.dart';
 import 'package:paper_route/features/areas/presentation/area_providers.dart';
 import 'package:paper_route/features/auth/domain/app_user.dart';
 import 'package:paper_route/features/customers/domain/customer.dart';
+import 'package:paper_route/features/customers/domain/customer_removal_request.dart';
 import 'package:paper_route/features/customers/domain/customer_repository.dart';
 import 'package:paper_route/features/customers/presentation/customer_form_page.dart';
 import 'package:paper_route/features/customers/presentation/customer_providers.dart';
@@ -60,6 +61,28 @@ class FakeCustomerRepository implements CustomerRepository {
     required String businessId,
     required String customerId,
   }) => Stream.value(const []);
+
+  @override
+  Future<String> requestCustomerRemoval({
+    required AppUser actor,
+    required String customerId,
+    required String reason,
+  }) async => 'req-1';
+
+  @override
+  Stream<List<CustomerRemovalRequest>> watchPendingRemovalRequests({
+    required String businessId,
+    required String requesterId,
+    required bool isHead,
+  }) => Stream.value(const []);
+
+  @override
+  Future<void> reviewRemovalRequest({
+    required AppUser actor,
+    required String requestId,
+    required bool approved,
+    String? reviewNotes,
+  }) async {}
 }
 
 void main() {

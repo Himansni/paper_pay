@@ -3,6 +3,7 @@ import 'package:paper_route/core/errors/app_exception.dart';
 import 'package:paper_route/features/auth/domain/access_policy.dart';
 import 'package:paper_route/features/auth/domain/app_user.dart';
 import 'package:paper_route/features/customers/domain/customer.dart';
+import 'package:paper_route/features/customers/domain/customer_removal_request.dart';
 import 'package:paper_route/features/customers/domain/customer_repository.dart';
 import 'package:uuid/uuid.dart';
 
@@ -554,6 +555,217 @@ class FirebaseCustomerRepository implements CustomerRepository {
       throw const AppException(
         'Select an active employee assigned to this area.',
       );
+    }
+  }
+
+  @override
+  Future<String> requestCustomerRemoval({
+    required AppUser actor,
+    required String customerId,
+    required String reason,
+  }) async {
+    final businessId = _businessId(actor);
+    final cleanReason = reason.trim();
+    if (cleanReason.length < 3) {
+      throw const AppException(
+        'Please enter a valid reason for customer removal (minimum 3 characters).',
+      );
+    }
+    final customerRef = _collection(businessId, 'customers').doc(customerId);
+    final requestId = _uuid.v4();
+    final requestRef = _collection(businessId, 'removalRequests').doc(requestId);
+    final auditRef = _collection(businessId, 'auditRecords').doc();
+
+    try {
+      await _firestore.runTransaction((transaction) async {
+        final customerSnap = await transaction.get(customerRef);
+        final data = customerSnap.data();
+        if (!customerSnap.exists || data == null) {
+          throw const AppException('Customer no longer exists.');
+        }
+        _validateCustomerTenant(data, businessId);
+
+        if (data['status'] == CustomerStatus.archived.value) {
+          throw const AppException('Customer is already archived.');
+        }
+
+        // Validate employee permission/scope
+        if (!actor.isHead) {
+          final assignedId = data['assignedEmployeeId'] as String? ?? '';
+          final customerAreaId = data['areaId'] as String? ?? '';
+          final hasArea = actor.areaIds.contains(customerAreaId);
+          final isAssigned = assignedId == actor.uid;
+          if (!hasArea && !isAssigned) {
+            throw const AppException(
+              'You can only request removal for customers in your assigned areas.',
+            );
+          }
+        }
+
+        final now = FieldValue.serverTimestamp();
+        final requesterName =
+            actor.displayName.trim().isNotEmpty
+                ? actor.displayName
+                : actor.email;
+
+        transaction.set(requestRef, {
+          'id': requestId,
+          'businessId': businessId,
+          'customerId': customerId,
+          'customerName': data['name'] as String? ?? 'Customer',
+          'customerCode': data['customerCode'] as String? ?? customerId,
+          'areaId': data['areaId'] as String? ?? '',
+          'assignedEmployeeId': data['assignedEmployeeId'] as String? ?? '',
+          'requestedBy': actor.uid,
+          'requestedByName': requesterName,
+          'reason': cleanReason,
+          'status': 'pending',
+          'createdAt': now,
+          'updatedAt': now,
+        });
+
+        transaction.set(auditRef, {
+          'businessId': businessId,
+          'actorId': actor.uid,
+          'action': 'customerRemovalRequested',
+          'entityType': 'customerRemovalRequest',
+          'entityId': requestId,
+          'customerId': customerId,
+          'reason': cleanReason,
+          'createdAt': now,
+        });
+      });
+
+      return requestId;
+    } on AppException {
+      rethrow;
+    } on FirebaseException catch (error) {
+      throw _translate(error, 'Could not submit removal request.');
+    }
+  }
+
+  @override
+  Stream<List<CustomerRemovalRequest>> watchPendingRemovalRequests({
+    required String businessId,
+    required String requesterId,
+    required bool isHead,
+  }) {
+    if (businessId.isEmpty) return Stream.value(const []);
+    try {
+      final query = _collection(businessId, 'removalRequests')
+          .where('businessId', isEqualTo: businessId)
+          .where('status', isEqualTo: 'pending');
+
+      return query.snapshots().map((snapshot) {
+        final requests = <CustomerRemovalRequest>[];
+        for (final doc in snapshot.docs) {
+          try {
+            final req = CustomerRemovalRequest.fromMap(doc.id, doc.data());
+            if (isHead || req.requestedBy == requesterId || req.assignedEmployeeId == requesterId) {
+              requests.add(req);
+            }
+          } catch (_) {}
+        }
+        return requests;
+      });
+    } on FirebaseException catch (error) {
+      throw _translate(error, 'Could not watch pending removal requests.');
+    }
+  }
+
+  @override
+  Future<void> reviewRemovalRequest({
+    required AppUser actor,
+    required String requestId,
+    required bool approved,
+    String? reviewNotes,
+  }) async {
+    final businessId = _businessId(actor);
+    if (!actor.isHead) {
+      throw const AppException(
+        'Only the Agency Head can approve or reject customer removal requests.',
+      );
+    }
+    final requestRef = _collection(businessId, 'removalRequests').doc(requestId);
+    final auditRef = _collection(businessId, 'auditRecords').doc();
+
+    try {
+      await _firestore.runTransaction((transaction) async {
+        final requestSnap = await transaction.get(requestRef);
+        final reqData = requestSnap.data();
+        if (!requestSnap.exists || reqData == null) {
+          throw const AppException('Removal request no longer exists.');
+        }
+        if (reqData['businessId'] != businessId) {
+          throw const AppException('Cross-tenant action forbidden.');
+        }
+        if (reqData['status'] != 'pending') {
+          throw const AppException('This removal request has already been reviewed.');
+        }
+
+        final customerId = reqData['customerId'] as String? ?? '';
+        final customerRef = _collection(businessId, 'customers').doc(customerId);
+        final customerSnap = await transaction.get(customerRef);
+        final custData = customerSnap.data();
+        if (!customerSnap.exists || custData == null) {
+          throw const AppException('Target customer record not found.');
+        }
+
+        final collectionState = await transaction.get(
+          customerRef.collection('collectionState').doc('current'),
+        );
+        final now = FieldValue.serverTimestamp();
+
+        if (approved) {
+          // Archive customer safely while preserving all bills, payments, ledger lines
+          transaction.update(customerRef, {
+            'status': CustomerStatus.archived.value,
+            'updatedBy': actor.uid,
+            'lastAuditId': auditRef.id,
+            'updatedAt': now,
+          });
+          _updateReportingProjection(
+            transaction: transaction,
+            snapshot: collectionState,
+            actorId: actor.uid,
+            mutationType: 'customerStatusUpdated',
+            mutationId: auditRef.id,
+            now: now,
+            fields: {
+              'customerCode': custData['customerCode'] as String? ?? customerId,
+              'customerName': custData['name'] as String? ?? '',
+              'areaId': custData['areaId'] as String? ?? '',
+              'assignedEmployeeId': custData['assignedEmployeeId'] as String? ?? '',
+              'customerStatus': CustomerStatus.archived.value,
+            },
+          );
+        }
+
+        final nextStatus = approved ? 'approved' : 'rejected';
+        transaction.update(requestRef, {
+          'status': nextStatus,
+          'reviewedBy': actor.uid,
+          if (reviewNotes != null && reviewNotes.trim().isNotEmpty)
+            'reviewNotes': reviewNotes.trim(),
+          'updatedAt': now,
+        });
+
+        transaction.set(auditRef, {
+          'businessId': businessId,
+          'actorId': actor.uid,
+          'action': approved ? 'customerRemovalApproved' : 'customerRemovalRejected',
+          'entityType': 'customerRemovalRequest',
+          'entityId': requestId,
+          'customerId': customerId,
+          if (reviewNotes != null && reviewNotes.trim().isNotEmpty)
+            'reviewNotes': reviewNotes.trim(),
+          'createdAt': now,
+        });
+      });
+    } on AppException {
+      rethrow;
+    } on FirebaseException catch (error) {
+      throw _translate(error, 'Could not complete removal review.');
     }
   }
 

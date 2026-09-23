@@ -8,6 +8,7 @@ import 'package:paper_route/features/areas/presentation/area_providers.dart';
 import 'package:paper_route/features/auth/domain/access_policy.dart';
 import 'package:paper_route/features/auth/domain/app_user.dart';
 import 'package:paper_route/features/customers/domain/customer.dart';
+import 'package:paper_route/features/customers/domain/customer_removal_request.dart';
 import 'package:paper_route/features/collections/presentation/customer_collection_summary.dart';
 import 'package:paper_route/features/customers/presentation/customer_assignment_dialog.dart';
 import 'package:paper_route/features/customers/presentation/customer_providers.dart';
@@ -328,25 +329,339 @@ class _CustomerDetailViewState extends ConsumerState<_CustomerDetailView> {
               ),
               const SizedBox(height: 14),
               _CustomerHistory(businessId: businessId, customerId: customer.id),
-              const SizedBox(height: 14),
-              OutlinedButton.icon(
-                onPressed: _isBusy ? null : _toggleArchived,
-                icon: Icon(
-                  customer.isArchived
-                      ? Icons.restore_outlined
-                      : Icons.archive_outlined,
-                ),
-                label: Text(
-                  customer.isArchived
-                      ? (l10n?.reactivateCustomer ?? 'Reactivate customer')
-                      : (l10n?.archiveCustomer ?? 'Archive customer'),
-                ),
-              ),
             ],
+            const SizedBox(height: 20),
+
+            // Pending Removal Request Card if active for this customer
+            Builder(
+              builder: (context) {
+                final pendingAsync = ref.watch(
+                  pendingRemovalRequestsProvider(
+                    (
+                      businessId: businessId,
+                      requesterId: user.uid,
+                      isHead: user.isHead,
+                    ),
+                  ),
+                );
+                final pendingRequests =
+                    pendingAsync.asData?.value ??
+                    const <CustomerRemovalRequest>[];
+                final matchingRequest = pendingRequests
+                    .where((r) => r.customerId == customer.id)
+                    .firstOrNull;
+
+                if (matchingRequest != null) {
+                  return Card(
+                    color: const Color(0xFFFFEBEE),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: const BorderSide(color: Color(0xFFFFCDD2), width: 1.5),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFD32F2F),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: const Text(
+                                  'REMOVAL PENDING APPROVAL',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 11,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            'Requested by: ${matchingRequest.requestedByName}',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: const Color(0xFFFFCDD2)),
+                            ),
+                            child: Text(
+                              'Reason: ${matchingRequest.reason}',
+                              style: const TextStyle(
+                                color: Color(0xFF334E68),
+                                fontSize: 13.5,
+                              ),
+                            ),
+                          ),
+                          if (user.isHead) ...[
+                            const SizedBox(height: 12),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                OutlinedButton(
+                                  onPressed:
+                                      _isBusy
+                                          ? null
+                                          : () => _reviewRemoval(
+                                            matchingRequest,
+                                            approved: false,
+                                          ),
+                                  child: const Text('Reject Request'),
+                                ),
+                                const SizedBox(width: 10),
+                                FilledButton.icon(
+                                  onPressed:
+                                      _isBusy
+                                          ? null
+                                          : () => _reviewRemoval(
+                                            matchingRequest,
+                                            approved: true,
+                                          ),
+                                  style: FilledButton.styleFrom(
+                                    backgroundColor: const Color(0xFFD32F2F),
+                                  ),
+                                  icon: const Icon(
+                                    Icons.archive_outlined,
+                                    size: 18,
+                                  ),
+                                  label: const Text('Approve & Archive'),
+                                ),
+                              ],
+                            ),
+                          ] else ...[
+                            const SizedBox(height: 8),
+                            const Row(
+                              children: [
+                                Icon(
+                                  Icons.hourglass_empty_rounded,
+                                  size: 16,
+                                  color: Color(0xFFD32F2F),
+                                ),
+                                SizedBox(width: 6),
+                                Text(
+                                  'Awaiting Agency Head review and approval',
+                                  style: TextStyle(
+                                    color: Color(0xFFD32F2F),
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  );
+                }
+
+                if (!customer.isArchived) {
+                  return Column(
+                    children: [
+                      if (user.isHead) ...[
+                        OutlinedButton.icon(
+                          onPressed: _isBusy ? null : _toggleArchived,
+                          icon: const Icon(Icons.archive_outlined),
+                          label: Text(l10n?.archiveCustomer ?? 'Archive customer'),
+                        ),
+                        const SizedBox(height: 8),
+                      ],
+                      OutlinedButton.icon(
+                        onPressed: _isBusy ? null : _requestRemoval,
+                        icon: const Icon(
+                          Icons.person_remove_outlined,
+                          color: Color(0xFFD32F2F),
+                        ),
+                        label: const Text(
+                          'Request customer removal',
+                          style: TextStyle(color: Color(0xFFD32F2F)),
+                        ),
+                      ),
+                    ],
+                  );
+                }
+
+                if (user.isHead && customer.isArchived) {
+                  return FilledButton.icon(
+                    onPressed: _isBusy ? null : _toggleArchived,
+                    icon: const Icon(Icons.restore_outlined),
+                    label: Text(
+                      l10n?.reactivateCustomer ?? 'Reactivate customer',
+                    ),
+                  );
+                }
+
+                return const SizedBox.shrink();
+              },
+            ),
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _requestRemoval() async {
+    final customer = widget.customer;
+    final reasonController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+
+    final shouldSubmit = await showDialog<bool>(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: Text('Request Removal: ${customer.name}'),
+            content: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Submit a customer removal request for Agency Head review. Historical bills, ledger entries, and payment records remain 100% preserved.',
+                    style: TextStyle(color: Color(0xFF486581), fontSize: 13),
+                  ),
+                  const SizedBox(height: 14),
+                  TextFormField(
+                    controller: reasonController,
+                    autofocus: true,
+                    maxLines: 3,
+                    decoration: const InputDecoration(
+                      labelText: 'Reason for removal *',
+                      hintText:
+                          'e.g. Relocated to another city, Stopped reading newspaper',
+                    ),
+                    validator: (val) {
+                      if (val == null || val.trim().length < 3) {
+                        return 'Please provide a valid reason (min 3 characters).';
+                      }
+                      return null;
+                    },
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  if (formKey.currentState!.validate()) {
+                    Navigator.pop(context, true);
+                  }
+                },
+                child: const Text('Submit Request'),
+              ),
+            ],
+          ),
+    );
+
+    if (shouldSubmit != true || !mounted) return;
+    setState(() => _isBusy = true);
+    try {
+      await ref
+          .read(customerRepositoryProvider)
+          .requestCustomerRemoval(
+            actor: widget.user,
+            customerId: customer.id,
+            reason: reasonController.text.trim(),
+          );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Customer removal request submitted for Head review.'),
+          ),
+        );
+      }
+    } on Object catch (error) {
+      if (mounted) _showError(error);
+    } finally {
+      if (mounted) setState(() => _isBusy = false);
+    }
+  }
+
+  Future<void> _reviewRemoval(
+    CustomerRemovalRequest req, {
+    required bool approved,
+  }) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: Text(
+              approved
+                  ? 'Approve Customer Removal & Archive?'
+                  : 'Reject Removal Request?',
+            ),
+            content: Text(
+              approved
+                  ? 'Approving will archive "${req.customerName}". All bills, ledger lines, and payment records will be preserved.'
+                  : 'Rejecting will keep "${req.customerName}" active.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                style:
+                    approved
+                        ? FilledButton.styleFrom(
+                          backgroundColor: const Color(0xFFD32F2F),
+                        )
+                        : null,
+                onPressed: () => Navigator.pop(context, true),
+                child: Text(approved ? 'Approve & Archive' : 'Reject Request'),
+              ),
+            ],
+          ),
+    );
+
+    if (confirm != true || !mounted) return;
+    setState(() => _isBusy = true);
+    try {
+      await ref
+          .read(customerRepositoryProvider)
+          .reviewRemovalRequest(
+            actor: widget.user,
+            requestId: req.id,
+            approved: approved,
+          );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              approved
+                  ? 'Customer removed and archived.'
+                  : 'Removal request rejected.',
+            ),
+          ),
+        );
+      }
+    } on Object catch (error) {
+      if (mounted) _showError(error);
+    } finally {
+      if (mounted) setState(() => _isBusy = false);
+    }
   }
 
   Future<void> _changeAssignment(

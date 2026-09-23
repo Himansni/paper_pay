@@ -12,6 +12,7 @@ import 'package:paper_route/features/business/presentation/business_providers.da
 import 'package:paper_route/features/business/presentation/business_settings_page.dart';
 import 'package:paper_route/features/customers/domain/customer_assignment.dart';
 import 'package:paper_route/features/customers/domain/customer_assignment_repository.dart';
+import 'package:paper_route/features/customers/domain/customer_removal_request.dart';
 import 'package:paper_route/features/customers/presentation/customer_assignment_providers.dart';
 import 'package:paper_route/features/customers/presentation/customer_assignments_page.dart';
 import 'package:paper_route/features/customers/presentation/customer_detail_page.dart';
@@ -550,4 +551,27 @@ class _FakeCustomerRepository implements CustomerAssignmentRepository {
     required String customerId,
     required CustomerInput input,
   }) async {}
+
+  @override
+  Future<String> requestCustomerRemoval({
+    required AppUser actor,
+    required String customerId,
+    required String reason,
+  }) async => 'REQ-1';
+
+  @override
+  Stream<List<CustomerRemovalRequest>> watchPendingRemovalRequests({
+    required String businessId,
+    required String requesterId,
+    required bool isHead,
+  }) => Stream.value(const []);
+
+  @override
+  Future<void> reviewRemovalRequest({
+    required AppUser actor,
+    required String requestId,
+    required bool approved,
+    String? reviewNotes,
+  }) async {}
 }
+

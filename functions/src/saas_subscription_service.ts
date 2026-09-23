@@ -14,15 +14,38 @@ export interface SaasSubscriptionContract {
   isReadOnly: boolean;
   daysRemaining: number;
   graceDaysRemaining: number;
+  /** Pre-computed expiry timestamp (trial or paid period end + grace days).
+   * Stored in the Firestore subscription document so Firestore Security Rules
+   * can enforce the server-authoritative entitlement gate without runtime
+   * duration arithmetic. Updated by the server on every subscription change. */
+  effectiveExpiresAt: Date;
 }
 
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
+ * The date Phase 5 SaaS entitlement went live in production.
+ * Agencies whose business.createdAt predates this are "legacy" agencies.
+ * Their trial window is anchored to this date rather than their original
+ * createdAt, giving them a fair 30-day window from launch day while
+ * preventing exploitation — the constant is fixed on the server and
+ * cannot be reset by any client action.
+ */
+export const SAAS_LAUNCH_DATE = new Date("2026-09-24T00:00:00.000Z");
+
+/**
  * Evaluates the authoritative SaaS subscription/trial state for an agency.
- * Existing agencies without an explicit subscription document use their original
- * business creation timestamp to prevent duplicate trial resets.
+ *
+ * Migration policy for legacy agencies (created before SAAS_LAUNCH_DATE):
+ *   effectiveTrialStart = max(businessCreatedAt, SAAS_LAUNCH_DATE)
+ *
+ * This guarantees:
+ * - Newly registered agencies always get exactly 30 days from activation.
+ * - Pre-launch agencies are not immediately expired; they get 30 days from
+ *   the Phase 5 go-live date.
+ * - Trial resets are impossible: the cutoff is a fixed server constant and
+ *   clients cannot delete or recreate the subscription document.
  */
 export function evaluateAgencySubscriptionState(
   businessId: string,
@@ -40,10 +63,6 @@ export function evaluateAgencySubscriptionState(
   },
   now: Date = new Date(),
 ): SaasSubscriptionContract {
-  const trialStart = existingSubscription?.trialStartsAt ?? businessCreatedAt;
-  const trialEnd =
-    existingSubscription?.trialEndsAt ??
-    new Date(trialStart.getTime() + THIRTY_DAYS_MS);
   const graceDays = existingSubscription?.graceDays ?? 7;
   const graceDurationMs = graceDays * ONE_DAY_MS;
   const planId = existingSubscription?.planId ?? "trial";
@@ -52,6 +71,22 @@ export function evaluateAgencySubscriptionState(
 
   const currentPeriodStart = existingSubscription?.currentPeriodStartsAt;
   const currentPeriodEnd = existingSubscription?.currentPeriodEndsAt;
+
+  // --- Trial start resolution with migration policy ---
+  let trialStart: Date;
+  if (existingSubscription?.trialStartsAt) {
+    // Existing subscription document: always honour the stored trialStartsAt.
+    trialStart = existingSubscription.trialStartsAt;
+  } else {
+    // No subscription document (legacy or new agency):
+    // Apply migration policy — anchor to max(createdAt, SAAS_LAUNCH_DATE).
+    trialStart = businessCreatedAt < SAAS_LAUNCH_DATE
+      ? SAAS_LAUNCH_DATE
+      : businessCreatedAt;
+  }
+
+  const trialEnd = existingSubscription?.trialEndsAt
+    ?? new Date(trialStart.getTime() + THIRTY_DAYS_MS);
 
   let status: "trial" | "active" | "gracePeriod" | "expired";
   let effectiveEnd: Date;
@@ -82,9 +117,17 @@ export function evaluateAgencySubscriptionState(
 
   const graceEnd = new Date(effectiveEnd.getTime() + graceDurationMs);
   const msGraceRemaining = Math.max(0, graceEnd.getTime() - now.getTime());
-  const graceDaysRemaining = Math.min(graceDays, Math.ceil(msGraceRemaining / ONE_DAY_MS));
+  const graceDaysRemaining = Math.min(
+    graceDays,
+    Math.ceil(msGraceRemaining / ONE_DAY_MS),
+  );
 
   const isReadOnly = status === "expired";
+
+  // Pre-compute the authoritative expiry timestamp stored in Firestore.
+  // Firestore Security Rules read this field directly to gate operational
+  // create operations — no server-side duration arithmetic required in rules.
+  const effectiveExpiresAt = graceEnd;
 
   return {
     businessId,
@@ -100,12 +143,16 @@ export function evaluateAgencySubscriptionState(
     isReadOnly,
     daysRemaining,
     graceDaysRemaining,
+    effectiveExpiresAt,
   };
 }
 
 /**
  * Validates HMAC SHA-256 webhook signatures from payment providers
  * to ensure tamper-proof server-to-server subscription verification.
+ *
+ * Compatible with Razorpay webhook signature format:
+ * signature = HMAC-SHA256(rawBody, webhookSecret) encoded as hex
  */
 export function verifyWebhookSignature(
   rawBody: string,

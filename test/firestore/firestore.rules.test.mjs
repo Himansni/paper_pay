@@ -4424,6 +4424,88 @@ describe('Phase 7 reporting security and projection integrity', () => {
       // Client delete fails
       await assertFails(deleteDoc(subDoc));
     });
+
+    test('Expired agency (effectiveExpiresAt in the past) is blocked from creating customers, while read access is preserved', async () => {
+      // Simulate expired agency subscription in Firestore
+      await environment.withSecurityRulesDisabled(async (context) => {
+        const adminDb = context.firestore();
+        await setDoc(doc(adminDb, 'businesses/business-a/subscription/saas'), {
+          businessId: 'business-a',
+          planId: 'trial',
+          status: 'expired',
+          effectiveExpiresAt: new Date(Date.now() - 86_400_000), // 1 day ago (expired)
+          customerLimit: 500,
+          employeeLimit: 10,
+          graceDays: 7,
+          updatedAt: new Date(),
+        });
+      });
+
+      const headDb = auth('head-a', 'head-a@example.com');
+
+      // Head can still read existing customers
+      await assertSucceeds(getDoc(doc(headDb, 'businesses/business-a/customers/customer-1')));
+
+      // Head cannot create new customers because subscription write gate blocks expired agencies
+      const newCustomer = completeCustomer({
+        id: 'cust-expired-attempt',
+        businessId: 'business-a',
+        assignedEmployeeId: 'employee-a',
+        areaId: 'east',
+        lastAuditId: 'audit-expired-cust',
+      });
+      const auditDoc = customerAudit({
+        businessId: 'business-a',
+        actorId: 'head-a',
+        action: 'customerCreated',
+        entityId: 'cust-expired-attempt',
+      });
+
+      const batch = writeBatch(headDb);
+      batch.set(doc(headDb, 'businesses/business-a/customers/cust-expired-attempt'), newCustomer);
+      batch.set(doc(headDb, 'businesses/business-a/auditRecords/audit-expired-cust'), auditDoc);
+
+      await assertFails(batch.commit());
+    });
+
+    test('Active agency (effectiveExpiresAt in the future) can create customers normally', async () => {
+      // Simulate active agency subscription in Firestore
+      await environment.withSecurityRulesDisabled(async (context) => {
+        const adminDb = context.firestore();
+        await setDoc(doc(adminDb, 'businesses/business-a/subscription/saas'), {
+          businessId: 'business-a',
+          planId: 'growth',
+          status: 'active',
+          effectiveExpiresAt: new Date(Date.now() + 30 * 86_400_000), // 30 days in future
+          customerLimit: 1000,
+          employeeLimit: 10,
+          graceDays: 7,
+          updatedAt: new Date(),
+        });
+      });
+
+      const headDb = auth('head-a', 'head-a@example.com');
+
+      const newCustomer = completeCustomer({
+        id: 'cust-active-success',
+        businessId: 'business-a',
+        assignedEmployeeId: 'employee-a',
+        areaId: 'east',
+        lastAuditId: 'audit-active-cust',
+      });
+      const auditDoc = customerAudit({
+        businessId: 'business-a',
+        actorId: 'head-a',
+        action: 'customerCreated',
+        entityId: 'cust-active-success',
+      });
+
+      const batch = writeBatch(headDb);
+      batch.set(doc(headDb, 'businesses/business-a/customers/cust-active-success'), newCustomer);
+      batch.set(doc(headDb, 'businesses/business-a/auditRecords/audit-active-cust'), auditDoc);
+
+      await assertSucceeds(batch.commit());
+    });
   });
 });
 

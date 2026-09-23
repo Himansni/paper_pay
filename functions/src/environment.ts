@@ -37,3 +37,20 @@ export const accountDeletionRuntime = {
   concurrency: 20,
   enforceAppCheck: false,
 };
+
+/**
+ * Runtime config for the Razorpay payment webhook HTTP handler.
+ * Higher maxInstances to handle burst traffic on billing cycle days.
+ * enforceAppCheck is false because Razorpay is an external server, not a
+ * Firebase client and cannot send App Check tokens.
+ */
+export const webhookRuntime = {
+  region: functionRegion,
+  memory: "256MiB" as const,
+  timeoutSeconds: 30,
+  minInstances: 0,
+  maxInstances: 10,
+  concurrency: 40,
+  enforceAppCheck: false,
+};
+

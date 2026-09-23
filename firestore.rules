@@ -47,6 +47,18 @@ service cloud.firestore {
       return /databases/$(database)/documents/businesses/$(businessId)/auditRecords/$(auditId);
     }
 
+    function saasSubscriptionPath(businessId) {
+      return /databases/$(database)/documents/businesses/$(businessId)/subscription/saas;
+    }
+
+    function subscriptionAllowsWrites(businessId) {
+      let subDoc = saasSubscriptionPath(businessId);
+      return !exists(subDoc)
+        || !('effectiveExpiresAt' in get(subDoc).data)
+        || get(subDoc).data.effectiveExpiresAt == null
+        || request.time < get(subDoc).data.effectiveExpiresAt;
+    }
+
     function deliveryDropPath(businessId, routeId, customerId) {
       return /databases/$(database)/documents/businesses/$(businessId)/dailyRoutes/$(routeId)/drops/$(customerId);
     }
@@ -2996,7 +3008,8 @@ service cloud.firestore {
 
       match /customers/{customerId} {
         allow read: if canReadCustomerData(businessId, resource.data);
-        allow create: if activeMember(businessId)
+        allow create: if subscriptionAllowsWrites(businessId)
+          && activeMember(businessId)
           && validCustomerShape(businessId, customerId, request.resource.data)
           && request.resource.data.status == 'active'
           && request.resource.data.createdBy == request.auth.uid
@@ -3268,7 +3281,8 @@ service cloud.firestore {
 
         match /bills/{billId} {
           allow read: if canReadCustomer(businessId, customerId);
-          allow create: if head(businessId)
+          allow create: if subscriptionAllowsWrites(businessId)
+            && head(businessId)
             && get(customerPath(businessId, customerId)).data.status == 'active'
             && validBillShape(
               businessId,
@@ -3309,7 +3323,8 @@ service cloud.firestore {
 
         match /billingControls/{billingMonth} {
           allow read: if head(businessId);
-          allow create: if head(businessId)
+          allow create: if subscriptionAllowsWrites(businessId)
+            && head(businessId)
             && validBillingControlShape(
               businessId,
               customerId,
@@ -3371,7 +3386,8 @@ service cloud.firestore {
 
         match /adjustments/{adjustmentId} {
           allow read: if head(businessId);
-          allow create: if head(businessId)
+          allow create: if subscriptionAllowsWrites(businessId)
+            && head(businessId)
             && validAdjustmentShape(
               businessId,
               customerId,
@@ -3398,11 +3414,12 @@ service cloud.firestore {
             customerId,
             resource.data
           );
-          allow create: if validPaymentCreate(
-            businessId,
-            customerId,
-            paymentId
-          );
+          allow create: if subscriptionAllowsWrites(businessId)
+            && validPaymentCreate(
+              businessId,
+              customerId,
+              paymentId
+            );
           allow update, delete: if false;
         }
 

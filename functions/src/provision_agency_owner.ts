@@ -15,6 +15,7 @@ import {
   ProvisionAgencyOwnerRequest,
 } from "./provisioning_contract";
 import {enforceUidRateLimit} from "./rate_limit";
+import {evaluateAgencySubscriptionState} from "./saas_subscription_service";
 
 interface Identity {
   uid: string;
@@ -351,10 +352,14 @@ export async function provisionAgencyOwnerHandler(
     }
 
     const now = FieldValue.serverTimestamp();
-    const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
-    const nowMs = Timestamp.now().toMillis();
-    const trialStartsAt = Timestamp.fromMillis(nowMs);
-    const trialEndsAt = Timestamp.fromMillis(nowMs + thirtyDaysMs);
+    const nowDate = Timestamp.now().toDate();
+    // Use the shared SaaS evaluation to apply the migration policy and compute
+    // effectiveExpiresAt in one place. For a brand-new agency, createdAt == now
+    // so the migration guard is never triggered.
+    const saasState = evaluateAgencySubscriptionState(businessId, nowDate, undefined, nowDate);
+    const trialStartsAt = Timestamp.fromDate(saasState.trialStartsAt);
+    const trialEndsAt = Timestamp.fromDate(saasState.trialEndsAt);
+    const effectiveExpiresAt = Timestamp.fromDate(saasState.effectiveExpiresAt);
 
     transaction.create(businessReference, {
       businessId,
@@ -374,6 +379,9 @@ export async function provisionAgencyOwnerHandler(
       graceDays: 7,
       customerLimit: 500,
       employeeLimit: 10,
+      // Pre-computed expiry used by Firestore Security Rules to gate writes.
+      // equals trialEndsAt + 7 grace days; updated by server on every renewal.
+      effectiveExpiresAt,
       createdAt: now,
       updatedAt: now,
     });

@@ -702,12 +702,6 @@ class FirebaseBillingRepository implements BillingRepository {
           serviceBillingSourceSnapshot.data()?['revision'],
           exists: serviceBillingSourceSnapshot.exists,
         ),
-        _SourceLock.optional(
-          collectionStateSnapshot.reference,
-          'revision',
-          collectionStateData?['revision'],
-          exists: collectionStateSnapshot.exists,
-        ),
       ];
       for (final subscription in subscriptions.docs) {
         final series = subscription.data();

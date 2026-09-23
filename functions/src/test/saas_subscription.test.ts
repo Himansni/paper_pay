@@ -555,17 +555,24 @@ describe("Simulation Environment Isolation & Webhook Fallback Protection (Securi
       assert.equal(getWebhookSigningSecret(), "live_prod_webhook_secret_secure_99");
     });
 
-    it("allows dev test fallback secret only in positively identified paperroutedev or emulator", () => {
+    it("strictly fails closed (returns null) whenever secret is unconfigured, even in Development", () => {
       delete process.env.FUNCTIONS_EMULATOR;
       delete process.env.FIREBASE_EMULATOR_HUB;
       delete process.env.RAZORPAY_WEBHOOK_SECRET;
 
       process.env.GCLOUD_PROJECT = "paperroutedev";
-      assert.equal(getWebhookSigningSecret(), "whsec_paperroute_dev_test");
+      assert.equal(getWebhookSigningSecret(), null, "Development must fail closed if RAZORPAY_WEBHOOK_SECRET is unconfigured");
 
       delete process.env.GCLOUD_PROJECT;
       process.env.FUNCTIONS_EMULATOR = "true";
-      assert.equal(getWebhookSigningSecret(), "whsec_paperroute_dev_test");
+      assert.equal(getWebhookSigningSecret(), null, "Emulator must fail closed if RAZORPAY_WEBHOOK_SECRET is unconfigured");
+    });
+
+    it("returns securely configured secret in Development when configured", () => {
+      process.env.GCLOUD_PROJECT = "paperroutedev";
+      process.env.RAZORPAY_WEBHOOK_SECRET = "whsec_dev_securely_configured_secret_123";
+
+      assert.equal(getWebhookSigningSecret(), "whsec_dev_securely_configured_secret_123");
     });
   });
 });

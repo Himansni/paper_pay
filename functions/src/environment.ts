@@ -87,21 +87,17 @@ export function isSimulatedCheckoutPermitted(): boolean {
 
 /**
  * Resolves the Razorpay webhook signing secret.
- * In deployed Production or any unverified environment, fallback secrets are strictly
- * prohibited and a securely configured RAZORPAY_WEBHOOK_SECRET is required.
- * Returns null (failing closed) when missing.
+ * Deployed functions require a securely configured RAZORPAY_WEBHOOK_SECRET and fail closed (return null)
+ * if unconfigured, even in Development.
+ * Public or hardcoded fallback secrets in code are strictly prohibited in deployed environments.
  */
 export function getWebhookSigningSecret(): string | null {
   if (process.env.RAZORPAY_WEBHOOK_SECRET) {
     return process.env.RAZORPAY_WEBHOOK_SECRET;
   }
-  // In deployed Production or any unverified environment, fallback secrets are strictly prohibited.
-  // Fail closed when missing.
-  if (!isExplicitDevOrEmulatorEnvironment()) {
-    return null;
-  }
-  // In positively identified Development or local emulator environments, allow dev test fallback secret
-  return "whsec_paperroute_dev_test";
+  // Fail closed if unconfigured
+  return null;
 }
+
 
 

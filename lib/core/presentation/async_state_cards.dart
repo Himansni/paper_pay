@@ -4,11 +4,13 @@ class AsyncErrorCard extends StatelessWidget {
   const AsyncErrorCard({
     required this.message,
     required this.onRetry,
+    this.retryLabel = 'Try again',
     super.key,
   });
 
   final String message;
   final VoidCallback onRetry;
+  final String retryLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -24,7 +26,7 @@ class AsyncErrorCard extends StatelessWidget {
             OutlinedButton.icon(
               onPressed: onRetry,
               icon: const Icon(Icons.refresh),
-              label: const Text('Try again'),
+              label: Text(retryLabel),
             ),
           ],
         ),

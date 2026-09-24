@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:paper_route/core/localization/locale_provider.dart';
 import 'package:paper_route/features/auth/domain/app_user.dart';
 import 'package:paper_route/features/dashboard/presentation/dashboard_page.dart';
 import 'package:paper_route/features/reports/domain/report_models.dart';
@@ -43,7 +44,7 @@ void main() {
     expect(find.text('Daily pricing'), findsNothing);
   });
 
-  testWidgets('dashboard has explicit loading and error states', (
+  testWidgets('dashboard has explicit loading and clean error states', (
     tester,
   ) async {
     _largeView(tester);
@@ -55,10 +56,47 @@ void main() {
     pending.completer.completeError(StateError('synthetic failure'));
     await tester.pumpAndSettle();
     expect(
-      find.textContaining('Could not load operational metrics'),
+      find.text('Could not load dashboard. Tap Retry.'),
       findsOneWidget,
     );
-    expect(find.text('Try again'), findsOneWidget);
+    expect(find.text('Retry'), findsOneWidget);
+  });
+
+  testWidgets('Dashboard AppBar is responsive on narrow 360-420 width phones in English and Hindi', (
+    tester,
+  ) async {
+    for (final width in [360.0, 390.0, 420.0]) {
+      for (final locale in [const Locale('en'), const Locale('hi')]) {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = Size(width, 800);
+
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              reportingRepositoryProvider.overrideWithValue(_ImmediateReports(_dashboard)),
+            ],
+            child: MaterialApp(
+              locale: locale,
+              home: const DashboardPage(user: _head),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        // Branding must be readable
+        expect(find.text('PaperRoute'), findsOneWidget);
+        expect(find.byIcon(Icons.newspaper_rounded), findsOneWidget);
+
+        // Language toggle must be present
+        expect(find.byType(LanguageToggleButton), findsOneWidget);
+
+        // Overflow menu must be present for compact layout
+        expect(find.byKey(const ValueKey('dashboard-overflow-menu')), findsOneWidget);
+
+        // No Flutter render overflow errors
+        expect(tester.takeException(), isNull);
+      }
+    }
   });
 }
 

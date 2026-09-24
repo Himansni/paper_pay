@@ -12,6 +12,12 @@ import 'package:paper_route/features/reports/domain/report_models.dart';
 import 'package:paper_route/features/reports/presentation/reporting_providers.dart';
 import 'package:paper_route/l10n/app_localizations.dart';
 
+enum _DashboardMenuAction {
+  refresh,
+  accountSettings,
+  signOut,
+}
+
 class DashboardPage extends ConsumerWidget {
   const DashboardPage({required this.user, super.key});
 
@@ -22,34 +28,105 @@ class DashboardPage extends ConsumerWidget {
     final l10n = AppLocalizations.of(context);
     final firstName = user.displayName.trim().split(' ').firstOrNull ?? 'there';
     final dashboard = ref.watch(operationalDashboardProvider(user));
+    final width = MediaQuery.sizeOf(context).width;
+    final isCompact = width < 540;
+    final isUltraCompact = width < 360;
+
     return Scaffold(
       appBar: AppBar(
         title: const Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(Icons.newspaper_rounded, color: AppTheme.brand),
-            SizedBox(width: 10),
-            Text('PaperRoute'),
+            SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                'PaperRoute',
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
           ],
         ),
+        titleSpacing: 16,
         actions: [
           const LanguageToggleButton(isDense: true),
-          IconButton(
-            onPressed: () => ref.invalidate(operationalDashboardProvider(user)),
-            tooltip: l10n?.commonRefresh ?? 'Refresh dashboard',
-            icon: const Icon(Icons.refresh),
-          ),
-          IconButton(
-            onPressed: () => context.push('/account-settings'),
-            tooltip: l10n?.authAccountSettings ?? 'Account settings',
-            icon: const Icon(Icons.account_circle_outlined),
-          ),
-          IconButton(
-            onPressed: () => ref.read(authRepositoryProvider).signOut(),
-            tooltip: l10n?.authSignOut ?? 'Sign out',
-            icon: const Icon(Icons.logout_rounded),
-          ),
-          const SizedBox(width: 8),
+          if (!isCompact) ...[
+            IconButton(
+              onPressed: () => ref.invalidate(operationalDashboardProvider(user)),
+              tooltip: l10n?.commonRefresh ?? 'Refresh dashboard',
+              icon: const Icon(Icons.refresh),
+            ),
+            IconButton(
+              onPressed: () => context.push('/account-settings'),
+              tooltip: l10n?.authAccountSettings ?? 'Account settings',
+              icon: const Icon(Icons.account_circle_outlined),
+            ),
+            IconButton(
+              onPressed: () => ref.read(authRepositoryProvider).signOut(),
+              tooltip: l10n?.authSignOut ?? 'Sign out',
+              icon: const Icon(Icons.logout_rounded),
+            ),
+          ] else ...[
+            if (!isUltraCompact)
+              IconButton(
+                onPressed: () => ref.invalidate(operationalDashboardProvider(user)),
+                tooltip: l10n?.commonRefresh ?? 'Refresh dashboard',
+                icon: const Icon(Icons.refresh),
+              ),
+            PopupMenuButton<_DashboardMenuAction>(
+              key: const ValueKey('dashboard-overflow-menu'),
+              tooltip: 'More options',
+              icon: const Icon(Icons.more_vert),
+              onSelected: (action) {
+                switch (action) {
+                  case _DashboardMenuAction.refresh:
+                    ref.invalidate(operationalDashboardProvider(user));
+                    break;
+                  case _DashboardMenuAction.accountSettings:
+                    context.push('/account-settings');
+                    break;
+                  case _DashboardMenuAction.signOut:
+                    ref.read(authRepositoryProvider).signOut();
+                    break;
+                }
+              },
+              itemBuilder: (context) => [
+                if (isUltraCompact)
+                  PopupMenuItem(
+                    value: _DashboardMenuAction.refresh,
+                    child: Row(
+                      children: [
+                        const Icon(Icons.refresh),
+                        const SizedBox(width: 12),
+                        Text(l10n?.commonRefresh ?? 'Refresh dashboard'),
+                      ],
+                    ),
+                  ),
+                PopupMenuItem(
+                  value: _DashboardMenuAction.accountSettings,
+                  child: Row(
+                    children: [
+                      const Icon(Icons.account_circle_outlined),
+                      const SizedBox(width: 12),
+                      Text(l10n?.authAccountSettings ?? 'Account settings'),
+                    ],
+                  ),
+                ),
+                PopupMenuItem(
+                  value: _DashboardMenuAction.signOut,
+                  child: Row(
+                    children: [
+                      const Icon(Icons.logout_rounded),
+                      const SizedBox(width: 12),
+                      Text(l10n?.authSignOut ?? 'Sign out'),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
+          const SizedBox(width: 4),
         ],
       ),
       body: SafeArea(
@@ -82,14 +159,18 @@ class DashboardPage extends ConsumerWidget {
               const SizedBox(height: 18),
               dashboard.when(
                 loading: () => const _DashboardLoading(),
-                error:
-                    (error, _) => AsyncErrorCard(
-                      message: 'Could not load operational metrics. $error',
-                      onRetry:
-                          () => ref.invalidate(
-                            operationalDashboardProvider(user),
-                          ),
+                error: (error, stackTrace) {
+                  debugPrint(
+                    '[DashboardPage] operationalDashboardProvider error: $error\n$stackTrace',
+                  );
+                  return AsyncErrorCard(
+                    message: 'Could not load dashboard. Tap Retry.',
+                    retryLabel: 'Retry',
+                    onRetry: () => ref.invalidate(
+                      operationalDashboardProvider(user),
                     ),
+                  );
+                },
                 data:
                     (metrics) =>
                         user.isHead

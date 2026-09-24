@@ -676,6 +676,58 @@
         { "fieldPath": "stateId", "order": "ASCENDING" },
         { "fieldPath": "outstandingPaise", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "bills",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "billingMonth", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "bills",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "billingMonth", "order": "ASCENDING" },
+        { "fieldPath": "customerSearchName", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "collectionState",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "stateId", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "collectionState",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "stateId", "order": "ASCENDING" },
+        { "fieldPath": "outstandingPaise", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "subscriptions",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "subscriptions",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "newspaperId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": [

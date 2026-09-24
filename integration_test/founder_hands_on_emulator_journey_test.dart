@@ -21,11 +21,14 @@ import 'package:paper_route/features/delivery/domain/delivery_models.dart';
 
 const _businessId = 'biz_founder_acceptance';
 const _headEmail = 'dev-founder-head@paperroute.test';
-const _headPassword = 'PaperRouteDevHead2026!';
+const _headPassword = String.fromEnvironment('FOUNDER_HEAD_PASSWORD');
 const _employeeEmail = 'dev-founder-emp@paperroute.test';
-const _employeePassword = 'PaperRouteDevEmp2026!';
+const _employeePassword = String.fromEnvironment('FOUNDER_EMP_PASSWORD');
 
 void main() {
+  if (_headPassword.isEmpty || _employeePassword.isEmpty) {
+    throw Exception('Test credentials missing. Pass using --dart-define');
+  }
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets(

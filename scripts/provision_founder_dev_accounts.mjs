@@ -125,11 +125,13 @@ export async function provisionFounderDevAccounts() {
 
   const bizId = 'biz_founder_acceptance';
   const headEmail = 'dev-founder-head@paperroute.test';
-  const headPassword = process.env.FOUNDER_HEAD_PASSWORD || 'PaperRouteDevHead2026!';
+  const headPassword = process.env.FOUNDER_HEAD_PASSWORD;
+  if (!headPassword) throw new Error('FOUNDER_HEAD_PASSWORD env var is required');
   const headName = 'Founder Head (Dev)';
 
   const empEmail = 'dev-founder-emp@paperroute.test';
-  const empPassword = process.env.FOUNDER_EMP_PASSWORD || 'PaperRouteDevEmp2026!';
+  const empPassword = process.env.FOUNDER_EMP_PASSWORD;
+  if (!empPassword) throw new Error('FOUNDER_EMP_PASSWORD env var is required');
   const empName = 'Founder Employee (Dev)';
 
   // 1. Provision Head Auth User

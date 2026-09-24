@@ -18,6 +18,7 @@ import 'package:paper_route/features/subscriptions/data/firebase_subscription_re
 import 'package:paper_route/features/subscriptions/domain/customer_subscription.dart';
 import 'package:paper_route/features/delivery/data/firebase_delivery_repository.dart';
 import 'package:paper_route/features/delivery/domain/delivery_models.dart';
+import 'package:paper_route/features/reports/data/firebase_reporting_repository.dart';
 
 const _businessId = 'biz_founder_acceptance';
 const _headEmail = 'dev-founder-head@paperroute.test';
@@ -69,6 +70,16 @@ void main() {
       final subscriptionRepo = FirebaseSubscriptionRepository(firestore);
       final billingRepo = FirebaseBillingRepository(firestore);
       final collectionsRepo = FirebaseCollectionsRepository(firestore);
+      final reportsRepo = FirebaseReportingRepository(firestore);
+
+      // 1b. Verify Head Dashboard executes and loads all operational metrics without FAILED_PRECONDITION
+      final dashboard = await reportsRepo.fetchDashboard(
+        actor: head,
+        now: DateTime.now(),
+      );
+      expect(dashboard.monthKey, isNotEmpty);
+      expect(dashboard.employeeCollections, isNotEmpty);
+      print('✔ Step 1b: Head operational dashboard loaded (month: ${dashboard.monthKey}, employee metrics: ${dashboard.employeeCollections.length}) without FAILED_PRECONDITION');
 
       // 2. Create Area
       final areaName = 'Founder Route Area ${DateTime.now().millisecondsSinceEpoch}';

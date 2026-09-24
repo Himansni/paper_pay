@@ -728,6 +728,25 @@
         { "fieldPath": "newspaperId", "order": "ASCENDING" },
         { "fieldPath": "status", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "payments",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "collectorUid", "order": "ASCENDING" },
+        { "fieldPath": "confirmedAt", "order": "ASCENDING" },
+        { "fieldPath": "amountPaise", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "payments",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "collectorUid", "order": "ASCENDING" },
+        { "fieldPath": "confirmedAt", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": [

@@ -211,21 +211,43 @@ class FirebaseAuthRepository implements AuthRepository {
         final invitation = await transaction.get(inviteRef);
         final data = invitation.data();
         if (!invitation.exists || data == null) {
-          throw const AppException('Invitation not found or no longer valid.');
+          throw const AppException(
+            'Invitation not found or no longer valid.',
+            code: 'invitation-not-found',
+          );
+        }
+        if (data['status'] == 'accepted') {
+          throw const AppException(
+            'This invitation has already been used.',
+            code: 'invitation-already-used',
+          );
+        }
+        if (data['status'] == 'revoked') {
+          throw const AppException(
+            'This invitation has been revoked.',
+            code: 'invitation-revoked',
+          );
         }
         if (data['status'] != 'pending' || data['role'] != 'employee') {
-          throw const AppException('This invitation has already been used.');
+          throw const AppException(
+            'This invitation is no longer valid.',
+            code: 'invitation-invalid',
+          );
         }
         if (data['email'] != refreshedUser.email?.toLowerCase()) {
-          throw const AppException(
-            'Sign in with the same email address that was invited.',
+          throw AppException(
+            'Sign in with the invited email address. Currently signed in as ${refreshedUser.email}.',
+            code: 'invitation-email-mismatch',
           );
         }
 
         final expiresAt = data['expiresAt'];
         if (expiresAt is Timestamp &&
             expiresAt.toDate().isBefore(DateTime.now())) {
-          throw const AppException('This invitation has expired.');
+          throw const AppException(
+            'This invitation has expired.',
+            code: 'invitation-expired',
+          );
         }
 
         final permissions =
@@ -271,11 +293,17 @@ class FirebaseAuthRepository implements AuthRepository {
           'updatedAt': now,
         });
       });
+    } on AppException {
+      rethrow;
     } on FirebaseException catch (error) {
+      if (error.code == 'permission-denied') {
+        throw AppException(
+          'The invitation could not be verified. Ensure you are signed in with the invited email address (${refreshedUser.email}), and check the business ID and invitation code.',
+          code: error.code,
+        );
+      }
       throw AppException(
-        error.code == 'permission-denied'
-            ? 'The invitation could not be verified. Check the business and invitation codes.'
-            : 'Could not activate access. Please try again.',
+        'Could not activate access. Please try again.',
         code: error.code,
       );
     }

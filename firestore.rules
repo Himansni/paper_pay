@@ -2952,7 +2952,6 @@ service cloud.firestore {
         allow get: if head(businessId)
           || (
             verifiedEmail()
-            && resource.data.status == 'pending'
             && resource.data.email == request.auth.token.email
           );
         allow list: if head(businessId);

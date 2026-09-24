@@ -49,10 +49,10 @@ class _AccessPendingPageState extends ConsumerState<AccessPendingPage> {
       await ref
           .read(authRepositoryProvider)
           .acceptEmployeeInvitation(
-            businessId: _businessController.text,
-            invitationId: _invitationController.text,
-            displayName: _nameController.text,
-            phone: _phoneController.text,
+            businessId: _businessController.text.trim(),
+            invitationId: _invitationController.text.trim(),
+            displayName: _nameController.text.trim(),
+            phone: _phoneController.text.trim(),
           );
     } on AppException catch (error) {
       if (mounted) setState(() => _error = error.message);
@@ -76,10 +76,17 @@ class _AccessPendingPageState extends ConsumerState<AccessPendingPage> {
       );
     }
 
+    final signedInEmail =
+        widget.user?.email ??
+        ref.watch(authSessionProvider).asData?.value?.email ??
+        '';
+
     return AuthScaffold(
       title: 'Activate your access',
       subtitle:
-          'Enter the business ID and one-time invitation code shared by your Head Distributor.',
+          signedInEmail.isNotEmpty
+              ? 'Signed in as $signedInEmail.\nEnter the business ID and one-time invitation code shared by your Head Distributor.'
+              : 'Enter the business ID and one-time invitation code shared by your Head Distributor.',
       child: Form(
         key: _formKey,
         child: Column(
@@ -89,6 +96,9 @@ class _AccessPendingPageState extends ConsumerState<AccessPendingPage> {
               controller: _businessController,
               validator: (value) => AuthFields.required(value, 'Business ID'),
               textInputAction: TextInputAction.next,
+              textCapitalization: TextCapitalization.none,
+              autocorrect: false,
+              enableSuggestions: false,
               decoration: const InputDecoration(labelText: 'Business ID'),
             ),
             const SizedBox(height: 12),
@@ -97,6 +107,9 @@ class _AccessPendingPageState extends ConsumerState<AccessPendingPage> {
               validator:
                   (value) => AuthFields.required(value, 'Invitation code'),
               textInputAction: TextInputAction.next,
+              textCapitalization: TextCapitalization.none,
+              autocorrect: false,
+              enableSuggestions: false,
               decoration: const InputDecoration(labelText: 'Invitation code'),
             ),
             const SizedBox(height: 12),

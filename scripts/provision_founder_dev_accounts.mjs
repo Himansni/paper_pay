@@ -11,10 +11,25 @@ if (
   throw new Error('CRITICAL SAFETY FAILURE: This script is restricted strictly to paperroutedev.');
 }
 
-const cfgPath = process.env.HOME + '/.config/configstore/firebase-tools.json';
-const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
-const vs = (cfg.additionalAccounts || []).find((a) => a.user?.email === 'vs467890@gmail.com') || cfg;
-const adminToken = vs.tokens.access_token;
+// Load local ignored environment file if variables are not already set in process.env
+if (!process.env.FOUNDER_HEAD_PASSWORD || !process.env.FOUNDER_EMP_PASSWORD) {
+  if (fs.existsSync('.env.paperroutedev')) {
+    const raw = fs.readFileSync('.env.paperroutedev', 'utf8');
+    for (const line of raw.split('\n')) {
+      const match = line.match(/^\s*([A-Za-z0-9_]+)\s*=\s*['"]?(.*?)['"]?\s*$/);
+      if (match && !process.env[match[1]]) {
+        process.env[match[1]] = match[2];
+      }
+    }
+  }
+}
+
+function getAdminToken() {
+  const cfgPath = process.env.HOME + '/.config/configstore/firebase-tools.json';
+  const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+  const vs = (cfg.additionalAccounts || []).find((a) => a.user?.email === 'vs467890@gmail.com') || cfg;
+  return vs.tokens.access_token;
+}
 
 function toFirestoreValue(val) {
   if (val === null || val === undefined) return { nullValue: null };
@@ -47,7 +62,7 @@ async function writeAdminFirestoreDoc(docPath, data) {
   const res = await fetch(url, {
     method: 'PATCH',
     headers: {
-      Authorization: `Bearer ${adminToken}`,
+      Authorization: `Bearer ${getAdminToken()}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ fields }),
@@ -65,7 +80,7 @@ async function getOrCreateAuthUser(email, password, displayName) {
   const lookupRes = await fetch(lookupUrl, {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${adminToken}`,
+      Authorization: `Bearer ${getAdminToken()}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ email: [email] }),
@@ -79,7 +94,7 @@ async function getOrCreateAuthUser(email, password, displayName) {
     const updateRes = await fetch(updateUrl, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${adminToken}`,
+        Authorization: `Bearer ${getAdminToken()}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -98,7 +113,7 @@ async function getOrCreateAuthUser(email, password, displayName) {
     const createRes = await fetch(createUrl, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${adminToken}`,
+        Authorization: `Bearer ${getAdminToken()}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({

@@ -399,5 +399,17 @@
   "frequencyDaily": "दैनिक",
   "frequencyWeekly": "साप्ताहिक",
   "frequencyFortnightly": "पाक्षिक",
-  "frequencyMonthly": "मासिक"
+  "frequencyMonthly": "मासिक",
+  "addAnotherNewspaper": "एक और समाचार पत्र जोड़ें",
+  "removeNewspaper": "समाचार पत्र हटाएं",
+  "selectNewspaper": "समाचार पत्र / पत्रिका चुनें",
+  "noNewspapersSelected": "कोई समाचार पत्र नहीं चुना गया",
+  "multipleNewspapers": "अनेक समाचार पत्र",
+  "clearPlannedEndDate": "नियोजित समाप्ति तिथि हटाएं",
+  "selectStartDate": "प्रारंभ तिथि चुनें",
+  "selectPlannedEndDate": "नियोजित समाप्ति तिथि चुनें",
+  "plannedEndDateBeforeStartDate": "नियोजित समाप्ति तिथि प्रारंभ तिथि से पहले नहीं हो सकती।",
+  "couldNotLoadOutstanding": "वर्तमान बकाया राशि लोड नहीं की जा सकी।",
+  "tryAgain": "पुनः प्रयास करें",
+  "customerSubscriptionsSetupFailed": "ग्राहक बनाया गया, लेकिन कुछ सदस्यताएं सेट नहीं की जा सकीं।"
 }

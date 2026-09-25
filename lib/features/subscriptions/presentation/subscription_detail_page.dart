@@ -122,13 +122,22 @@ class CustomerSubscriptionsSection extends ConsumerWidget {
                               '/customers/${Uri.encodeComponent(customer.id)}/subscriptions/${Uri.encodeComponent(subscription.id)}',
                             ),
                       ),
-                    if (canManage && (active.length > 1 || paused.isNotEmpty)) ...[
+                    if (canManage) ...[
                       const SizedBox(height: 12),
                       Wrap(
                         spacing: 8,
                         runSpacing: 8,
                         children: [
-                          if (active.isNotEmpty)
+                          OutlinedButton.icon(
+                            key: const ValueKey('add-newspaper-bottom-button'),
+                            onPressed:
+                                () => context.push<bool>(
+                                  '/customers/${Uri.encodeComponent(customer.id)}/subscriptions/new',
+                                ),
+                            icon: const Icon(Icons.add),
+                            label: const Text('Add newspaper'),
+                          ),
+                          if (active.isNotEmpty && (active.length > 1 || paused.isNotEmpty))
                             OutlinedButton.icon(
                               key: const ValueKey('pause-all-subscriptions-button'),
                               onPressed: () => _pauseAll(context, ref, active, key),

@@ -2086,6 +2086,78 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Monthly'**
   String get frequencyMonthly;
+
+  /// No description provided for @addAnotherNewspaper.
+  ///
+  /// In en, this message translates to:
+  /// **'Add another newspaper'**
+  String get addAnotherNewspaper;
+
+  /// No description provided for @removeNewspaper.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove newspaper'**
+  String get removeNewspaper;
+
+  /// No description provided for @selectNewspaper.
+  ///
+  /// In en, this message translates to:
+  /// **'Select Newspaper / Magazine'**
+  String get selectNewspaper;
+
+  /// No description provided for @noNewspapersSelected.
+  ///
+  /// In en, this message translates to:
+  /// **'No newspapers selected'**
+  String get noNewspapersSelected;
+
+  /// No description provided for @multipleNewspapers.
+  ///
+  /// In en, this message translates to:
+  /// **'Multiple newspapers'**
+  String get multipleNewspapers;
+
+  /// No description provided for @clearPlannedEndDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear planned end date'**
+  String get clearPlannedEndDate;
+
+  /// No description provided for @selectStartDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Select start date'**
+  String get selectStartDate;
+
+  /// No description provided for @selectPlannedEndDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Select planned end date'**
+  String get selectPlannedEndDate;
+
+  /// No description provided for @plannedEndDateBeforeStartDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Planned end date cannot precede start date.'**
+  String get plannedEndDateBeforeStartDate;
+
+  /// No description provided for @couldNotLoadOutstanding.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load current outstanding.'**
+  String get couldNotLoadOutstanding;
+
+  /// No description provided for @tryAgain.
+  ///
+  /// In en, this message translates to:
+  /// **'Try again'**
+  String get tryAgain;
+
+  /// No description provided for @customerSubscriptionsSetupFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Customer created, but some subscriptions could not be set up.'**
+  String get customerSubscriptionsSetupFailed;
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

@@ -518,5 +518,17 @@
   "frequencyDaily": "Daily",
   "frequencyWeekly": "Weekly",
   "frequencyFortnightly": "Fortnightly",
-  "frequencyMonthly": "Monthly"
+  "frequencyMonthly": "Monthly",
+  "addAnotherNewspaper": "Add another newspaper",
+  "removeNewspaper": "Remove newspaper",
+  "selectNewspaper": "Select Newspaper / Magazine",
+  "noNewspapersSelected": "No newspapers selected",
+  "multipleNewspapers": "Multiple newspapers",
+  "clearPlannedEndDate": "Clear planned end date",
+  "selectStartDate": "Select start date",
+  "selectPlannedEndDate": "Select planned end date",
+  "plannedEndDateBeforeStartDate": "Planned end date cannot precede start date.",
+  "couldNotLoadOutstanding": "Could not load current outstanding.",
+  "tryAgain": "Try again",
+  "customerSubscriptionsSetupFailed": "Customer created, but some subscriptions could not be set up."
 }

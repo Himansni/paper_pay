@@ -1063,4 +1063,40 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get frequencyMonthly => 'Monthly';
+
+  @override
+  String get addAnotherNewspaper => 'Add another newspaper';
+
+  @override
+  String get removeNewspaper => 'Remove newspaper';
+
+  @override
+  String get selectNewspaper => 'Select Newspaper / Magazine';
+
+  @override
+  String get noNewspapersSelected => 'No newspapers selected';
+
+  @override
+  String get multipleNewspapers => 'Multiple newspapers';
+
+  @override
+  String get clearPlannedEndDate => 'Clear planned end date';
+
+  @override
+  String get selectStartDate => 'Select start date';
+
+  @override
+  String get selectPlannedEndDate => 'Select planned end date';
+
+  @override
+  String get plannedEndDateBeforeStartDate => 'Planned end date cannot precede start date.';
+
+  @override
+  String get couldNotLoadOutstanding => 'Could not load current outstanding.';
+
+  @override
+  String get tryAgain => 'Try again';
+
+  @override
+  String get customerSubscriptionsSetupFailed => 'Customer created, but some subscriptions could not be set up.';
 }

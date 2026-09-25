@@ -1063,4 +1063,40 @@ class AppLocalizationsHi extends AppLocalizations {
 
   @override
   String get frequencyMonthly => 'मासिक';
+
+  @override
+  String get addAnotherNewspaper => 'एक और समाचार पत्र जोड़ें';
+
+  @override
+  String get removeNewspaper => 'समाचार पत्र हटाएं';
+
+  @override
+  String get selectNewspaper => 'समाचार पत्र / पत्रिका चुनें';
+
+  @override
+  String get noNewspapersSelected => 'कोई समाचार पत्र नहीं चुना गया';
+
+  @override
+  String get multipleNewspapers => 'अनेक समाचार पत्र';
+
+  @override
+  String get clearPlannedEndDate => 'नियोजित समाप्ति तिथि हटाएं';
+
+  @override
+  String get selectStartDate => 'प्रारंभ तिथि चुनें';
+
+  @override
+  String get selectPlannedEndDate => 'नियोजित समाप्ति तिथि चुनें';
+
+  @override
+  String get plannedEndDateBeforeStartDate => 'नियोजित समाप्ति तिथि प्रारंभ तिथि से पहले नहीं हो सकती।';
+
+  @override
+  String get couldNotLoadOutstanding => 'वर्तमान बकाया राशि लोड नहीं की जा सकी।';
+
+  @override
+  String get tryAgain => 'पुनः प्रयास करें';
+
+  @override
+  String get customerSubscriptionsSetupFailed => 'ग्राहक बनाया गया, लेकिन कुछ सदस्यताएं सेट नहीं की जा सकीं।';
 }

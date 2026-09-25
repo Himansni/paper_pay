@@ -88,6 +88,16 @@ class CustomerFormPage extends ConsumerStatefulWidget {
   ConsumerState<CustomerFormPage> createState() => _CustomerFormPageState();
 }
 
+class _InitialSubscriptionDraft {
+  String newspaperId;
+  int quantity;
+
+  _InitialSubscriptionDraft({
+    required this.newspaperId,
+    this.quantity = 1,
+  });
+}
+
 class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
   static const _accessPolicy = AccessPolicy();
   final _formKey = GlobalKey<FormState>();
@@ -117,8 +127,7 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
 
   // Phase 3 Quick Add & Subscription state
   late bool _quickAddMode;
-  String? _selectedNewspaperId;
-  int _subscriptionQuantity = 1;
+  final List<_InitialSubscriptionDraft> _initialSubscriptions = [];
 
   bool get _isEditing => widget.customer != null;
 
@@ -127,6 +136,9 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
     super.initState();
     _quickAddMode = widget.isQuickAdd;
     final customer = widget.customer;
+    if (customer == null) {
+      _initialSubscriptions.add(_InitialSubscriptionDraft(newspaperId: ''));
+    }
     _name = TextEditingController(text: customer?.name ?? '');
     _phone = TextEditingController(text: customer?.phone ?? '');
     _alternatePhone = TextEditingController(
@@ -350,6 +362,7 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
                   DropdownButtonFormField<DeliveryPlacement>(
                     key: const ValueKey('delivery-placement-dropdown'),
                     value: _deliveryPlacement,
+                    isExpanded: true,
                     decoration: const InputDecoration(
                       labelText: 'Delivery placement point',
                     ),
@@ -357,7 +370,7 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
                       for (final p in DeliveryPlacement.values)
                         DropdownMenuItem(
                           value: p,
-                          child: Text(p.label),
+                          child: Text(p.label, overflow: TextOverflow.ellipsis),
                         ),
                     ],
                     onChanged: (val) {
@@ -450,18 +463,19 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
                           areaItems.any((area) => area.id == _areaId)
                               ? _areaId
                               : '',
+                      isExpanded: true,
                       decoration: const InputDecoration(
                         labelText: 'Delivery area',
                       ),
                       items: [
                         const DropdownMenuItem(
                           value: '',
-                          child: Text('Select an area'),
+                          child: Text('Select an area', overflow: TextOverflow.ellipsis),
                         ),
                         for (final area in areaItems)
                           DropdownMenuItem(
                             value: area.id,
-                            child: Text(area.name),
+                            child: Text(area.name, overflow: TextOverflow.ellipsis),
                           ),
                       ],
                       validator:
@@ -499,18 +513,19 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
                                   )
                                   ? _employeeId
                                   : '',
+                          isExpanded: true,
                           decoration: const InputDecoration(
                             labelText: 'Assigned employee (optional)',
                           ),
                           items: [
                             const DropdownMenuItem(
                               value: '',
-                              child: Text('Leave unassigned for now'),
+                              child: Text('Leave unassigned for now', overflow: TextOverflow.ellipsis),
                             ),
                             for (final member in _employeesForArea(memberItems))
                               DropdownMenuItem(
                                 value: member.uid,
-                                child: Text(member.displayName),
+                                child: Text(member.displayName, overflow: TextOverflow.ellipsis),
                               ),
                           ],
                           onChanged:
@@ -529,6 +544,7 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
                     DropdownButtonFormField<RoutePlacement>(
                       key: const ValueKey('route-placement-dropdown'),
                       value: _routePlacement,
+                      isExpanded: true,
                       decoration: const InputDecoration(
                         labelText: 'Route order placement',
                         helperText: 'Controls morning delivery sequence.',
@@ -536,15 +552,15 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
                       items: const [
                         DropdownMenuItem(
                           value: RoutePlacement.first,
-                          child: Text('Add at start of route (First)'),
+                          child: Text('Add at start of route (First)', overflow: TextOverflow.ellipsis),
                         ),
                         DropdownMenuItem(
                           value: RoutePlacement.last,
-                          child: Text('Add at end of route (Last)'),
+                          child: Text('Add at end of route (Last)', overflow: TextOverflow.ellipsis),
                         ),
                         DropdownMenuItem(
                           value: RoutePlacement.afterCustomer,
-                          child: Text('Place after existing customer…'),
+                          child: Text('Place after existing customer…', overflow: TextOverflow.ellipsis),
                         ),
                       ],
                       onChanged: (value) {
@@ -604,6 +620,7 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
                                       : active.first.id;
                               return DropdownButtonFormField<String>(
                                 value: selectedValue,
+                                isExpanded: true,
                                 decoration: const InputDecoration(
                                   labelText: 'Preceding customer',
                                 ),
@@ -613,6 +630,7 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
                                       value: c.id,
                                       child: Text(
                                         '${c.name} (${c.customerCode})',
+                                        overflow: TextOverflow.ellipsis,
                                       ),
                                     ),
                                 ],
@@ -630,71 +648,206 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
               ),
               const SizedBox(height: 14),
 
-              // Initial Publication / Subscription Selector (New Customers)
+              // Initial Publication / Multi-Subscription Selector (New Customers)
               if (!_isEditing && newspapers.isNotEmpty) ...[
                 _SectionCard(
-                  title: 'Initial Subscription (Optional)',
+                  title: 'Newspaper Subscriptions',
                   subtitle:
-                      'Attach a publication right away or configure full details later.',
+                      'Attach one or more publications right away or configure full details later.',
                   children: [
-                    DropdownButtonFormField<String>(
-                      key: const ValueKey('initial-newspaper-dropdown'),
-                      value: _selectedNewspaperId ?? '',
-                      decoration: const InputDecoration(
-                        labelText: 'Select Newspaper / Magazine',
-                      ),
-                      items: [
-                        const DropdownMenuItem(
-                          value: '',
-                          child: Text('None (Set up subscription later)'),
+                    if (_initialSubscriptions.isEmpty)
+                      OutlinedButton.icon(
+                        key: const ValueKey('add-first-newspaper-btn'),
+                        onPressed: () {
+                          setState(() {
+                            _initialSubscriptions.add(
+                              _InitialSubscriptionDraft(
+                                newspaperId: newspapers.first.id,
+                                quantity: 1,
+                              ),
+                            );
+                          });
+                        },
+                        icon: const Icon(Icons.add),
+                        label: const Text('Add newspaper'),
+                      )
+                    else ...[
+                      for (int i = 0; i < _initialSubscriptions.length; i++) ...[
+                        Builder(
+                          builder: (context) {
+                            final draft = _initialSubscriptions[i];
+                            final otherSelectedIds = _initialSubscriptions
+                                .asMap()
+                                .entries
+                                .where((e) => e.key != i)
+                                .map((e) => e.value.newspaperId)
+                                .toSet();
+                            final availablePapers = newspapers
+                                .where(
+                                  (p) =>
+                                      !otherSelectedIds.contains(p.id) ||
+                                      p.id == draft.newspaperId,
+                                )
+                                .toList();
+
+                            return Card(
+                              margin: const EdgeInsets.only(bottom: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                side: BorderSide(color: Colors.grey.shade300),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.all(12),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: DropdownButtonFormField<String>(
+                                            key: ValueKey('initial-newspaper-dropdown-$i'),
+                                            value:
+                                                draft.newspaperId.isNotEmpty &&
+                                                        availablePapers.any(
+                                                          (p) =>
+                                                              p.id ==
+                                                              draft.newspaperId,
+                                                        )
+                                                    ? draft.newspaperId
+                                                    : '',
+                                            isExpanded: true,
+                                            decoration: const InputDecoration(
+                                              labelText:
+                                                  'Select Newspaper / Magazine',
+                                              contentPadding:
+                                                  EdgeInsets.symmetric(
+                                                    horizontal: 12,
+                                                    vertical: 10,
+                                                  ),
+                                            ),
+                                            items: [
+                                              const DropdownMenuItem(
+                                                value: '',
+                                                child: Text(
+                                                  'None (Select publication)',
+                                                ),
+                                              ),
+                                              for (final pub in availablePapers)
+                                                DropdownMenuItem(
+                                                  value: pub.id,
+                                                  child: Text(
+                                                    pub.displayName,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                  ),
+                                                ),
+                                            ],
+                                            onChanged: (val) {
+                                              setState(
+                                                () =>
+                                                    draft.newspaperId =
+                                                        val ?? '',
+                                              );
+                                            },
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        IconButton(
+                                          key: ValueKey('remove-newspaper-$i'),
+                                          icon: const Icon(
+                                            Icons.delete_outline,
+                                            color: Colors.red,
+                                          ),
+                                          tooltip: 'Remove newspaper',
+                                          onPressed: () {
+                                            setState(() {
+                                              _initialSubscriptions.removeAt(i);
+                                            });
+                                          },
+                                        ),
+                                      ],
+                                    ),
+                                    if (draft.newspaperId.isNotEmpty) ...[
+                                      const SizedBox(height: 10),
+                                      Row(
+                                        children: [
+                                          const Text(
+                                            'Quantity: ',
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          IconButton(
+                                            key: ValueKey('decrease-qty-$i'),
+                                            icon: const Icon(
+                                              Icons.remove_circle_outline,
+                                            ),
+                                            onPressed:
+                                                draft.quantity > 1
+                                                    ? () => setState(
+                                                      () => draft.quantity--,
+                                                    )
+                                                    : null,
+                                          ),
+                                          Text(
+                                            '${draft.quantity}',
+                                            style: const TextStyle(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.w800,
+                                            ),
+                                          ),
+                                          IconButton(
+                                            key: ValueKey('increase-qty-$i'),
+                                            icon: const Icon(
+                                              Icons.add_circle_outline,
+                                            ),
+                                            onPressed:
+                                                draft.quantity < 50
+                                                    ? () => setState(
+                                                      () => draft.quantity++,
+                                                    )
+                                                    : null,
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
                         ),
-                        for (final pub in newspapers)
-                          DropdownMenuItem(
-                            value: pub.id,
-                            child: Text(pub.displayName),
-                          ),
                       ],
-                      onChanged: (val) {
-                        setState(() => _selectedNewspaperId = val);
-                      },
-                    ),
-                    if (_selectedNewspaperId != null &&
-                        _selectedNewspaperId!.isNotEmpty) ...[
-                      const SizedBox(height: 14),
-                      Row(
-                        children: [
-                          const Text(
-                            'Quantity: ',
-                            style: TextStyle(fontWeight: FontWeight.w600),
+                      if (_initialSubscriptions.length < newspapers.length)
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: TextButton.icon(
+                            key: const ValueKey('add-another-newspaper-button'),
+                            onPressed: () {
+                              final selectedIds =
+                                  _initialSubscriptions
+                                      .map((s) => s.newspaperId)
+                                      .toSet();
+                              final remaining =
+                                  newspapers
+                                      .where((p) => !selectedIds.contains(p.id))
+                                      .toList();
+                              if (remaining.isNotEmpty) {
+                                setState(() {
+                                  _initialSubscriptions.add(
+                                    _InitialSubscriptionDraft(
+                                      newspaperId: remaining.first.id,
+                                      quantity: 1,
+                                    ),
+                                  );
+                                });
+                              }
+                            },
+                            icon: const Icon(Icons.add),
+                            label: const Text('Add another newspaper'),
                           ),
-                          const SizedBox(width: 10),
-                          IconButton(
-                            icon: const Icon(Icons.remove_circle_outline),
-                            onPressed:
-                                _subscriptionQuantity > 1
-                                    ? () => setState(
-                                      () => _subscriptionQuantity--,
-                                    )
-                                    : null,
-                          ),
-                          Text(
-                            '$_subscriptionQuantity',
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.add_circle_outline),
-                            onPressed:
-                                _subscriptionQuantity < 20
-                                    ? () => setState(
-                                      () => _subscriptionQuantity++,
-                                    )
-                                    : null,
-                          ),
-                        ],
-                      ),
+                        ),
                     ],
                   ],
                 ),
@@ -984,33 +1137,57 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
           // Route placement error non-fatal
         }
 
-        // Optional initial publication subscription
-        if (_selectedNewspaperId != null &&
-            _selectedNewspaperId!.isNotEmpty) {
+        // Optional initial publication subscriptions
+        final validDrafts =
+            _initialSubscriptions
+                .where((draft) => draft.newspaperId.trim().isNotEmpty)
+                .toList();
+
+        final failedPapers = <String>[];
+        for (final draft in validDrafts) {
           try {
             await ref.read(subscriptionRepositoryProvider).createSubscription(
               actor: widget.user,
               customerId: id,
               input: SubscriptionInput(
-                newspaperId: _selectedNewspaperId!,
+                newspaperId: draft.newspaperId,
                 startDate: LocalDate.fromDateTime(DateTime.now()),
                 endDate: null,
-                quantity: _subscriptionQuantity,
+                quantity: draft.quantity,
                 deliveryWeekdays: DeliveryWeekday.all,
                 customPricePaise: null,
                 customPriceReason: '',
               ),
             );
           } catch (_) {
-            // Subscription setup non-fatal
+            failedPapers.add(draft.newspaperId);
           }
         }
 
+        if (failedPapers.isNotEmpty && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Customer created, but ${failedPapers.length} subscription(s) could not be set up. Please add them from Customer Details.',
+              ),
+              backgroundColor: Colors.orange.shade800,
+            ),
+          );
+        } else if (mounted && !addNext) {
+          final l10n = AppLocalizations.of(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                l10n?.customerCreated(id) ?? 'Customer $id created.',
+              ),
+            ),
+          );
+        }
+
         if (!mounted) return;
-        final l10n = AppLocalizations.of(context);
 
         if (addNext) {
-          // Retain sticky selections (_areaId, _employeeId, _deliveryPlacement, _routePlacement, _selectedNewspaperId)
+          // Retain sticky selections (_areaId, _employeeId, _deliveryPlacement, _routePlacement, _initialSubscriptions)
           setState(() {
             _name.clear();
             _phone.clear();
@@ -1036,14 +1213,6 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
           _nameFocus.requestFocus();
           return;
         }
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              l10n?.customerCreated(id) ?? 'Customer $id created.',
-            ),
-          ),
-        );
       } else {
         await repository.updateCustomerProfile(
           actor: widget.user,

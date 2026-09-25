@@ -178,6 +178,14 @@
     },
     {
       "collectionGroup": "bills",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "billingMonth", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "bills",
       "queryScope": "COLLECTION_GROUP",
       "fields": [
         { "fieldPath": "businessId", "order": "ASCENDING" },

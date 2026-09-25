@@ -129,6 +129,7 @@ class _SubscriptionFormPageState extends ConsumerState<SubscriptionFormPage> {
     if (current != null) {
       _newspaperId = current.newspaperId;
       _quantity.text = current.quantity.toString();
+      _start.text = (current.isEnded ? LocalDate.fromDateTime(DateTime.now()) : current.startDate).toString();
       // An ended subscription's end date belongs to its closed history. A
       // restart is a new service period and must not inherit that old date as
       // its planned end.
@@ -139,6 +140,8 @@ class _SubscriptionFormPageState extends ConsumerState<SubscriptionFormPage> {
               ? ''
               : NewspaperMoney.formatPaiseForInput(current.customPricePaise!);
       _customPriceReason.text = current.customPriceReason;
+    } else {
+      _start.text = LocalDate.fromDateTime(DateTime.now()).toString();
     }
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadNewspapers());
   }
@@ -188,18 +191,80 @@ class _SubscriptionFormPageState extends ConsumerState<SubscriptionFormPage> {
           archived.newspapers.where((paper) => paper.id == current.newspaperId),
         );
       }
+      final uniqueMap = <String, Newspaper>{};
+      for (final p in papers) {
+        uniqueMap.putIfAbsent(p.id, () => p);
+      }
+      final deduplicated = uniqueMap.values.toList();
       setState(() {
-        _newspapers = papers;
+        _newspapers = deduplicated;
         _newspaperId =
             current?.newspaperId ??
             (_newspaperId.isNotEmpty
                 ? _newspaperId
-                : (papers.isEmpty ? '' : papers.first.id));
+                : (deduplicated.isEmpty ? '' : deduplicated.first.id));
       });
     } on Object catch (error) {
       if (mounted) setState(() => _loadError = error.toString());
     } finally {
       if (mounted) setState(() => _loadingNewspapers = false);
+    }
+  }
+
+  LocalDate? _tryParseDate(String text) {
+    try {
+      return LocalDate.parse(text);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _pickStartDate() async {
+    final initial = _start.text.trim().isNotEmpty
+        ? (_tryParseDate(_start.text.trim())?.toDateTime() ?? DateTime.now())
+        : DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+    if (picked != null) {
+      final selectedLocalDate = LocalDate.fromDateTime(picked);
+      setState(() {
+        _start.text = selectedLocalDate.toString();
+        if (_end.text.trim().isNotEmpty) {
+          final currentEnd = _tryParseDate(_end.text.trim());
+          if (currentEnd != null && currentEnd.isBefore(selectedLocalDate)) {
+            _end.clear();
+          }
+        }
+      });
+    }
+  }
+
+  Future<void> _pickEndDate() async {
+    final startDate = _tryParseDate(_start.text.trim());
+    final now = DateTime.now();
+    final minDate = startDate != null ? startDate.toDateTime() : DateTime(2000);
+    DateTime initial = _end.text.trim().isNotEmpty
+        ? (_tryParseDate(_end.text.trim())?.toDateTime() ?? now)
+        : (startDate != null && startDate.toDateTime().isAfter(now)
+            ? startDate.toDateTime()
+            : now);
+    if (initial.isBefore(minDate)) {
+      initial = minDate;
+    }
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: minDate,
+      lastDate: DateTime(2100),
+    );
+    if (picked != null) {
+      setState(() {
+        _end.text = LocalDate.fromDateTime(picked).toString();
+      });
     }
   }
 
@@ -276,12 +341,16 @@ class _SubscriptionFormPageState extends ConsumerState<SubscriptionFormPage> {
               else
                 DropdownButtonFormField<String>(
                   value: _newspaperId,
+                  isExpanded: true,
                   decoration: const InputDecoration(labelText: 'Newspaper'),
                   items: [
                     for (final newspaper in _newspapers)
                       DropdownMenuItem(
                         value: newspaper.id,
-                        child: Text(newspaper.displayName),
+                        child: Text(
+                          newspaper.displayName,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                   ],
                   onChanged:
@@ -292,6 +361,7 @@ class _SubscriptionFormPageState extends ConsumerState<SubscriptionFormPage> {
                 ),
               const SizedBox(height: 14),
               TextFormField(
+                key: const ValueKey('subscription-start-date-field'),
                 controller: _start,
                 decoration: InputDecoration(
                   labelText:
@@ -300,15 +370,35 @@ class _SubscriptionFormPageState extends ConsumerState<SubscriptionFormPage> {
                           : 'Subscription start date',
                   hintText: 'YYYY-MM-DD',
                   helperText: 'Calendar date only; no time zone is stored.',
+                  suffixIcon: IconButton(
+                    key: const ValueKey('subscription-start-date-picker-button'),
+                    icon: const Icon(Icons.calendar_today_outlined),
+                    tooltip: 'Select start date',
+                    onPressed: _pickStartDate,
+                  ),
                 ),
                 validator: _requiredDate,
               ),
               const SizedBox(height: 14),
               TextFormField(
+                key: const ValueKey('subscription-end-date-field'),
                 controller: _end,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Planned end date (optional)',
                   hintText: 'YYYY-MM-DD',
+                  suffixIcon: _end.text.isNotEmpty
+                      ? IconButton(
+                          key: const ValueKey('clear-planned-end-date'),
+                          icon: const Icon(Icons.clear),
+                          tooltip: 'Clear planned end date',
+                          onPressed: () => setState(() => _end.clear()),
+                        )
+                      : IconButton(
+                          key: const ValueKey('subscription-end-date-picker-button'),
+                          icon: const Icon(Icons.calendar_today_outlined),
+                          tooltip: 'Select planned end date',
+                          onPressed: _pickEndDate,
+                        ),
                 ),
                 validator: _optionalDate,
               ),
@@ -436,7 +526,15 @@ class _SubscriptionFormPageState extends ConsumerState<SubscriptionFormPage> {
 
   String? _optionalDate(String? value) {
     final text = value?.trim() ?? '';
-    return text.isEmpty ? null : _requiredDate(text);
+    if (text.isEmpty) return null;
+    final parseResult = _requiredDate(text);
+    if (parseResult != null) return parseResult;
+    final end = _tryParseDate(text);
+    final start = _tryParseDate(_start.text.trim());
+    if (end != null && start != null && end.isBefore(start)) {
+      return 'Subscription end date cannot be before its start date.';
+    }
+    return null;
   }
 
   Future<void> _submit() async {

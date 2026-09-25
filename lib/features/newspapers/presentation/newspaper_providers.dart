@@ -44,5 +44,9 @@ final activeNewspapersListProvider = FutureProvider.autoDispose
               pageSize: 50,
             ),
           );
-      return page.newspapers;
+      final uniqueMap = <String, Newspaper>{};
+      for (final n in page.newspapers) {
+        uniqueMap.putIfAbsent(n.id, () => n);
+      }
+      return uniqueMap.values.toList();
     });

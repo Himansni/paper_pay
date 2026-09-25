@@ -41,20 +41,7 @@ class _FakeAuthRepository implements AuthRepository {
   Future<void> signIn({required String email, required String password}) async {}
 
   @override
-  Future<void> signInWithEmailAndPassword({
-    required String email,
-    required String password,
-  }) async {}
-
-  @override
   Future<void> registerInvitedEmployee({
-    required String email,
-    required String password,
-    required String displayName,
-  }) async {}
-
-  @override
-  Future<void> signUpWithEmailAndPassword({
     required String email,
     required String password,
     required String displayName,
@@ -68,12 +55,6 @@ class _FakeAuthRepository implements AuthRepository {
 
   @override
   Future<void> reauthenticate({required String password}) async {}
-
-  @override
-  Future<void> updatePassword({
-    required String currentPassword,
-    required String newPassword,
-  }) async {}
 
   @override
   Future<void> requestAccountDeletion({

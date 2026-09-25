@@ -63,7 +63,12 @@ class _MorningRoutePageState extends ConsumerState<MorningRoutePage> {
           children: [
             const Icon(Icons.directions_bike_outlined, color: AppTheme.brand),
             const SizedBox(width: 8),
-            Text(l10n?.morningRouteTitle ?? 'Morning Route'),
+            Flexible(
+              child: Text(
+                l10n?.morningRouteTitle ?? 'Morning Route',
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
           ],
         ),
         actions: [
@@ -101,23 +106,40 @@ class _MorningRoutePageState extends ConsumerState<MorningRoutePage> {
           IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: l10n?.refreshRoute ?? 'Refresh Route',
-            onPressed: () => ref.invalidate(morningRouteStopsProvider(user)),
+            onPressed: () {
+              ref.invalidate(deliveryAreasProvider(businessId));
+              ref.invalidate(morningRouteStopsProvider(user));
+            },
           ),
           const SizedBox(width: 8),
         ],
       ),
       body: SafeArea(
         top: false,
-        child: stopsAsync.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (err, _) => Padding(
-            padding: const EdgeInsets.all(20),
-            child: AsyncErrorCard(
-              message: 'Could not load morning route. $err',
-              onRetry: () => ref.invalidate(morningRouteStopsProvider(user)),
-            ),
-          ),
-          data: (stops) {
+        child: areasAsync.hasError && !areasAsync.isLoading
+            ? Padding(
+                padding: const EdgeInsets.all(20),
+                child: AsyncErrorCard(
+                  message: 'Could not load delivery areas. ${areasAsync.error}',
+                  onRetry: () {
+                    ref.invalidate(deliveryAreasProvider(businessId));
+                    ref.invalidate(morningRouteStopsProvider(user));
+                  },
+                ),
+              )
+            : stopsAsync.when(
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (err, _) => Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: AsyncErrorCard(
+                    message: 'Could not load morning route. $err',
+                    onRetry: () {
+                      ref.invalidate(deliveryAreasProvider(businessId));
+                      ref.invalidate(morningRouteStopsProvider(user));
+                    },
+                  ),
+                ),
+                data: (stops) {
             final areas = areasAsync.asData?.value ?? [];
             final total = stops.length;
             final delivered = stops.where((s) => s.isDelivered).length;

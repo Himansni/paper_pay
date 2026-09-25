@@ -193,7 +193,12 @@ class _SubscriptionFormPageState extends ConsumerState<SubscriptionFormPage> {
       }
       final uniqueMap = <String, Newspaper>{};
       for (final p in papers) {
-        uniqueMap.putIfAbsent(p.id, () => p);
+        final key = p.displayName.trim().toLowerCase();
+        final effectiveKey = key.isEmpty ? p.id : key;
+        if (!uniqueMap.containsKey(effectiveKey) ||
+            (current != null && p.id == current.newspaperId)) {
+          uniqueMap[effectiveKey] = p;
+        }
       }
       final deduplicated = uniqueMap.values.toList();
       setState(() {

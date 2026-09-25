@@ -61,9 +61,15 @@ class _DailyPricingPageState extends ConsumerState<DailyPricingPage> {
               pageSize: 50,
             ),
           );
+      final uniqueMap = <String, Newspaper>{};
+      for (final n in page.newspapers) {
+        final key = n.displayName.trim().toLowerCase();
+        uniqueMap.putIfAbsent(key.isEmpty ? n.id : key, () => n);
+      }
+      final deduplicated = uniqueMap.values.toList();
       if (!mounted) return;
       setState(() {
-        _newspapers = page.newspapers;
+        _newspapers = deduplicated;
         if (_newspaperId.isEmpty && _newspapers.isNotEmpty) {
           _newspaperId = _newspapers.first.id;
         }
@@ -274,8 +280,8 @@ class _DailyPricingPageState extends ConsumerState<DailyPricingPage> {
                           ),
                           validator:
                               (value) =>
-                                  (value?.trim().length ?? 0) < 3
-                                      ? 'Enter a clear reason.'
+                                  (value != null && value.trim().length > 300)
+                                      ? 'Reason cannot exceed 300 characters.'
                                       : null,
                         ),
                         if (_current != null) ...[

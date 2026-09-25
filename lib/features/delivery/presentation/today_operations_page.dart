@@ -30,7 +30,12 @@ class TodayOperationsPage extends ConsumerWidget {
           children: [
             const Icon(Icons.dashboard_customize_outlined, color: AppTheme.brand),
             const SizedBox(width: 8),
-            Text(l10n?.headTodayTitle ?? "Today's Operations"),
+            Flexible(
+              child: Text(
+                l10n?.headTodayTitle ?? "Today's Operations",
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
           ],
         ),
         actions: [
@@ -397,10 +402,14 @@ class _RouteProgressMonitorCard extends ConsumerWidget {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text(
-                              route.areaName,
-                              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
+                            Expanded(
+                              child: Text(
+                                route.areaName,
+                                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
+                            const SizedBox(width: 8),
                             Row(
                               children: [
                                 Text(

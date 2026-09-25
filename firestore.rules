@@ -2219,7 +2219,6 @@ service cloud.firestore {
         && data.revision is int
         && data.revision >= 1
         && data.reason is string
-        && data.reason.size() >= 3
         && data.reason.size() <= 300
         && data.createdBy is string
         && data.updatedBy is string

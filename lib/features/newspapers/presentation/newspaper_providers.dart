@@ -46,7 +46,8 @@ final activeNewspapersListProvider = FutureProvider.autoDispose
           );
       final uniqueMap = <String, Newspaper>{};
       for (final n in page.newspapers) {
-        uniqueMap.putIfAbsent(n.id, () => n);
+        final key = n.displayName.trim().toLowerCase();
+        uniqueMap.putIfAbsent(key.isEmpty ? n.id : key, () => n);
       }
       return uniqueMap.values.toList();
     });

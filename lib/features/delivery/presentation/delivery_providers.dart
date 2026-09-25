@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:paper_route/core/domain/local_date.dart';
+import 'package:paper_route/core/errors/app_exception.dart';
 import 'package:paper_route/features/areas/domain/delivery_area.dart';
 import 'package:paper_route/features/areas/presentation/area_providers.dart';
 import 'package:paper_route/features/auth/domain/app_user.dart';
@@ -143,6 +144,9 @@ final morningRouteStopsProvider =
 
   // 1. Fetch areas
   final areasAsync = ref.watch(deliveryAreasProvider(businessId));
+  if (areasAsync.hasError) {
+    throw AppException('Could not load delivery areas: ${areasAsync.error}');
+  }
   final areas = (areasAsync.asData?.value ?? const <DeliveryArea>[])
       .where((a) => a.isActive)
       .toList();
@@ -154,6 +158,10 @@ final morningRouteStopsProvider =
     } else if (areas.isNotEmpty) {
       activeAreaId = areas.first.id;
     }
+  }
+
+  if (activeAreaId.isEmpty) {
+    return const <DailyRouteStop>[];
   }
 
   final areaName = areas
@@ -206,12 +214,10 @@ final morningRouteStopsProvider =
     customers = sorted;
   }
 
-  final List<DailyRouteStop> stops = [];
-
-  for (var i = 0; i < customers.length; i++) {
+  final subscriptionRepo = ref.read(subscriptionRepositoryProvider);
+  final stopFutures = List.generate(customers.length, (i) async {
     final customer = customers[i];
-    final List<CustomerSubscription> subs = await ref
-        .read(subscriptionRepositoryProvider)
+    final List<CustomerSubscription> subs = await subscriptionRepo
         .watchCustomerSubscriptions(
           businessId: businessId,
           customerId: customer.id,
@@ -233,8 +239,7 @@ final morningRouteStopsProvider =
         pauseReason = 'Paused';
       } else {
         // Check dated pauses covering selectedDate
-        final pauses = await ref
-            .read(subscriptionRepositoryProvider)
+        final pauses = await subscriptionRepo
             .watchPauses(
               businessId: businessId,
               customerId: customer.id,
@@ -262,7 +267,7 @@ final morningRouteStopsProvider =
       );
     }
 
-    if (drops.isEmpty) continue; // No papers scheduled for this customer on this day
+    if (drops.isEmpty) return null; // No papers scheduled for this customer on this day
 
     final isAllPaused = drops.every((d) => d.isPaused);
     final persistedDrop = persistedDrops[customer.id];
@@ -292,26 +297,25 @@ final morningRouteStopsProvider =
       deliveredAt = persistedDrop.updatedAt;
     }
 
-    stops.add(
-      DailyRouteStop(
-        customerId: customer.id,
-        customerCode: customer.customerCode,
-        customerName: customer.name,
-        houseNumber: customer.houseNumber,
-        buildingInfo: customer.buildingInfo,
-        address: customer.address,
-        landmark: customer.landmark,
-        deliveryPlacement: customer.deliveryPlacement.label,
-        routeSequence: i + 1,
-        areaId: activeAreaId,
-        areaName: areaName,
-        drops: drops,
-        status: stopStatus,
-        exceptionReason: exceptionReason,
-        deliveredAt: deliveredAt,
-      ),
+    return DailyRouteStop(
+      customerId: customer.id,
+      customerCode: customer.customerCode,
+      customerName: customer.name,
+      houseNumber: customer.houseNumber,
+      buildingInfo: customer.buildingInfo,
+      address: customer.address,
+      landmark: customer.landmark,
+      deliveryPlacement: customer.deliveryPlacement.label,
+      routeSequence: i + 1,
+      areaId: activeAreaId,
+      areaName: areaName,
+      drops: drops,
+      status: stopStatus,
+      exceptionReason: exceptionReason,
+      deliveredAt: deliveredAt,
     );
-  }
+  });
 
-  return stops;
+  final resolvedStops = await Future.wait(stopFutures);
+  return resolvedStops.whereType<DailyRouteStop>().toList();
 });

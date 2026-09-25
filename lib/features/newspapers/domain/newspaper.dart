@@ -357,9 +357,9 @@ class PriceRuleInput {
   const PriceRuleInput({
     required this.kind,
     required this.startDate,
-    required this.endDate,
+    this.endDate,
     required this.pricePaise,
-    required this.reason,
+    this.reason = '',
   });
 
   final PriceRuleKind kind;
@@ -388,9 +388,9 @@ class PriceRuleInput {
     if (value.effectiveEnd.isBefore(value.startDate)) {
       throw const AppException('Price period end cannot precede its start.');
     }
-    if (value.reason.length < 3 || value.reason.length > 300) {
+    if (value.reason.length > 300) {
       throw const AppException(
-        'Enter a pricing reason between 3 and 300 characters.',
+        'Pricing reason cannot exceed 300 characters.',
       );
     }
   }

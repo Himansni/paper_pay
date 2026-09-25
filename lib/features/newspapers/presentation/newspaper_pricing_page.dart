@@ -145,7 +145,7 @@ class _NewspaperPricingPageState extends ConsumerState<NewspaperPricingPage> {
                     ),
                     subtitle: Text(
                       '${rule.startDate}${rule.endDate == null ? '' : ' → ${rule.endDate}'}\n'
-                      '${rule.status.label} • revision ${rule.revision} • ${rule.reason}',
+                      '${rule.status.label} • revision ${rule.revision}${rule.reason.trim().isEmpty ? '' : ' • ${rule.reason.trim()}'}',
                     ),
                     isThreeLine: true,
                     trailing:
@@ -340,12 +340,12 @@ class _PriceRuleDialogState extends State<_PriceRuleDialog> {
                   helperText:
                       widget.correcting == null
                           ? 'Example: Tuesday edition price'
-                          : 'Required; the previous record is retained.',
+                          : 'The previous record is retained.',
                 ),
                 validator:
                     (value) =>
-                        (value?.trim().length ?? 0) < 3
-                            ? 'Enter a clear reason.'
+                        (value != null && value.trim().length > 300)
+                            ? 'Reason cannot exceed 300 characters.'
                             : null,
               ),
             ],

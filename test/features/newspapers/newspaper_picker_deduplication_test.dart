@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:paper_route/core/domain/local_date.dart';
+import 'package:paper_route/core/errors/app_exception.dart';
 import 'package:paper_route/features/areas/domain/delivery_area.dart';
 import 'package:paper_route/features/areas/presentation/area_providers.dart';
 import 'package:paper_route/features/auth/domain/access_policy.dart';
@@ -114,12 +116,32 @@ void main() {
 
   group('Newspaper Picker Deduplication & Long Name Formatting', () {
     test(
-      'activeNewspapersListProvider deduplicates duplicate newspapers by ID',
+      'activeNewspapersListProvider deduplicates distinct documents with same display name',
       () async {
+        const paper1DistinctDocId = Newspaper(
+          id: 'NP-001-ALT-DOC-ID',
+          newspaperCode: 'NP-001-ALT',
+          businessId: 'biz-1',
+          name: 'Dainik Jagran',
+          searchName: 'dainik jagran',
+          edition: 'Kanpur',
+          language: 'Hindi',
+          defaultPricePaise: 450,
+          status: NewspaperStatus.active,
+          createdBy: 'head-001',
+          updatedBy: 'head-001',
+          lastAuditId: 'audit-1-alt',
+        );
+
         final container = ProviderContainer(
           overrides: [
             newspaperRepositoryProvider.overrideWithValue(
-              _MockNewspaperRepo([paper1, paper1Duplicate, veryLongNamePaper]),
+              _MockNewspaperRepo([
+                paper1,
+                paper1Duplicate,
+                paper1DistinctDocId,
+                veryLongNamePaper,
+              ]),
             ),
           ],
         );
@@ -133,9 +155,47 @@ void main() {
         );
 
         expect(result.length, equals(2));
-        expect(result.map((p) => p.id).toList(), equals(['NP-001', 'NP-LONG']));
+        expect(
+          result.map((p) => p.displayName).toList(),
+          equals([paper1.displayName, veryLongNamePaper.displayName]),
+        );
       },
     );
+
+    test('PriceRuleInput accepts empty reason and validates length <= 300', () {
+      const validEmptyReason = PriceRuleInput(
+        kind: PriceRuleKind.exactDate,
+        startDate: LocalDate(2026, 9, 25),
+        pricePaise: 500,
+        reason: '',
+      );
+      expect(() => validEmptyReason.validate(), returnsNormally);
+
+      const validWithReason = PriceRuleInput(
+        kind: PriceRuleKind.exactDate,
+        startDate: LocalDate(2026, 9, 25),
+        pricePaise: 500,
+        reason: 'Holiday special price',
+      );
+      expect(() => validWithReason.validate(), returnsNormally);
+
+      final invalidLongReason = PriceRuleInput(
+        kind: PriceRuleKind.exactDate,
+        startDate: const LocalDate(2026, 9, 25),
+        pricePaise: 500,
+        reason: 'A' * 301,
+      );
+      expect(
+        () => invalidLongReason.validate(),
+        throwsA(
+          isA<AppException>().having(
+            (e) => e.message,
+            'message',
+            contains('300 characters'),
+          ),
+        ),
+      );
+    });
 
     testWidgets(
       'SubscriptionFormPage deduplicates newspapers and handles very long names without overflow',

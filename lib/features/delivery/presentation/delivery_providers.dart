@@ -182,26 +182,48 @@ final morningRouteStopsProvider =
       const <String, DeliveryDropRecord>{};
 
   // 2. Fetch active customers for this area
-  final customerPage =
-      await ref.read(customerRepositoryProvider).fetchCustomers(
-            CustomerListRequest(
-              businessId: businessId,
-              requesterId: user.uid,
-              isHead: user.isHead,
-              status: CustomerStatus.active,
-              areaId: activeAreaId,
-              pageSize: 200,
-            ),
-          );
+  // CustomerRepository intentionally caps each page at 50 records.
+  // A route can contain more than 50 customers, so fetch every page instead
+  // of requesting an invalid page size (which leaves the route unavailable).
+  final customerRepository = ref.read(customerRepositoryProvider);
+  final customers = <Customer>[];
+  CustomerPageCursor? cursor;
+  do {
+    final customerPage = await customerRepository.fetchCustomers(
+      CustomerListRequest(
+        businessId: businessId,
+        requesterId: user.uid,
+        isHead: user.isHead,
+        status: CustomerStatus.active,
+        areaId: activeAreaId,
+        pageSize: 50,
+        cursor: cursor,
+      ),
+    );
+    customers.addAll(customerPage.customers);
 
-  List<Customer> customers = customerPage.customers;
+    if (!customerPage.hasMore || customerPage.nextCursor == null) {
+      break;
+    }
+    final nextCursor = customerPage.nextCursor!;
+    if (cursor != null &&
+        nextCursor.customerId == cursor!.customerId &&
+        nextCursor.searchName == cursor!.searchName) {
+      throw const AppException(
+        'Customer route pagination did not advance. Please refresh and retry.',
+      );
+    }
+    cursor = nextCursor;
+  } while (true);
+
+  List<Customer> customersForRoute = customers;
   final routeOrder = await ref.read(deliveryRepositoryProvider).getRouteOrder(
         businessId: businessId,
         areaId: activeAreaId,
       );
   if (routeOrder != null && routeOrder.customerIds.isNotEmpty) {
     final Map<String, Customer> customerMap = {
-      for (final c in customers) c.id: c,
+      for (final c in customersForRoute) c.id: c,
     };
     final List<Customer> sorted = [];
     for (final id in routeOrder.customerIds) {
@@ -211,12 +233,12 @@ final morningRouteStopsProvider =
       }
     }
     sorted.addAll(customerMap.values);
-    customers = sorted;
+    customersForRoute = sorted;
   }
 
   final subscriptionRepo = ref.read(subscriptionRepositoryProvider);
-  final stopFutures = List.generate(customers.length, (i) async {
-    final customer = customers[i];
+  final stopFutures = List.generate(customersForRoute.length, (i) async {
+    final customer = customersForRoute[i];
     final List<CustomerSubscription> subs = await subscriptionRepo
         .watchCustomerSubscriptions(
           businessId: businessId,

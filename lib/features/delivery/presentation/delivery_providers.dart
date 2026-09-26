@@ -5,7 +5,6 @@ import 'package:paper_route/features/areas/domain/delivery_area.dart';
 import 'package:paper_route/features/areas/presentation/area_providers.dart';
 import 'package:paper_route/features/auth/domain/app_user.dart';
 import 'package:paper_route/features/customers/domain/customer.dart';
-import 'package:paper_route/features/customers/domain/customer_repository.dart';
 import 'package:paper_route/features/customers/presentation/customer_providers.dart';
 import 'package:paper_route/features/delivery/data/firebase_delivery_repository.dart';
 import 'package:paper_route/features/delivery/domain/delivery_models.dart';
@@ -208,8 +207,8 @@ final morningRouteStopsProvider =
     }
     final nextCursor = customerPage.nextCursor!;
     if (cursor != null &&
-        nextCursor.customerId == cursor!.customerId &&
-        nextCursor.searchName == cursor!.searchName) {
+        nextCursor.customerId == cursor.customerId &&
+        nextCursor.searchName == cursor.searchName) {
       throw const AppException(
         'Customer route pagination did not advance. Please refresh and retry.',
       );

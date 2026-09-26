@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:paper_route/core/domain/local_date.dart';
+import 'package:paper_route/features/areas/domain/delivery_area.dart';
 import 'package:paper_route/features/areas/presentation/area_providers.dart';
 import 'package:paper_route/features/auth/domain/app_user.dart';
 import 'package:paper_route/features/delivery/domain/delivery_models.dart';
@@ -302,6 +303,78 @@ void main() {
       expect(find.text('Delivered'), findsWidgets);
       expect(find.text('Undo Delivered'), findsOneWidget);
     });
+
+    testWidgets(
+      'Morning Route Card layout with multiple areas on narrow screen',
+      (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = const Size(360, 640);
+        addTearDown(() {
+          tester.view.resetPhysicalSize();
+          tester.view.resetDevicePixelRatio();
+        });
+
+        const testAreas = [
+          DeliveryArea(
+            id: 'area-1',
+            name: 'Kabir Nagar Raipur',
+            isActive: true,
+            assignedEmployeeIds: {'emp-1'},
+          ),
+          DeliveryArea(
+            id: 'area-2',
+            name: 'Founder Route Area 1790192875866',
+            isActive: true,
+            assignedEmployeeIds: {'emp-1'},
+          ),
+        ];
+
+        const stop = DailyRouteStop(
+          customerId: 'c-1',
+          customerCode: 'C001',
+          customerName: 'Kabir Nagar Customer',
+          houseNumber: '101',
+          buildingInfo: '',
+          address: 'Kabir Nagar Raipur',
+          landmark: '',
+          deliveryPlacement: '',
+          routeSequence: 1,
+          areaId: 'area-1',
+          areaName: 'Kabir Nagar Raipur',
+          drops: [
+            DailyPaperDrop(
+              newspaperId: 'toi',
+              newspaperName: 'Times of India',
+              quantity: 1,
+              isPaused: false,
+            ),
+          ],
+        );
+
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              morningRouteStopsProvider(testUser).overrideWith(
+                (ref) async => [stop],
+              ),
+              deliveryAreasProvider('biz-1').overrideWith(
+                (ref) => Stream.value(testAreas),
+              ),
+            ],
+            child: const MaterialApp(
+              home: MorningRoutePage(user: testUser),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        final firstAreaNameFinder = find.text('Kabir Nagar Raipur').first;
+        final size = tester.getSize(firstAreaNameFinder);
+        expect(size.width, greaterThanOrEqualTo(100.0));
+        expect(size.height, lessThan(80.0));
+        expect(tester.takeException(), isNull);
+      },
+    );
   });
 }
 

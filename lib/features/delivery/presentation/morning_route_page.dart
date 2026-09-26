@@ -168,6 +168,7 @@ class _MorningRoutePageState extends ConsumerState<MorningRoutePage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Expanded(
                               child: Column(
@@ -176,31 +177,62 @@ class _MorningRoutePageState extends ConsumerState<MorningRoutePage> {
                                   Text(
                                     stops.isNotEmpty ? stops.first.areaName : 'Delivery Route',
                                     style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
                                     '${selectedDate.toString()} • ${selectedDate.toDateTime().weekday == 7 ? "Sunday" : "Weekday"}',
                                     style: const TextStyle(color: Color(0xFF486581), fontWeight: FontWeight.w600),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ],
                               ),
                             ),
-                            if (areas.length > 1)
-                              DropdownButton<String>(
-                                value: ref.watch(selectedRouteAreaProvider).isEmpty
-                                    ? (stops.isNotEmpty ? stops.first.areaId : '')
-                                    : ref.watch(selectedRouteAreaProvider),
-                                underline: const SizedBox.shrink(),
-                                items: [
-                                  for (final a in areas)
-                                    DropdownMenuItem(value: a.id, child: Text(a.name)),
-                                ],
-                                onChanged: (val) {
-                                  if (val != null) {
-                                    ref.read(selectedRouteAreaProvider.notifier).setArea(val);
-                                  }
-                                },
+                            if (areas.length > 1) ...[
+                              const SizedBox(width: 8),
+                              ConstrainedBox(
+                                constraints: const BoxConstraints(maxWidth: 140),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF1F5F9),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: const Color(0xFFCBD5E1)),
+                                  ),
+                                  child: DropdownButtonHideUnderline(
+                                    child: DropdownButton<String>(
+                                      value: areas.any((a) => a.id == ref.watch(selectedRouteAreaProvider))
+                                          ? ref.watch(selectedRouteAreaProvider)
+                                          : (stops.isNotEmpty && areas.any((a) => a.id == stops.first.areaId)
+                                              ? stops.first.areaId
+                                              : (areas.isNotEmpty ? areas.first.id : null)),
+                                      isDense: true,
+                                      isExpanded: true,
+                                      icon: const Icon(Icons.arrow_drop_down, color: Color(0xFF486581)),
+                                      items: [
+                                        for (final a in areas)
+                                          DropdownMenuItem(
+                                            value: a.id,
+                                            child: Text(
+                                              a.name,
+                                              overflow: TextOverflow.ellipsis,
+                                              maxLines: 1,
+                                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                                            ),
+                                          ),
+                                      ],
+                                      onChanged: (val) {
+                                        if (val != null) {
+                                          ref.read(selectedRouteAreaProvider.notifier).setArea(val);
+                                        }
+                                      },
+                                    ),
+                                  ),
+                                ),
                               ),
+                            ],
                           ],
                         ),
                         const SizedBox(height: 16),
@@ -217,10 +249,14 @@ class _MorningRoutePageState extends ConsumerState<MorningRoutePage> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text(
-                              '$delivered of ${total - paused} active delivered',
-                              style: const TextStyle(fontWeight: FontWeight.w700),
+                            Expanded(
+                              child: Text(
+                                '$delivered of ${total - paused} active delivered',
+                                style: const TextStyle(fontWeight: FontWeight.w700),
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
+                            const SizedBox(width: 8),
                             Text(
                               '${(progress * 100).round()}% Completed',
                               style: const TextStyle(fontWeight: FontWeight.w800, color: AppTheme.brand),
@@ -449,17 +485,22 @@ class _RouteStopCard extends StatelessWidget {
             // Stop header with code and status badge
             Row(
               children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFEDF2F7),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    '#${stop.routeSequence} • ${stop.customerCode}',
-                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: Color(0xFF2D3748)),
+                Flexible(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEDF2F7),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      '#${stop.routeSequence} • ${stop.customerCode}',
+                      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: Color(0xFF2D3748)),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                 ),
+                const SizedBox(width: 8),
                 const Spacer(),
                 if (isDelivered)
                   Chip(
@@ -489,6 +530,8 @@ class _RouteStopCard extends StatelessWidget {
             // House number and customer name
             Text(
               stop.customerName,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
             ),
             if (stop.houseNumber.isNotEmpty || stop.buildingInfo.isNotEmpty)

@@ -108,6 +108,7 @@ class _MorningRoutePageState extends ConsumerState<MorningRoutePage> {
             tooltip: l10n?.refreshRoute ?? 'Refresh Route',
             onPressed: () {
               ref.invalidate(deliveryAreasProvider(businessId));
+              ref.invalidate(morningRouteBaseStopsProvider(user));
               ref.invalidate(morningRouteStopsProvider(user));
             },
           ),
@@ -123,11 +124,13 @@ class _MorningRoutePageState extends ConsumerState<MorningRoutePage> {
                   message: 'Could not load delivery areas. ${areasAsync.error}',
                   onRetry: () {
                     ref.invalidate(deliveryAreasProvider(businessId));
+                    ref.invalidate(morningRouteBaseStopsProvider(user));
                     ref.invalidate(morningRouteStopsProvider(user));
                   },
                 ),
               )
             : stopsAsync.when(
+                skipLoadingOnReload: true,
                 loading: () => const Center(child: CircularProgressIndicator()),
                 error: (err, _) => Padding(
                   padding: const EdgeInsets.all(20),
@@ -135,6 +138,7 @@ class _MorningRoutePageState extends ConsumerState<MorningRoutePage> {
                     message: 'Could not load morning route. $err',
                     onRetry: () {
                       ref.invalidate(deliveryAreasProvider(businessId));
+                      ref.invalidate(morningRouteBaseStopsProvider(user));
                       ref.invalidate(morningRouteStopsProvider(user));
                     },
                   ),
@@ -203,8 +207,8 @@ class _MorningRoutePageState extends ConsumerState<MorningRoutePage> {
                                   ),
                                   child: DropdownButtonHideUnderline(
                                     child: DropdownButton<String>(
-                                      value: areas.any((a) => a.id == ref.watch(selectedRouteAreaProvider))
-                                          ? ref.watch(selectedRouteAreaProvider)
+                                      value: areas.any((a) => a.id == selectedAreaId)
+                                          ? selectedAreaId
                                           : (stops.isNotEmpty && areas.any((a) => a.id == stops.first.areaId)
                                               ? stops.first.areaId
                                               : (areas.isNotEmpty ? areas.first.id : null)),

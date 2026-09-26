@@ -556,8 +556,12 @@ class _CollectPaymentFormState extends ConsumerState<_CollectPaymentForm> {
   }
 
   String? _validateAmount(String? raw) {
+    final text = raw?.trim() ?? '';
+    if (text.startsWith('-')) {
+      return 'Enter a positive amount.';
+    }
     try {
-      final value = parseRupeesToPaise(raw ?? '');
+      final value = parseRupeesToPaise(text);
       if (value <= 0) return 'Enter a positive amount.';
       if (value > widget.summary.amountDuePaise) {
         return 'Amount cannot exceed the current outstanding.';

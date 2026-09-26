@@ -135,12 +135,15 @@ final deliveryStatusStateProvider =
   DeliveryStatusNotifier.new,
 );
 
-final morningRouteStopsProvider =
+/// Fetches the base customer route structure (customers, subscriptions, pauses, route sequence).
+/// This only recomputes when the date or selected area changes, or when explicitly refreshed.
+/// It does NOT watch routeDropsStreamProvider or deliveryStatusStateProvider, avoiding heavy
+/// database re-queries on drop status changes.
+final morningRouteBaseStopsProvider =
     FutureProvider.family<List<DailyRouteStop>, AppUser>((ref, user) async {
   final businessId = user.businessId!;
   final selectedDate = ref.watch(morningRouteDateProvider);
   final selectedAreaId = ref.watch(selectedRouteAreaProvider);
-  final markedStatuses = ref.watch(deliveryStatusStateProvider);
 
   // 1. Fetch areas
   final areasAsync = ref.watch(deliveryAreasProvider(businessId));
@@ -169,17 +172,6 @@ final morningRouteStopsProvider =
           .map((a) => a.name)
           .firstOrNull ??
       'Route';
-
-  // Watch persisted drops for this route
-  final persistedDropsAsync = ref.watch(
-    routeDropsStreamProvider((
-      businessId: businessId,
-      areaId: activeAreaId,
-      date: selectedDate,
-    ),),
-  );
-  final persistedDrops = persistedDropsAsync.asData?.value ??
-      const <String, DeliveryDropRecord>{};
 
   // 2. Fetch active customers for this area
   // CustomerRepository intentionally caps each page at 50 records.
@@ -292,32 +284,6 @@ final morningRouteStopsProvider =
     if (drops.isEmpty) return null; // No papers scheduled for this customer on this day
 
     final isAllPaused = drops.every((d) => d.isPaused);
-    final persistedDrop = persistedDrops[customer.id];
-    final localStatus = markedStatuses[customer.id];
-
-    // Priority:
-    // 1. If all papers are paused today -> always paused
-    // 2. Local optimistic action if any
-    // 3. Persisted drop from Firestore if present and not 'pending'
-    // 4. Default: pending
-    DeliveryStopStatus stopStatus = DeliveryStopStatus.pending;
-    String? exceptionReason;
-    DateTime? deliveredAt;
-
-    if (isAllPaused) {
-      stopStatus = DeliveryStopStatus.paused;
-    } else if (localStatus != null) {
-      stopStatus = localStatus;
-      if (persistedDrop != null) {
-        exceptionReason = persistedDrop.exceptionReason;
-        deliveredAt = persistedDrop.updatedAt;
-      }
-    } else if (persistedDrop != null &&
-        persistedDrop.status != DeliveryStopStatus.pending) {
-      stopStatus = persistedDrop.status;
-      exceptionReason = persistedDrop.exceptionReason;
-      deliveredAt = persistedDrop.updatedAt;
-    }
 
     return DailyRouteStop(
       customerId: customer.id,
@@ -332,12 +298,72 @@ final morningRouteStopsProvider =
       areaId: activeAreaId,
       areaName: areaName,
       drops: drops,
-      status: stopStatus,
-      exceptionReason: exceptionReason,
-      deliveredAt: deliveredAt,
+      status: isAllPaused ? DeliveryStopStatus.paused : DeliveryStopStatus.pending,
     );
   });
 
   final resolvedStops = await Future.wait(stopFutures);
   return resolvedStops.whereType<DailyRouteStop>().toList();
 });
+
+/// Composes base route stops with live persisted drops and local delivery actions.
+/// Whenever a drop is marked or a drop stream updates, this runs synchronously
+/// in memory without re-fetching customers or subscriptions from the database!
+final morningRouteStopsProvider =
+    FutureProvider.family<List<DailyRouteStop>, AppUser>((ref, user) async {
+  final baseStops = await ref.watch(morningRouteBaseStopsProvider(user).future);
+  if (baseStops.isEmpty) return const <DailyRouteStop>[];
+
+  final businessId = user.businessId!;
+  final selectedDate = ref.watch(morningRouteDateProvider);
+  final activeAreaId = baseStops.first.areaId;
+
+  final markedStatuses = ref.watch(deliveryStatusStateProvider);
+  final persistedDropsAsync = ref.watch(
+    routeDropsStreamProvider((
+      businessId: businessId,
+      areaId: activeAreaId,
+      date: selectedDate,
+    ),),
+  );
+  final persistedDrops = persistedDropsAsync.asData?.value ??
+      const <String, DeliveryDropRecord>{};
+
+  return baseStops.map((stop) {
+    if (stop.isPausedToday) return stop;
+
+    final customerId = stop.customerId;
+    final localStatus = markedStatuses[customerId];
+    final persistedDrop = persistedDrops[customerId];
+
+    DeliveryStopStatus stopStatus = DeliveryStopStatus.pending;
+    String? exceptionReason;
+    DateTime? deliveredAt;
+
+    if (localStatus != null) {
+      stopStatus = localStatus;
+      if (persistedDrop != null) {
+        exceptionReason = persistedDrop.exceptionReason;
+        deliveredAt = persistedDrop.updatedAt;
+      }
+    } else if (persistedDrop != null &&
+        persistedDrop.status != DeliveryStopStatus.pending) {
+      stopStatus = persistedDrop.status;
+      exceptionReason = persistedDrop.exceptionReason;
+      deliveredAt = persistedDrop.updatedAt;
+    }
+
+    if (stopStatus == stop.status &&
+        exceptionReason == stop.exceptionReason &&
+        deliveredAt == stop.deliveredAt) {
+      return stop;
+    }
+
+    return stop.copyWith(
+      status: stopStatus,
+      exceptionReason: exceptionReason,
+      deliveredAt: deliveredAt,
+    );
+  }).toList();
+});
+

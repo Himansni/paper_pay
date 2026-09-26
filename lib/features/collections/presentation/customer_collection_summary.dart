@@ -136,6 +136,16 @@ class CustomerCollectionSummary extends ConsumerWidget {
                             style: TextStyle(color: Color(0xFF486581)),
                           ),
                         ),
+                      if (canCollect &&
+                          summary.amountDuePaise <= 0 &&
+                          customer.openingBalancePaise > 0)
+                        const Padding(
+                          padding: EdgeInsets.only(top: 8),
+                          child: Text(
+                            'Opening balance becomes collectible once the first monthly bill is generated and finalized.',
+                            style: TextStyle(color: Color(0xFF486581)),
+                          ),
+                        ),
                     ],
                   ),
             ),

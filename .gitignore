@@ -75,3 +75,4 @@ firebase-tools.json
 /functions/node_modules/
 /functions/lib/
 /scripts/backups/
+/scratch/

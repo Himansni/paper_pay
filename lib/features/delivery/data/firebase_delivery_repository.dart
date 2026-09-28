@@ -68,11 +68,7 @@ class FirebaseDeliveryRepository implements DeliveryRepository {
       customerId: customerId,
     );
 
-    final auditRef = _firestore
-        .collection('businesses')
-        .doc(businessId)
-        .collection('auditRecords')
-        .doc();
+    final auditRef = ref.collection('auditRecords').doc();
 
     final batch = _firestore.batch();
 

@@ -63,6 +63,70 @@ service cloud.firestore {
       return /databases/$(database)/documents/businesses/$(businessId)/dailyRoutes/$(routeId)/drops/$(customerId);
     }
 
+    function deliveryDropAuditPath(businessId, routeId, customerId, auditId) {
+      return /databases/$(database)/documents/businesses/$(businessId)/dailyRoutes/$(routeId)/drops/$(customerId)/auditRecords/$(auditId);
+    }
+
+    function validDeliveryDropAuditAfter(businessId, routeId, customerId, auditId) {
+      let audit = getAfter(deliveryDropAuditPath(businessId, routeId, customerId, auditId)).data;
+      return existsAfter(deliveryDropAuditPath(businessId, routeId, customerId, auditId))
+        && audit.businessId == businessId
+        && audit.actorId == request.auth.uid
+        && audit.action == 'deliveryDropStatusUpdated'
+        && audit.entityType == 'deliveryDrop'
+        && audit.entityId == customerId
+        && audit.routeId == routeId
+        && audit.areaId == request.resource.data.areaId
+        && audit.date == request.resource.data.date
+        && audit.status == request.resource.data.status
+        && audit.createdAt == request.time;
+    }
+
+    function validDeliveryDropLocalAuditCreate(businessId, routeId, customerId, auditId) {
+      let audit = request.resource.data;
+      return activeMember(businessId)
+        && audit.keys().hasOnly([
+          'businessId', 'actorId', 'action', 'entityType', 'entityId',
+          'routeId', 'areaId', 'date', 'status', 'exceptionReason',
+          'createdAt'
+        ])
+        && audit.businessId == businessId
+        && audit.actorId == request.auth.uid
+        && audit.action == 'deliveryDropStatusUpdated'
+        && audit.entityType == 'deliveryDrop'
+        && audit.entityId == customerId
+        && audit.routeId == routeId
+        && existsAfter(deliveryDropPath(businessId, routeId, customerId))
+        && audit.areaId == getAfter(deliveryDropPath(
+          businessId, routeId, customerId
+        )).data.areaId
+        && audit.date == getAfter(deliveryDropPath(
+          businessId, routeId, customerId
+        )).data.date
+        && audit.status == getAfter(deliveryDropPath(
+          businessId, routeId, customerId
+        )).data.status
+        && (
+          (
+            audit.status == 'exception'
+            && audit.exceptionReason == getAfter(deliveryDropPath(
+              businessId, routeId, customerId
+            )).data.exceptionReason
+          )
+          || (
+            audit.status != 'exception'
+            && !('exceptionReason' in audit.keys())
+          )
+        )
+        && audit.createdAt == request.time
+        && getAfter(deliveryDropPath(
+          businessId, routeId, customerId
+        )).data.lastAuditId == auditId
+        && getAfter(deliveryDropPath(
+          businessId, routeId, customerId
+        )).data.actorUid == request.auth.uid;
+    }
+
     function deliveryDropReferencesAuditAfter(businessId, routeId, customerId, auditId) {
       let path = deliveryDropPath(businessId, routeId, customerId);
       return existsAfter(path)
@@ -3601,6 +3665,9 @@ service cloud.firestore {
           && request.resource.data.businessId == businessId
           && request.resource.data.actorId == request.auth.uid
           && request.resource.data.createdAt == request.time
+          // Delivery drop audits are now target-local. Reject them before the
+          // legacy root dispatcher so this path cannot authorize a second audit.
+          && request.resource.data.entityType != 'deliveryDrop'
           && (
             (
               request.resource.data.action == 'customerRemovalRequested'
@@ -3651,32 +3718,6 @@ service cloud.firestore {
                 auditId
               )
             )
-            || (
-              request.resource.data.entityType == 'deliveryDrop'
-              && request.resource.data.action in [
-                'deliveryDropStatusUpdated',
-                'deliveryDropDelivered',
-                'deliveryDropPending',
-                'deliveryDropException'
-              ]
-              && request.resource.data.entityId is string
-              && request.resource.data.routeId is string
-              && request.resource.data.areaId is string
-              && (
-                head(businessId)
-                || (
-                  memberData(businessId).role == 'employee'
-                  && memberData(businessId).areaIds is list
-                  && memberData(businessId).areaIds.hasAny([request.resource.data.areaId])
-                )
-              )
-              && deliveryDropReferencesAuditAfter(
-                businessId,
-                request.resource.data.routeId,
-                request.resource.data.entityId,
-                auditId
-              )
-            )
           );
         allow update, delete: if false;
       }
@@ -3706,6 +3747,10 @@ service cloud.firestore {
             && validDeliveryDropShape(businessId, customerId, routeId, request.resource.data)
             && request.resource.data.actorUid == request.auth.uid
             && request.resource.data.updatedAt == request.time
+            && validDeliveryDropAuditAfter(
+              businessId, routeId, customerId,
+              request.resource.data.lastAuditId
+            )
             && (
               head(businessId)
               || (
@@ -3716,6 +3761,14 @@ service cloud.firestore {
             );
 
           allow delete: if false;
+
+          match /auditRecords/{auditId} {
+            allow read: if activeMember(businessId);
+            allow create: if validDeliveryDropLocalAuditCreate(
+              businessId, routeId, customerId, auditId
+            );
+            allow update, delete: if false;
+          }
         }
       }
 

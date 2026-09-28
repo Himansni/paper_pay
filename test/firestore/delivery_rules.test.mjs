@@ -36,6 +36,12 @@ const seed = async () => {
       createdAt: new Date(),
     });
 
+    // Delivery writes are available only while the business subscription is
+    // active, so the delivery-focused fixture must model that prerequisite.
+    await setDoc(doc(db, 'businesses/business-a/subscription/saas'), {
+      effectiveExpiresAt: new Date('2099-01-01T00:00:00.000Z'),
+    });
+
     // Business B (for cross-tenant tests)
     await setDoc(doc(db, 'businesses/business-b'), {
       name: 'Agency B',
@@ -138,8 +144,8 @@ describe('Phase 2A & 2D: Delivery Persistence, Transition Audit & Route Ordering
     `businesses/business-a/dailyRoutes/${routeIdEast}/drops/${customerId}`;
   const dropPathWest = (customerId) =>
     `businesses/business-a/dailyRoutes/${routeIdWest}/drops/${customerId}`;
-  const auditPath = (auditId) =>
-    `businesses/business-a/auditRecords/${auditId}`;
+  const auditPath = (auditId, customerId = 'cust-101') =>
+    `${dropPathEast(customerId)}/auditRecords/${auditId}`;
   const routeOrderPath = (areaId) =>
     `businesses/business-a/routeOrders/${areaId}`;
 
@@ -383,7 +389,134 @@ describe('Phase 2A & 2D: Delivery Persistence, Transition Audit & Route Ordering
     await assertFails(deleteDoc(doc(headDb, auditPath('audit-immutable'))));
   });
 
-  test('7. Head can read agency delivery operations and audits across all routes', async () => {
+  test('7. A drop cannot be written without its target-local audit', async () => {
+    const db = auth('emp-east', 'emp-east@test.local');
+
+    await assertFails(
+      setDoc(doc(db, dropPathEast('cust-102')), {
+        businessId: 'business-a',
+        routeId: routeIdEast,
+        date: routeDate,
+        areaId: 'east',
+        customerId: 'cust-102',
+        status: 'delivered',
+        actorUid: 'emp-east',
+        updatedAt: serverTimestamp(),
+        lastAuditId: 'audit-missing',
+      }),
+    );
+  });
+
+  test('8. A local audit must be paired to its own drop and exact audit ID', async () => {
+    const db = auth('emp-east', 'emp-east@test.local');
+    const batch = writeBatch(db);
+
+    // The audit path belongs to cust-102 but claims to audit cust-101; the
+    // parent/child getAfter checks must reject this cross-target pairing.
+    batch.set(doc(db, auditPath('audit-wrong-target', 'cust-102')), {
+      businessId: 'business-a',
+      actorId: 'emp-east',
+      action: 'deliveryDropStatusUpdated',
+      entityType: 'deliveryDrop',
+      entityId: 'cust-101',
+      routeId: routeIdEast,
+      areaId: 'east',
+      date: routeDate,
+      status: 'delivered',
+      createdAt: serverTimestamp(),
+    });
+    batch.set(doc(db, dropPathEast('cust-101')), {
+      businessId: 'business-a',
+      routeId: routeIdEast,
+      date: routeDate,
+      areaId: 'east',
+      customerId: 'cust-101',
+      status: 'delivered',
+      actorUid: 'emp-east',
+      updatedAt: serverTimestamp(),
+      lastAuditId: 'a-different-id',
+    });
+
+    await assertFails(batch.commit());
+  });
+
+  test('9. Local audit business, route, or area mismatches are denied', async () => {
+    const db = auth('emp-east', 'emp-east@test.local');
+    const invalidAudits = [
+      { id: 'audit-wrong-business', businessId: 'business-b' },
+      { id: 'audit-wrong-route', routeId: routeIdWest },
+      { id: 'audit-wrong-area', areaId: 'west' },
+    ];
+
+    for (const invalid of invalidAudits) {
+      const batch = writeBatch(db);
+      batch.set(doc(db, auditPath(invalid.id)), {
+        businessId: invalid.businessId ?? 'business-a',
+        actorId: 'emp-east',
+        action: 'deliveryDropStatusUpdated',
+        entityType: 'deliveryDrop',
+        entityId: 'cust-101',
+        routeId: invalid.routeId ?? routeIdEast,
+        areaId: invalid.areaId ?? 'east',
+        date: routeDate,
+        status: 'delivered',
+        createdAt: serverTimestamp(),
+      });
+      batch.set(doc(db, dropPathEast('cust-101')), {
+        businessId: 'business-a',
+        routeId: routeIdEast,
+        date: routeDate,
+        areaId: 'east',
+        customerId: 'cust-101',
+        status: 'delivered',
+        actorUid: 'emp-east',
+        updatedAt: serverTimestamp(),
+        lastAuditId: invalid.id,
+      });
+
+      await assertFails(batch.commit());
+    }
+  });
+
+  test('10. Root delivery-drop audits are denied while historical root audits remain readable', async () => {
+    await environment.withSecurityRulesDisabled(async (context) => {
+      const adminDb = context.firestore();
+      await setDoc(
+        doc(adminDb, 'businesses/business-a/auditRecords/historical-delivery'),
+        {
+          businessId: 'business-a',
+          actorId: 'emp-east',
+          action: 'deliveryDropStatusUpdated',
+          entityType: 'deliveryDrop',
+          entityId: 'cust-101',
+          routeId: routeIdEast,
+          areaId: 'east',
+          createdAt: new Date(),
+        },
+      );
+    });
+
+    const employeeDb = auth('emp-east', 'emp-east@test.local');
+    const headDb = auth('head-a', 'head-a@test.local');
+
+    await assertFails(
+      setDoc(doc(employeeDb, 'businesses/business-a/auditRecords/new-root-delivery'), {
+        businessId: 'business-a',
+        actorId: 'emp-east',
+        action: 'deliveryDropStatusUpdated',
+        entityType: 'deliveryDrop',
+        entityId: 'cust-101',
+        routeId: routeIdEast,
+        areaId: 'east',
+        createdAt: serverTimestamp(),
+      }),
+    );
+    await assertSucceeds(
+      getDoc(doc(headDb, 'businesses/business-a/auditRecords/historical-delivery')),
+    );
+  });
+
+  test('11. Head can read agency delivery operations and audits across all routes', async () => {
     await environment.withSecurityRulesDisabled(async (context) => {
       const adminDb = context.firestore();
       await setDoc(doc(adminDb, dropPathEast('cust-101')), {

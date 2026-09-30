@@ -702,6 +702,119 @@ const seedCollectionProjection = async ({
   });
 };
 
+const seedCollectionSubscription = async () => {
+  await environment.withSecurityRulesDisabled(async (context) => {
+    await setDoc(
+      doc(context.firestore(), 'businesses/business-a/subscription/saas'),
+      { effectiveExpiresAt: new Date('2099-01-01T00:00:00.000Z') },
+    );
+  });
+};
+
+const recordAccountAdjustmentTransaction = async (
+  db,
+  {
+    customerId = 'C-MANAGED',
+    adjustmentId,
+    actorId,
+    actorRole,
+    direction,
+    amountPaise,
+    reason = 'Correction to customer outstanding',
+    omitReason = false,
+    billingMonth = '2026-09',
+  },
+) => {
+  const customerPath = `businesses/business-a/customers/${customerId}`;
+  const adjustmentRef = doc(
+    db,
+    `${customerPath}/accountAdjustments/${adjustmentId}`,
+  );
+  const customerRef = doc(db, customerPath);
+  const stateRef = doc(db, `${customerPath}/collectionState/current`);
+  const balanceRef = doc(
+    db,
+    `${customerPath}/billBalances/${billingMonth}`,
+  );
+  const auditId = `${adjustmentId}-audit`;
+  const auditRef = doc(db, `businesses/business-a/auditRecords/${auditId}`);
+
+  return runTransaction(db, async (transaction) => {
+    const existing = await transaction.get(adjustmentRef);
+    if (existing.exists()) return false;
+    const customer = await transaction.get(customerRef);
+    const state = await transaction.get(stateRef);
+    const balance = await transaction.get(balanceRef);
+    const signedAmount =
+      direction === 'increase' ? amountPaise : -amountPaise;
+    const nextOutstanding = state.data().outstandingPaise + signedAmount;
+    const nextSource = balance.data().sourceAmountPaise + signedAmount;
+    const nextBillNet =
+      nextSource -
+      balance.data().allocatedPaise +
+      balance.data().reversedPaise;
+    const now = serverTimestamp();
+
+    transaction.set(adjustmentRef, {
+      businessId: 'business-a',
+      customerId,
+      adjustmentId,
+      customerCode: customer.data().customerCode,
+      customerName: customer.data().name,
+      areaId: customer.data().areaId,
+      assignedEmployeeId: customer.data().assignedEmployeeId,
+      idempotencyKey: adjustmentId,
+      amountPaise,
+      direction,
+      ...(omitReason ? {} : { reason }),
+      billingMonth,
+      createdBy: actorId,
+      actorRole,
+      lastAuditId: auditId,
+      createdAt: now,
+    });
+    transaction.update(balanceRef, {
+      sourceAmountPaise: nextSource,
+      outstandingPaise: Math.max(0, nextBillNet),
+      status:
+        nextBillNet > 0
+          ? 'outstanding'
+          : nextBillNet === 0
+            ? 'settled'
+            : 'credit',
+      revision: balance.data().revision + 1,
+      lastMutationType: 'accountAdjustmentCreated',
+      lastMutationId: adjustmentId,
+      updatedAt: now,
+    });
+    transaction.update(stateRef, {
+      outstandingPaise: nextOutstanding,
+      reportingStatus: nextOutstanding > 0 ? 'unpaid' : 'fullyPaid',
+      oldestOutstandingMonth: nextOutstanding > 0 ? billingMonth : '',
+      revision: state.data().revision + 1,
+      lastMutationType: 'accountAdjustmentCreated',
+      lastMutationId: adjustmentId,
+      updatedBy: actorId,
+      updatedAt: now,
+    });
+    transaction.set(auditRef, {
+      businessId: 'business-a',
+      actorId,
+      actorRole,
+      action: 'accountAdjustmentCreated',
+      entityType: 'accountAdjustment',
+      entityId: adjustmentId,
+      customerId,
+      amountPaise,
+      direction,
+      reason,
+      billingMonth,
+      createdAt: now,
+    });
+    return true;
+  });
+};
+
 const confirmPaymentTransaction = async (
   db,
   {
@@ -1165,6 +1278,12 @@ describe('privilege and financial integrity', () => {
         updatedAt: serverTimestamp(),
       }),
     );
+    await assertFails(
+      updateDoc(doc(db, 'businesses/business-a/members/employee-c'), {
+        permissions: ['allowIncreaseOutstanding', 'allowDecreaseOutstanding'],
+        updatedAt: serverTimestamp(),
+      }),
+    );
   });
 
   test('employee cannot alter newspaper pricing', async () => {
@@ -1493,6 +1612,433 @@ describe('member guard ordering and collection read guards', () => {
     );
     await assertFails(
       getDoc(doc(head, 'businesses/business-a/customers/ghost/collectionState/current')),
+    );
+  });
+});
+
+describe('direction-specific employee outstanding adjustments', () => {
+  const employeeMemberPath = 'businesses/business-a/members/employee-a';
+
+  const setEmployeePermissions = (permissions) =>
+    updateDoc(doc(auth('head-a', 'head-a@example.com'), employeeMemberPath), {
+      permissions,
+      updatedAt: serverTimestamp(),
+    });
+
+  test('Head can independently grant, combine, and revoke adjustment permissions', async () => {
+    const head = auth('head-a', 'head-a@example.com');
+    await setEmployeePermissions(['allowIncreaseOutstanding']);
+    let permissions = (
+      await getDoc(doc(head, employeeMemberPath))
+    ).data().permissions;
+    assert.deepEqual(permissions, ['allowIncreaseOutstanding']);
+
+    await setEmployeePermissions(['allowDecreaseOutstanding']);
+    permissions = (await getDoc(doc(head, employeeMemberPath))).data()
+      .permissions;
+    assert.deepEqual(permissions, ['allowDecreaseOutstanding']);
+
+    await setEmployeePermissions([
+      'allowIncreaseOutstanding',
+      'allowDecreaseOutstanding',
+    ]);
+    permissions = (await getDoc(doc(head, employeeMemberPath))).data()
+      .permissions;
+    assert.deepEqual(
+      new Set(permissions),
+      new Set(['allowIncreaseOutstanding', 'allowDecreaseOutstanding']),
+    );
+
+    await setEmployeePermissions(['allowDecreaseOutstanding']);
+    permissions = (await getDoc(doc(head, employeeMemberPath))).data()
+      .permissions;
+    assert.deepEqual(permissions, ['allowDecreaseOutstanding']);
+
+    await setEmployeePermissions([]);
+    permissions = (await getDoc(doc(head, employeeMemberPath))).data()
+      .permissions;
+    assert.deepEqual(permissions, []);
+  });
+
+  test('employee with increase permission adjusts the same financial projections and creates immutable actor audit', async () => {
+    const head = auth('head-a', 'head-a@example.com');
+    const employee = auth('employee-a', 'employee-a@example.com');
+    await seedCollectionProjection();
+    await seedCollectionSubscription();
+    await setEmployeePermissions(['allowIncreaseOutstanding']);
+
+    await assertSucceeds(
+      recordAccountAdjustmentTransaction(employee, {
+        adjustmentId: 'employee-increase-1',
+        actorId: 'employee-a',
+        actorRole: 'employee',
+        direction: 'increase',
+        amountPaise: 1500,
+      }),
+    );
+
+    const path = 'businesses/business-a/customers/C-MANAGED';
+    const state = (
+      await getDoc(doc(employee, `${path}/collectionState/current`))
+    ).data();
+    const balance = (
+      await getDoc(doc(employee, `${path}/billBalances/2026-09`))
+    ).data();
+    const adjustment = (
+      await getDoc(
+        doc(employee, `${path}/accountAdjustments/employee-increase-1`),
+      )
+    ).data();
+    let audit;
+    await environment.withSecurityRulesDisabled(async (context) => {
+      audit = (
+        await getDoc(
+          doc(
+            context.firestore(),
+            'businesses/business-a/auditRecords/employee-increase-1-audit',
+          ),
+        )
+      ).data();
+    });
+
+    assert.equal(state.outstandingPaise, 61500);
+    assert.equal(balance.sourceAmountPaise, 61500);
+    assert.equal(balance.outstandingPaise, 61500);
+    assert.equal(adjustment.createdBy, 'employee-a');
+    assert.equal(audit.actorId, 'employee-a');
+    assert.equal(audit.entityId, 'employee-increase-1');
+    assert.equal(audit.direction, 'increase');
+    assert.equal(audit.amountPaise, 1500);
+    await assertFails(
+      updateDoc(
+        doc(employee, 'businesses/business-a/auditRecords/employee-increase-1-audit'),
+        { reason: 'tampered' },
+      ),
+    );
+    await assertFails(
+      deleteDoc(
+        doc(employee, 'businesses/business-a/auditRecords/employee-increase-1-audit'),
+      ),
+    );
+  });
+
+  test('employee without increase permission or with only decrease permission is denied', async () => {
+    const employee = auth('employee-a', 'employee-a@example.com');
+    await seedCollectionProjection();
+    await seedCollectionSubscription();
+    await setEmployeePermissions(['allowDecreaseOutstanding']);
+    await assertFails(
+      recordAccountAdjustmentTransaction(employee, {
+        adjustmentId: 'employee-increase-denied',
+        actorId: 'employee-a',
+        actorRole: 'employee',
+        direction: 'increase',
+        amountPaise: 100,
+      }),
+    );
+
+    const path = 'businesses/business-a/customers/C-MANAGED';
+    assert.equal(
+      (
+        await getDoc(doc(employee, `${path}/collectionState/current`))
+      ).data().outstandingPaise,
+      60000,
+    );
+  });
+
+  test('employee with decrease permission can decrease, but cannot make outstanding negative', async () => {
+    const employee = auth('employee-a', 'employee-a@example.com');
+    await seedCollectionProjection();
+    await seedCollectionSubscription();
+    await setEmployeePermissions(['allowDecreaseOutstanding']);
+
+    await assertSucceeds(
+      recordAccountAdjustmentTransaction(employee, {
+        adjustmentId: 'employee-decrease-1',
+        actorId: 'employee-a',
+        actorRole: 'employee',
+        direction: 'decrease',
+        amountPaise: 1000,
+      }),
+    );
+    const stateRef = doc(
+      employee,
+      'businesses/business-a/customers/C-MANAGED/collectionState/current',
+    );
+    assert.equal((await getDoc(stateRef)).data().outstandingPaise, 59000);
+
+    await assertFails(
+      recordAccountAdjustmentTransaction(employee, {
+        adjustmentId: 'employee-decrease-too-much',
+        actorId: 'employee-a',
+        actorRole: 'employee',
+        direction: 'decrease',
+        amountPaise: 60000,
+      }),
+    );
+    assert.equal((await getDoc(stateRef)).data().outstandingPaise, 59000);
+  });
+
+  test('zero outstanding blocks decreases and permits increases only with increase permission', async () => {
+    const employee = auth('employee-a', 'employee-a@example.com');
+    await seedCollectionProjection();
+    await seedCollectionSubscription();
+    await setEmployeePermissions(['allowDecreaseOutstanding']);
+
+    await assertSucceeds(
+      recordAccountAdjustmentTransaction(employee, {
+        adjustmentId: 'employee-zero-balance-decrease',
+        actorId: 'employee-a',
+        actorRole: 'employee',
+        direction: 'decrease',
+        amountPaise: 60000,
+      }),
+    );
+
+    const path = 'businesses/business-a/customers/C-MANAGED';
+    const stateRef = doc(employee, `${path}/collectionState/current`);
+    assert.equal((await getDoc(stateRef)).data().outstandingPaise, 0);
+    await assertFails(
+      recordAccountAdjustmentTransaction(employee, {
+        adjustmentId: 'employee-zero-balance-increase-denied',
+        actorId: 'employee-a',
+        actorRole: 'employee',
+        direction: 'increase',
+        amountPaise: 10000,
+      }),
+    );
+    await assertFails(
+      recordAccountAdjustmentTransaction(employee, {
+        adjustmentId: 'employee-zero-balance-decrease-denied',
+        actorId: 'employee-a',
+        actorRole: 'employee',
+        direction: 'decrease',
+        amountPaise: 1,
+      }),
+    );
+
+    await setEmployeePermissions(['allowIncreaseOutstanding']);
+    await assertSucceeds(
+      recordAccountAdjustmentTransaction(employee, {
+        adjustmentId: 'employee-zero-balance-increase',
+        actorId: 'employee-a',
+        actorRole: 'employee',
+        direction: 'increase',
+        amountPaise: 10000,
+      }),
+    );
+
+    assert.equal((await getDoc(stateRef)).data().outstandingPaise, 10000);
+    const adjustment = (
+      await getDoc(
+        doc(employee, `${path}/accountAdjustments/employee-zero-balance-increase`),
+      )
+    ).data();
+    assert.equal(adjustment.createdBy, 'employee-a');
+    assert.equal(adjustment.direction, 'increase');
+  });
+
+  test('employee without decrease permission or with only increase permission is denied', async () => {
+    const employee = auth('employee-a', 'employee-a@example.com');
+    await seedCollectionProjection();
+    await seedCollectionSubscription();
+    await setEmployeePermissions(['allowIncreaseOutstanding']);
+    await assertFails(
+      recordAccountAdjustmentTransaction(employee, {
+        adjustmentId: 'employee-decrease-denied',
+        actorId: 'employee-a',
+        actorRole: 'employee',
+        direction: 'decrease',
+        amountPaise: 100,
+      }),
+    );
+  });
+
+  test('Head adjustment remains authorized and writes consistent projections', async () => {
+    const head = auth('head-a', 'head-a@example.com');
+    await seedCollectionProjection();
+    await seedCollectionSubscription();
+    await assertSucceeds(
+      recordAccountAdjustmentTransaction(head, {
+        adjustmentId: 'head-adjustment-1',
+        actorId: 'head-a',
+        actorRole: 'head',
+        direction: 'increase',
+        amountPaise: 2500,
+      }),
+    );
+    const state = (
+      await getDoc(
+        doc(head, 'businesses/business-a/customers/C-MANAGED/collectionState/current'),
+      )
+    ).data();
+    assert.equal(state.outstandingPaise, 62500);
+  });
+
+  test('Head can decrease outstanding through the existing adjustment path', async () => {
+    const head = auth('head-a', 'head-a@example.com');
+    await seedCollectionProjection();
+    await seedCollectionSubscription();
+    await assertSucceeds(
+      recordAccountAdjustmentTransaction(head, {
+        adjustmentId: 'head-adjustment-decrease-1',
+        actorId: 'head-a',
+        actorRole: 'head',
+        direction: 'decrease',
+        amountPaise: 2500,
+      }),
+    );
+    const state = (
+      await getDoc(
+        doc(head, 'businesses/business-a/customers/C-MANAGED/collectionState/current'),
+      )
+    ).data();
+    assert.equal(state.outstandingPaise, 57500);
+  });
+
+  test('employee adjustment requires active membership and current customer assignment; only Heads can edit permissions', async () => {
+    const head = auth('head-a', 'head-a@example.com');
+    const employee = auth('employee-a', 'employee-a@example.com');
+    await seedCollectionProjection();
+    await seedCollectionSubscription();
+    await setEmployeePermissions([
+      'allowIncreaseOutstanding',
+      'allowDecreaseOutstanding',
+    ]);
+
+    await assertFails(
+      updateDoc(doc(employee, employeeMemberPath), {
+        permissions: ['allowIncreaseOutstanding', 'allowDecreaseOutstanding'],
+        updatedAt: serverTimestamp(),
+      }),
+    );
+    await assertFails(
+      updateDoc(doc(employee, 'businesses/business-a/members/employee-c'), {
+        permissions: ['allowIncreaseOutstanding', 'allowDecreaseOutstanding'],
+        updatedAt: serverTimestamp(),
+      }),
+    );
+
+    await updateDoc(doc(head, employeeMemberPath), {
+      status: 'inactive',
+      updatedAt: serverTimestamp(),
+    });
+    await assertFails(
+      recordAccountAdjustmentTransaction(employee, {
+        adjustmentId: 'inactive-employee-adjustment',
+        actorId: 'employee-a',
+        actorRole: 'employee',
+        direction: 'increase',
+        amountPaise: 100,
+      }),
+    );
+    await updateDoc(doc(head, employeeMemberPath), {
+      status: 'active',
+      updatedAt: serverTimestamp(),
+    });
+
+    await environment.withSecurityRulesDisabled(async (context) => {
+      await updateDoc(
+        doc(
+          context.firestore(),
+          'businesses/business-a/customers/C-MANAGED',
+        ),
+        { assignedEmployeeId: 'employee-c' },
+      );
+    });
+    await assertFails(
+      recordAccountAdjustmentTransaction(employee, {
+        adjustmentId: 'unassigned-employee-adjustment',
+        actorId: 'employee-a',
+        actorRole: 'employee',
+        direction: 'increase',
+        amountPaise: 100,
+      }),
+    );
+  });
+
+  test('cross-business writes, invalid amounts, missing reasons, and duplicate effects are denied or idempotent', async () => {
+    const employee = auth('employee-a', 'employee-a@example.com');
+    await seedCollectionProjection();
+    await seedCollectionSubscription();
+    await setEmployeePermissions(['allowIncreaseOutstanding']);
+
+    await assertFails(
+      recordAccountAdjustmentTransaction(
+        auth('employee-b', 'employee-b@example.com'),
+        {
+          customerId: 'C-MANAGED',
+          adjustmentId: 'cross-business-attempt',
+          actorId: 'employee-b',
+          actorRole: 'employee',
+          direction: 'increase',
+          amountPaise: 100,
+        },
+      ),
+    );
+    for (const [adjustmentId, amountPaise, reason] of [
+      ['zero-adjustment', 0, 'Must be positive'],
+      ['negative-adjustment', -100, 'Must be positive'],
+      ['malformed-adjustment', '100', 'Must be positive'],
+      ['missing-reason', 100, ''],
+    ]) {
+      await assertFails(
+        recordAccountAdjustmentTransaction(employee, {
+          adjustmentId,
+          actorId: 'employee-a',
+          actorRole: 'employee',
+          direction: 'increase',
+          amountPaise,
+          reason,
+        }),
+      );
+    }
+    await assertFails(
+      recordAccountAdjustmentTransaction(employee, {
+        adjustmentId: 'omitted-reason-adjustment',
+        actorId: 'employee-a',
+        actorRole: 'employee',
+        direction: 'increase',
+        amountPaise: 100,
+        omitReason: true,
+      }),
+    );
+
+    const idempotencyKey = 'same-adjustment-once';
+    await assertSucceeds(
+      recordAccountAdjustmentTransaction(employee, {
+        adjustmentId: idempotencyKey,
+        actorId: 'employee-a',
+        actorRole: 'employee',
+        direction: 'increase',
+        amountPaise: 100,
+      }),
+    );
+    await assertSucceeds(
+      recordAccountAdjustmentTransaction(employee, {
+        adjustmentId: idempotencyKey,
+        actorId: 'employee-a',
+        actorRole: 'employee',
+        direction: 'increase',
+        amountPaise: 100,
+      }),
+    );
+    const state = (
+      await getDoc(
+        doc(employee, 'businesses/business-a/customers/C-MANAGED/collectionState/current'),
+      )
+    ).data();
+    assert.equal(state.outstandingPaise, 60100);
+    assert.equal(
+      (
+        await getDoc(
+          doc(
+            employee,
+            `businesses/business-a/customers/C-MANAGED/accountAdjustments/${idempotencyKey}`,
+          ),
+        )
+      ).data().amountPaise,
+      100,
     );
   });
 });

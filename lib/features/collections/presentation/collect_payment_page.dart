@@ -8,9 +8,11 @@ import 'package:paper_route/features/auth/domain/app_user.dart';
 import 'package:paper_route/features/billing/domain/monthly_bill.dart';
 import 'package:paper_route/features/collections/domain/collection_models.dart';
 import 'package:paper_route/features/collections/domain/upi_payment_uri.dart';
+import 'package:paper_route/features/collections/presentation/adjust_outstanding_page.dart';
 import 'package:paper_route/features/collections/presentation/collections_providers.dart';
 import 'package:paper_route/features/customers/domain/customer.dart';
 import 'package:paper_route/features/customers/presentation/customer_providers.dart';
+import 'package:paper_route/features/reports/presentation/reporting_providers.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:uuid/uuid.dart';
 
@@ -18,16 +20,25 @@ class CollectPaymentPage extends ConsumerWidget {
   const CollectPaymentPage({
     required this.user,
     required this.customerId,
+    this.adjustmentOnly = false,
     this.onConfirmed,
     super.key,
   });
 
   final AppUser user;
   final String customerId;
+  final bool adjustmentOnly;
   final ValueChanged<PaymentConfirmationResult>? onConfirmed;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (adjustmentOnly) {
+      return AdjustOutstandingPage(
+        user: user,
+        customerId: customerId,
+      );
+    }
+
     final businessId = user.businessId!;
     final customerKey = (businessId: businessId, customerId: customerId);
     final customer = ref.watch(customerProvider(customerKey));
@@ -54,12 +65,35 @@ class CollectPaymentPage extends ConsumerWidget {
           customerAreaId: value.areaId,
           isCustomerArchived: value.isArchived,
         );
-        if (!canCollect) {
+        final canIncreaseOutstanding = policy.canIncreaseOutstanding(
+          member: user,
+          customerBusinessId: value.businessId,
+          assignedEmployeeId: value.assignedEmployeeId,
+          customerAreaId: value.areaId,
+          isCustomerArchived: value.isArchived,
+        );
+        final canDecreaseOutstanding = policy.canDecreaseOutstanding(
+          member: user,
+          customerBusinessId: value.businessId,
+          assignedEmployeeId: value.assignedEmployeeId,
+          customerAreaId: value.areaId,
+          isCustomerArchived: value.isArchived,
+        );
+        final canAdjust = policy.canAdjustOutstanding(
+          member: user,
+          customerBusinessId: value.businessId,
+          assignedEmployeeId: value.assignedEmployeeId,
+          customerAreaId: value.areaId,
+          isCustomerArchived: value.isArchived,
+        );
+        if (adjustmentOnly ? !canAdjust : !canCollect && !canAdjust) {
           return _missingScaffold(
             context,
             value.isArchived
-                ? 'Collections are disabled for archived customers.'
-                : 'You are not authorized to collect from this customer.',
+                ? 'Collections and adjustments are disabled for archived customers.'
+                : adjustmentOnly
+                ? 'You are not authorized to adjust this customer.'
+                : 'You are not authorized to collect from or adjust this customer.',
           );
         }
         return outstanding.when(
@@ -79,6 +113,10 @@ class CollectPaymentPage extends ConsumerWidget {
                 customer: value,
                 summary: summary,
                 upiSettings: upiSettings,
+                canRecordPayments: canCollect,
+                canIncreaseOutstanding: canIncreaseOutstanding,
+                canDecreaseOutstanding: canDecreaseOutstanding,
+                adjustmentOnly: adjustmentOnly,
                 onConfirmed: onConfirmed,
               ),
         );
@@ -89,7 +127,7 @@ class CollectPaymentPage extends ConsumerWidget {
   Scaffold _loadingScaffold(BuildContext context) => Scaffold(
     appBar: AppBar(
       leading: BackButton(onPressed: () => _back(context)),
-      title: const Text('Collect payment'),
+      title: Text(adjustmentOnly ? 'Adjust outstanding' : 'Collect payment'),
     ),
     body: const Center(child: CircularProgressIndicator()),
   );
@@ -101,7 +139,7 @@ class CollectPaymentPage extends ConsumerWidget {
   }) => Scaffold(
     appBar: AppBar(
       leading: BackButton(onPressed: () => _back(context)),
-      title: const Text('Collect payment'),
+      title: Text(adjustmentOnly ? 'Adjust outstanding' : 'Collect payment'),
     ),
     body: Padding(
       padding: const EdgeInsets.all(20),
@@ -112,7 +150,7 @@ class CollectPaymentPage extends ConsumerWidget {
   Scaffold _missingScaffold(BuildContext context, String message) => Scaffold(
     appBar: AppBar(
       leading: BackButton(onPressed: () => _back(context)),
-      title: const Text('Collect payment'),
+      title: Text(adjustmentOnly ? 'Adjust outstanding' : 'Collect payment'),
     ),
     body: Padding(
       padding: const EdgeInsets.all(20),
@@ -139,6 +177,10 @@ class _CollectPaymentForm extends ConsumerStatefulWidget {
     required this.customer,
     required this.summary,
     required this.upiSettings,
+    required this.canRecordPayments,
+    required this.canIncreaseOutstanding,
+    required this.canDecreaseOutstanding,
+    required this.adjustmentOnly,
     required this.onConfirmed,
   });
 
@@ -146,6 +188,10 @@ class _CollectPaymentForm extends ConsumerStatefulWidget {
   final Customer customer;
   final CustomerOutstandingSummary summary;
   final AsyncValue<UpiSettings> upiSettings;
+  final bool canRecordPayments;
+  final bool canIncreaseOutstanding;
+  final bool canDecreaseOutstanding;
+  final bool adjustmentOnly;
   final ValueChanged<PaymentConfirmationResult>? onConfirmed;
 
   @override
@@ -176,6 +222,20 @@ class _CollectPaymentFormState extends ConsumerState<_CollectPaymentForm> {
   }
 
   @override
+  void didUpdateWidget(covariant _CollectPaymentForm oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.summary.amountDuePaise != widget.summary.amountDuePaise) {
+      if (_amountController.text.isEmpty ||
+          _amountController.text ==
+              _formatInputAmount(oldWidget.summary.amountDuePaise)) {
+        _amountController.text = _formatInputAmount(
+          widget.summary.amountDuePaise,
+        );
+      }
+    }
+  }
+
+  @override
   void dispose() {
     _amountController.removeListener(_onFormDetailsChanged);
     _amountController.dispose();
@@ -189,6 +249,10 @@ class _CollectPaymentFormState extends ConsumerState<_CollectPaymentForm> {
     final customer = widget.customer;
     final summary = widget.summary;
     final hasOutstanding = summary.amountDuePaise > 0;
+    final canDecrease = widget.canDecreaseOutstanding && hasOutstanding;
+
+    final canAdjust = widget.canIncreaseOutstanding || canDecrease;
+
     return Scaffold(
       appBar: AppBar(
         leading: BackButton(
@@ -198,7 +262,26 @@ class _CollectPaymentFormState extends ConsumerState<_CollectPaymentForm> {
                       ? context.pop()
                       : context.go('/customers/${customer.id}'),
         ),
-        title: const Text('Collect payment'),
+        title: Text(
+          widget.adjustmentOnly
+              ? 'Adjust outstanding'
+              : widget.canRecordPayments
+              ? 'Collect payment'
+              : 'Outstanding',
+        ),
+        actions: [
+          if (!widget.adjustmentOnly && canAdjust)
+            IconButton(
+              key: const ValueKey('adjust-outstanding-action'),
+              icon: const Icon(Icons.edit_document),
+              tooltip: 'Adjust outstanding balance',
+              onPressed:
+                  () => _showAddOutstandingDialog(
+                    canIncrease: widget.canIncreaseOutstanding,
+                    canDecrease: canDecrease,
+                  ),
+            ),
+        ],
       ),
       body: SafeArea(
         top: false,
@@ -227,8 +310,10 @@ class _CollectPaymentFormState extends ConsumerState<_CollectPaymentForm> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text(
-                          'Posted balance (collectible)',
+                        Text(
+                          widget.adjustmentOnly
+                              ? 'Current outstanding'
+                              : 'Posted balance (collectible)',
                           style: TextStyle(fontWeight: FontWeight.w700),
                         ),
                         Container(
@@ -285,14 +370,15 @@ class _CollectPaymentFormState extends ConsumerState<_CollectPaymentForm> {
                           'Customer credit: ${BillingMoney.formatPaise(summary.creditPaise)}',
                         ),
                       ),
-                    if (!summary.serverConfirmed)
+                    if (!widget.adjustmentOnly && !summary.serverConfirmed)
                       const Padding(
                         padding: EdgeInsets.only(top: 8),
                         child: Text(
                           'Waiting for the server. Collection is temporarily disabled.',
                         ),
                       ),
-                    if (summary.requiresProjectionSetup)
+                    if (!widget.adjustmentOnly &&
+                        summary.requiresProjectionSetup)
                       const Padding(
                         padding: EdgeInsets.only(top: 8),
                         child: Text(
@@ -305,7 +391,28 @@ class _CollectPaymentFormState extends ConsumerState<_CollectPaymentForm> {
               ),
             ),
             const SizedBox(height: 14),
-            if (!hasOutstanding)
+            if (widget.adjustmentOnly)
+              _OutstandingAdjustmentPanel(
+                canIncrease: widget.canIncreaseOutstanding,
+                canDecrease: canDecrease,
+                hasDecreasePermission: widget.canDecreaseOutstanding,
+                onAdjust:
+                    () => _showAddOutstandingDialog(
+                      canIncrease: widget.canIncreaseOutstanding,
+                      canDecrease: canDecrease,
+                    ),
+              )
+            else if (!widget.canRecordPayments)
+              const Card(
+                child: ListTile(
+                  leading: Icon(Icons.info_outline),
+                  title: Text('Payment collection is not enabled'),
+                  subtitle: Text(
+                    'You can adjust this customer’s outstanding balance using the permissions granted by your Agency Head.',
+                  ),
+                ),
+              )
+            else if (!hasOutstanding)
               const EmptyStateCard(
                 icon: Icons.check_circle_outline,
                 title: 'Nothing to collect',
@@ -456,7 +563,9 @@ class _CollectPaymentFormState extends ConsumerState<_CollectPaymentForm> {
                       color: const Color(0xFFFFF8E8),
                       child: const ListTile(
                         leading: Icon(Icons.verified_user_outlined),
-                        title: Text('Collector-confirmed (manual verification)'),
+                        title: Text(
+                          'Collector-confirmed (manual verification)',
+                        ),
                         subtitle: Text(
                           'Displaying or scanning a QR code never automatically confirms payment. This payment is recorded as collector-confirmed, not automatically bank-verified. Confirm only after you have actually seen that funds or cash were received.',
                         ),
@@ -692,6 +801,14 @@ class _CollectPaymentFormState extends ConsumerState<_CollectPaymentForm> {
         );
       }
       _newIdempotencyKey();
+      final businessId = widget.user.businessId!;
+      final customerKey = (
+        businessId: businessId,
+        customerId: widget.customer.id,
+      );
+      ref.invalidate(customerOutstandingProvider(customerKey));
+      ref.invalidate(operationalDashboardProvider(widget.user));
+
       if (!mounted) return;
       widget.onConfirmed?.call(result);
       if (widget.onConfirmed == null) {
@@ -723,6 +840,261 @@ class _CollectPaymentFormState extends ConsumerState<_CollectPaymentForm> {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _showAddOutstandingDialog({
+    required bool canIncrease,
+    required bool canDecrease,
+  }) async {
+    final amountController = TextEditingController();
+    final reasonController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    var submitting = false;
+    var direction =
+        canIncrease
+            ? AdjustmentDirection.increase
+            : AdjustmentDirection.decrease;
+
+    await showDialog<void>(
+      context: context,
+      builder:
+          (dialogContext) => StatefulBuilder(
+            builder:
+                (context, setDialogState) => AlertDialog(
+                  title: const Text('Adjust outstanding balance'),
+                  content: Form(
+                    key: formKey,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const Text(
+                          'Record an audited account adjustment to increase or decrease the collectible balance for this customer.',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Color(0xFF486581),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        SegmentedButton<AdjustmentDirection>(
+                          segments: [
+                            if (canIncrease)
+                              const ButtonSegment(
+                                value: AdjustmentDirection.increase,
+                                label: Text('Increase'),
+                                icon: Icon(Icons.add_circle_outline),
+                              ),
+                            if (canDecrease)
+                              const ButtonSegment(
+                                value: AdjustmentDirection.decrease,
+                                label: Text('Decrease'),
+                                icon: Icon(Icons.remove_circle_outline),
+                              ),
+                          ],
+                          selected: {direction},
+                          onSelectionChanged: (
+                            Set<AdjustmentDirection> newSelection,
+                          ) {
+                            setDialogState(() {
+                              direction = newSelection.first;
+                            });
+                          },
+                        ),
+                        const SizedBox(height: 16),
+                        TextFormField(
+                          key: const ValueKey('adjustment-amount'),
+                          controller: amountController,
+                          enabled: !submitting,
+                          decoration: const InputDecoration(
+                            labelText: 'Amount (₹)',
+                            prefixText: '₹ ',
+                          ),
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          validator: (value) {
+                            final text = value?.trim() ?? '';
+                            if (text.isEmpty) return 'Enter an amount in ₹.';
+                            if (text.startsWith('-')) {
+                              return 'Enter a positive amount.';
+                            }
+                            try {
+                              final paise = parseRupeesToPaise(text);
+                              if (paise <= 0) return 'Enter a positive amount.';
+                              return null;
+                            } catch (_) {
+                              return 'Enter rupees with up to two decimal places.';
+                            }
+                          },
+                        ),
+                        const SizedBox(height: 14),
+                        TextFormField(
+                          key: const ValueKey('adjustment-reason'),
+                          controller: reasonController,
+                          enabled: !submitting,
+                          decoration: const InputDecoration(
+                            labelText: 'Reason',
+                            hintText:
+                                'e.g. Prior unbilled dues / manual arrears',
+                          ),
+                          maxLength: 300,
+                          validator: (value) {
+                            final text = value?.trim() ?? '';
+                            if (text.length < 3) {
+                              return 'Enter a reason with at least 3 characters.';
+                            }
+                            return null;
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed:
+                          submitting
+                              ? null
+                              : () => Navigator.pop(dialogContext),
+                      child: const Text('Cancel'),
+                    ),
+                    FilledButton(
+                      key: const ValueKey('submit-adjustment'),
+                      onPressed:
+                          submitting
+                              ? null
+                              : () async {
+                                if (!formKey.currentState!.validate()) return;
+                                setDialogState(() => submitting = true);
+                                try {
+                                  final amountPaise = parseRupeesToPaise(
+                                    amountController.text.trim(),
+                                  );
+                                  final reason = reasonController.text.trim();
+                                  final now = DateTime.now();
+                                  final billingMonth =
+                                      '${now.year}-${now.month.toString().padLeft(2, '0')}';
+                                  final idempotencyKey = const Uuid().v4();
+
+                                  await ref
+                                      .read(collectionsRepositoryProvider)
+                                      .recordAccountAdjustment(
+                                        actor: widget.user,
+                                        customerId: widget.customer.id,
+                                        input: AccountAdjustmentInput(
+                                          amountPaise: amountPaise,
+                                          direction: direction,
+                                          reason: reason,
+                                          billingMonth: billingMonth,
+                                          idempotencyKey: idempotencyKey,
+                                        ),
+                                      );
+
+                                  if (mounted) {
+                                    final businessId = widget.user.businessId!;
+                                    final customerKey = (
+                                      businessId: businessId,
+                                      customerId: widget.customer.id,
+                                    );
+                                    ref.invalidate(
+                                      customerOutstandingProvider(customerKey),
+                                    );
+                                    ref.invalidate(
+                                      operationalDashboardProvider(widget.user),
+                                    );
+
+                                    if (dialogContext.mounted) {
+                                      Navigator.pop(dialogContext);
+                                    }
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            'Adjusted outstanding by ${BillingMoney.formatPaise(amountPaise)}.',
+                                          ),
+                                        ),
+                                      );
+                                    }
+                                  }
+                                } catch (error) {
+                                  setDialogState(() => submitting = false);
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text(error.toString())),
+                                    );
+                                  }
+                                }
+                              },
+                      child:
+                          submitting
+                              ? const SizedBox.square(
+                                dimension: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                              : const Text('Save adjustment'),
+                    ),
+                  ],
+                ),
+          ),
+    );
+  }
+}
+
+class _OutstandingAdjustmentPanel extends StatelessWidget {
+  const _OutstandingAdjustmentPanel({
+    required this.canIncrease,
+    required this.canDecrease,
+    required this.hasDecreasePermission,
+    required this.onAdjust,
+  });
+
+  final bool canIncrease;
+  final bool canDecrease;
+  final bool hasDecreasePermission;
+  final VoidCallback onAdjust;
+
+  @override
+  Widget build(BuildContext context) {
+    final canAdjust = canIncrease || canDecrease;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Outstanding adjustment',
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'Record an audited increase or decrease. Payment collection is a separate action.',
+            ),
+            if (hasDecreasePermission && !canDecrease) ...[
+              const SizedBox(height: 10),
+              const Text(
+                'There is no outstanding balance to decrease.',
+                key: ValueKey('no-outstanding-to-decrease'),
+              ),
+            ],
+            if (canAdjust) ...[
+              const SizedBox(height: 14),
+              FilledButton.icon(
+                key: const ValueKey('open-adjustment-form'),
+                onPressed: onAdjust,
+                icon: const Icon(Icons.edit_document),
+                label: const Text('Record adjustment'),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
   }
 }
 

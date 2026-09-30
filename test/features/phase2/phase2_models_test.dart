@@ -16,7 +16,12 @@ void main() {
         'phone': '9999999999',
         'role': 'employee',
         'status': 'active',
-        'permissions': ['addCustomers', 'recordPayments'],
+        'permissions': [
+          'addCustomers',
+          'recordPayments',
+          'allowIncreaseOutstanding',
+          'allowDecreaseOutstanding',
+        ],
         'areaIds': ['east', 'west'],
         'notes': 'Morning route',
       });
@@ -24,10 +29,26 @@ void main() {
       expect(member.uid, 'employee-1');
       expect(member.role, UserRole.employee);
       expect(member.isActive, isTrue);
-      expect(member.permissions, {'addCustomers', 'recordPayments'});
+      expect(member.permissions, {
+        'addCustomers',
+        'recordPayments',
+        'allowIncreaseOutstanding',
+        'allowDecreaseOutstanding',
+      });
       expect(member.areaIds, {'east', 'west'});
     },
   );
+
+  test('missing legacy permission fields default to no permissions', () {
+    final member = EmployeeMember.fromMap('legacy-employee', {
+      'role': 'employee',
+      'status': 'active',
+    });
+
+    expect(member.permissions, isEmpty);
+    expect(member.permissions.contains('allowIncreaseOutstanding'), isFalse);
+    expect(member.permissions.contains('allowDecreaseOutstanding'), isFalse);
+  });
 
   test('unknown member role is never treated as an employee or Head', () {
     final member = EmployeeMember.fromMap('unknown', {

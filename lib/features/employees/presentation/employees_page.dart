@@ -22,12 +22,22 @@ class EmployeesPage extends ConsumerWidget {
     PermissionKey.manageAssignedSubscriptions:
         'Manage assigned customer subscriptions',
     PermissionKey.recordPayments: 'Record payments',
+    PermissionKey.allowIncreaseOutstanding: 'Allow Increase Outstanding',
+    PermissionKey.allowDecreaseOutstanding: 'Allow Decrease Outstanding',
     PermissionKey.recordDeliveryExceptions: 'Record delivery exceptions',
     PermissionKey.arrangeDeliveryRoutes: 'Arrange delivery routes',
   };
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (!user.hasActiveAccess || !user.isHead) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Employees')),
+        body: const Center(
+          child: Text('Only the Agency Head can manage employee access.'),
+        ),
+      );
+    }
     final businessId = user.businessId!;
     final members = ref.watch(employeeMembersProvider(businessId));
     final invitations = ref.watch(employeeInvitationsProvider(businessId));
@@ -289,7 +299,7 @@ class _MemberList extends StatelessWidget {
                       ? const Chip(label: Text('Owner'))
                       : IconButton(
                         onPressed: () => onEdit(member),
-                        tooltip: 'Manage employee',
+                        tooltip: 'Edit permissions',
                         icon: const Icon(Icons.manage_accounts_outlined),
                       ),
             ),
@@ -500,6 +510,11 @@ class _MemberDialog extends StatefulWidget {
 }
 
 class _MemberDialogState extends State<_MemberDialog> {
+  static const _increaseOutstandingPermission =
+      PermissionKey.allowIncreaseOutstanding;
+  static const _decreaseOutstandingPermission =
+      PermissionKey.allowDecreaseOutstanding;
+
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _nameController;
   late final TextEditingController _phoneController;
@@ -528,14 +543,42 @@ class _MemberDialogState extends State<_MemberDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Manage employee'),
+      title: const Text('Edit Permissions'),
       content: SizedBox(
         width: 480,
         child: Form(
           key: _formKey,
           child: SingleChildScrollView(
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Text(
+                  'Outstanding adjustments',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'Grant increase and decrease access independently. Changes take effect immediately.',
+                ),
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: _permissions.contains(_increaseOutstandingPermission),
+                  title: const Text('Allow Increase Outstanding'),
+                  onChanged: (selected) => _setPermission(
+                    _increaseOutstandingPermission,
+                    selected,
+                  ),
+                ),
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: _permissions.contains(_decreaseOutstandingPermission),
+                  title: const Text('Allow Decrease Outstanding'),
+                  onChanged: (selected) => _setPermission(
+                    _decreaseOutstandingPermission,
+                    selected,
+                  ),
+                ),
+                const Divider(),
                 TextFormField(
                   controller: _nameController,
                   decoration: const InputDecoration(labelText: 'Display name'),
@@ -569,7 +612,11 @@ class _MemberDialogState extends State<_MemberDialog> {
                   onChanged: (value) => setState(() => _isActive = value),
                 ),
                 const Divider(),
-                for (final entry in widget.permissionLabels.entries)
+                for (final entry in widget.permissionLabels.entries.where(
+                  (entry) =>
+                      entry.key != _increaseOutstandingPermission &&
+                      entry.key != _decreaseOutstandingPermission,
+                ))
                   CheckboxListTile(
                     contentPadding: EdgeInsets.zero,
                     value: _permissions.contains(entry.key),
@@ -609,5 +656,15 @@ class _MemberDialogState extends State<_MemberDialog> {
         ),
       ],
     );
+  }
+
+  void _setPermission(String permission, bool? selected) {
+    setState(() {
+      if (selected == true) {
+        _permissions.add(permission);
+      } else {
+        _permissions.remove(permission);
+      }
+    });
   }
 }

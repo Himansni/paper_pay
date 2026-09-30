@@ -29,6 +29,13 @@ class CustomerCollectionSummary extends ConsumerWidget {
       customerAreaId: customer.areaId,
       isCustomerArchived: customer.isArchived,
     );
+    final canAdjustOutstanding = policy.canAdjustOutstanding(
+      member: user,
+      customerBusinessId: customer.businessId,
+      assignedEmployeeId: customer.assignedEmployeeId,
+      customerAreaId: customer.areaId,
+      isCustomerArchived: customer.isArchived,
+    );
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(18),
@@ -117,6 +124,18 @@ class CustomerCollectionSummary extends ConsumerWidget {
                             icon: const Icon(Icons.payments_outlined),
                             label: const Text('Collect payment'),
                           ),
+                          if (canAdjustOutstanding)
+                            OutlinedButton.icon(
+                              key: const ValueKey(
+                                'open-outstanding-adjustment',
+                              ),
+                              onPressed:
+                                  () => context.push<void>(
+                                    '/customers/${Uri.encodeComponent(customer.id)}/adjust-outstanding',
+                                  ),
+                              icon: const Icon(Icons.edit_document),
+                              label: const Text('Adjust outstanding'),
+                            ),
                           OutlinedButton.icon(
                             key: const ValueKey('open-customer-payments'),
                             onPressed:
@@ -128,7 +147,9 @@ class CustomerCollectionSummary extends ConsumerWidget {
                           ),
                         ],
                       ),
-                      if (!canCollect && !customer.isArchived)
+                      if (!canCollect &&
+                          !canAdjustOutstanding &&
+                          !customer.isArchived)
                         const Padding(
                           padding: EdgeInsets.only(top: 8),
                           child: Text(

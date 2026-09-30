@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:paper_route/core/errors/app_exception.dart';
 import 'package:paper_route/features/auth/domain/access_policy.dart';
 import 'package:paper_route/features/auth/domain/app_user.dart';
+import 'package:paper_route/features/billing/domain/monthly_bill.dart';
 import 'package:paper_route/features/collections/domain/collection_balance_engine.dart';
 import 'package:paper_route/features/collections/domain/collection_models.dart';
 import 'package:paper_route/features/collections/domain/collection_repository.dart';
@@ -47,6 +48,11 @@ class FirebaseCollectionsRepository implements CollectionsRepository {
     String businessId,
     String customerId,
   ) => _customer(businessId, customerId).collection('paymentReversals');
+
+  CollectionReference<Map<String, dynamic>> _accountAdjustments(
+    String businessId,
+    String customerId,
+  ) => _customer(businessId, customerId).collection('accountAdjustments');
 
   CollectionReference<Map<String, dynamic>> _billBalances(
     String businessId,
@@ -674,6 +680,367 @@ class FirebaseCollectionsRepository implements CollectionsRepository {
     }
   }
 
+  @override
+  Future<AccountAdjustmentResult> recordAccountAdjustment({
+    required AppUser actor,
+    required String customerId,
+    required AccountAdjustmentInput input,
+  }) async {
+    final businessId = _activeBusinessId(actor);
+    final value = input.normalized();
+    value.validate();
+    if (customerId.trim().isEmpty || customerId.contains('/')) {
+      throw const AppException('A valid customer ID is required.');
+    }
+    final customerData = await _readAuthorizedCustomer(
+      actor: actor,
+      businessId: businessId,
+      customerId: customerId,
+    );
+    _ensureCanAdjust(actor, businessId, customerData, value.direction);
+    final adjustmentRef = _accountAdjustments(
+      businessId,
+      customerId,
+    ).doc(value.idempotencyKey);
+
+    try {
+      final existing = await adjustmentRef.get(
+        const GetOptions(source: Source.server),
+      );
+      if (existing.exists) {
+        _verifyIdempotentAdjustment(existing.data()!, actor, value);
+        return _adjustmentResult(
+          businessId: businessId,
+          customerId: customerId,
+          adjustmentId: value.idempotencyKey,
+        );
+      }
+
+      await _adjustOnce(
+        actor: actor,
+        businessId: businessId,
+        customerId: customerId,
+        value: value,
+      );
+      return _adjustmentResult(
+        businessId: businessId,
+        customerId: customerId,
+        adjustmentId: value.idempotencyKey,
+      );
+    } on AppException {
+      rethrow;
+    } on FirebaseException catch (error) {
+      if (_mayBeCommittedRace(error)) {
+        final recovered = await _recoverAccountAdjustment(
+          businessId: businessId,
+          customerId: customerId,
+          input: value,
+        );
+        if (recovered != null) return recovered;
+      }
+      throw _translate(error, 'Could not record account adjustment.');
+    }
+  }
+
+  Future<void> _adjustOnce({
+    required AppUser actor,
+    required String businessId,
+    required String customerId,
+    required AccountAdjustmentInput value,
+  }) async {
+    final adjustmentRef = _accountAdjustments(
+      businessId,
+      customerId,
+    ).doc(value.idempotencyKey);
+    final accountRef = _collectionState(businessId, customerId);
+    final now = DateTime.now();
+    final monthKey =
+        value.billingMonth.isNotEmpty
+            ? value.billingMonth
+            : '${now.year}-${now.month.toString().padLeft(2, '0')}';
+    final balanceRef = _billBalances(businessId, customerId).doc(monthKey);
+    final auditRef = _audits(businessId).doc();
+
+    await _firestore.runTransaction((transaction) async {
+      final existing = await transaction.get(adjustmentRef);
+      if (existing.exists) {
+        _verifyIdempotentAdjustment(existing.data()!, actor, value);
+        return;
+      }
+      final customerSnapshot = await transaction.get(
+        _customer(businessId, customerId),
+      );
+      final customerData = customerSnapshot.data();
+      if (customerData == null) {
+        throw const AppException('The customer no longer exists.');
+      }
+      if (customerData['status'] != 'active') {
+        throw const AppException('Cannot adjust an inactive customer account.');
+      }
+
+      final stateSnapshot = await transaction.get(accountRef);
+      final stateData = stateSnapshot.data();
+
+      final balanceSnapshot = await transaction.get(balanceRef);
+      final balanceData = balanceSnapshot.data();
+
+      _ensureCanAdjust(actor, businessId, customerData, value.direction);
+
+      final signedAmount = value.signedAmountPaise;
+
+      // For decrease adjustments, validate outstanding won't become
+      // invalid negative unless the system already supports credit balances.
+      if (value.direction == AdjustmentDirection.decrease) {
+        final currentOutstanding =
+            (stateData != null
+                ? stateData['outstandingPaise'] as int?
+                : null) ??
+            0;
+        if (currentOutstanding + signedAmount < 0) {
+          throw AppException(
+            'Cannot decrease outstanding by more than the current balance '
+            '(₹${BillingMoney.formatPaise(currentOutstanding)}).',
+            code: 'invalid-decrease',
+          );
+        }
+      }
+
+      final serverNow = FieldValue.serverTimestamp();
+      final actorRoleValue = actor.isHead ? 'head' : 'employee';
+
+      transaction.set(adjustmentRef, {
+        'businessId': businessId,
+        'customerId': customerId,
+        'adjustmentId': value.idempotencyKey,
+        'customerCode': customerData['customerCode'],
+        'customerName': customerData['name'],
+        'areaId': customerData['areaId'],
+        'assignedEmployeeId': customerData['assignedEmployeeId'],
+        'idempotencyKey': value.idempotencyKey,
+        'amountPaise': value.amountPaise,
+        'direction': value.direction.value,
+        'reason': value.reason,
+        'billingMonth': monthKey,
+        'createdBy': actor.uid,
+        'actorRole': actorRoleValue,
+        'lastAuditId': auditRef.id,
+        'createdAt': serverNow,
+      });
+
+      if (balanceSnapshot.exists && balanceData != null) {
+        final currentSource = balanceData['sourceAmountPaise'] as int? ?? 0;
+        final currentAllocated = balanceData['allocatedPaise'] as int? ?? 0;
+        final currentReversed = balanceData['reversedPaise'] as int? ?? 0;
+        final currentRevision = balanceData['revision'] as int? ?? 0;
+        final nextSource = currentSource + signedAmount;
+        final nextNet = nextSource - currentAllocated + currentReversed;
+        final nextOutstanding = nextNet > 0 ? nextNet : 0;
+        final nextStatus =
+            nextNet > 0 ? 'outstanding' : (nextNet == 0 ? 'settled' : 'credit');
+
+        transaction.update(balanceRef, {
+          'sourceAmountPaise': nextSource,
+          'outstandingPaise': nextOutstanding,
+          'status': nextStatus,
+          'revision': currentRevision + 1,
+          'lastMutationType': 'accountAdjustmentCreated',
+          'lastMutationId': value.idempotencyKey,
+          'updatedAt': serverNow,
+        });
+      } else {
+        // New balance from adjustment: only valid for increase direction.
+        if (value.direction == AdjustmentDirection.decrease) {
+          throw const AppException(
+            'Cannot decrease outstanding when no billing balance exists.',
+            code: 'invalid-decrease',
+          );
+        }
+        transaction.set(balanceRef, {
+          'businessId': businessId,
+          'customerId': customerId,
+          'billId': monthKey,
+          'billingMonth': monthKey,
+          'sourceAmountPaise': value.amountPaise,
+          'allocatedPaise': 0,
+          'reversedPaise': 0,
+          'outstandingPaise': value.amountPaise,
+          'status': 'outstanding',
+          'revision': 0,
+          'lastMutationType': 'accountAdjustmentCreated',
+          'lastMutationId': value.idempotencyKey,
+          'createdAt': serverNow,
+          'updatedAt': serverNow,
+        });
+      }
+
+      if (stateSnapshot.exists && stateData != null) {
+        final currentOutstanding = stateData['outstandingPaise'] as int? ?? 0;
+        final currentConfirmed = stateData['confirmedPaise'] as int? ?? 0;
+        final currentReversed = stateData['reversedPaise'] as int? ?? 0;
+        final currentRevision = stateData['revision'] as int? ?? 0;
+        final currentOldest =
+            stateData['oldestOutstandingMonth'] as String? ?? '';
+        final nextOutstanding = currentOutstanding + signedAmount;
+        final String nextReportingStatus;
+        if (nextOutstanding < 0) {
+          nextReportingStatus = 'credit';
+        } else if (nextOutstanding == 0) {
+          nextReportingStatus = 'fullyPaid';
+        } else if (currentConfirmed > currentReversed) {
+          nextReportingStatus = 'partiallyPaid';
+        } else {
+          nextReportingStatus = 'unpaid';
+        }
+        final String nextOldest;
+        if (nextOutstanding <= 0) {
+          nextOldest = '';
+        } else if (currentOutstanding > 0 && currentOldest.isNotEmpty) {
+          nextOldest = currentOldest;
+        } else {
+          nextOldest = monthKey;
+        }
+
+        transaction.update(accountRef, {
+          'customerCode': customerData['customerCode'],
+          'customerName': customerData['name'],
+          'areaId': customerData['areaId'],
+          'assignedEmployeeId': customerData['assignedEmployeeId'],
+          'customerStatus': customerData['status'],
+          'outstandingPaise': nextOutstanding,
+          'confirmedPaise': currentConfirmed,
+          'reversedPaise': currentReversed,
+          'reportingStatus': nextReportingStatus,
+          'oldestOutstandingMonth': nextOldest,
+          'revision': currentRevision + 1,
+          'lastMutationType': 'accountAdjustmentCreated',
+          'lastMutationId': value.idempotencyKey,
+          'updatedBy': actor.uid,
+          'updatedAt': serverNow,
+        });
+      } else {
+        // New collection state from adjustment: only valid for increase.
+        if (value.direction == AdjustmentDirection.decrease) {
+          throw const AppException(
+            'Cannot decrease outstanding when no collection state exists.',
+            code: 'invalid-decrease',
+          );
+        }
+        transaction.set(accountRef, {
+          'businessId': businessId,
+          'customerId': customerId,
+          'stateId': 'current',
+          'customerCode': customerData['customerCode'],
+          'customerName': customerData['name'],
+          'areaId': customerData['areaId'],
+          'assignedEmployeeId': customerData['assignedEmployeeId'],
+          'customerStatus': customerData['status'],
+          'outstandingPaise': value.amountPaise,
+          'confirmedPaise': 0,
+          'reversedPaise': 0,
+          'reportingStatus': 'unpaid',
+          'oldestOutstandingMonth': monthKey,
+          'revision': 1,
+          'lastMutationType': 'accountAdjustmentCreated',
+          'lastMutationId': value.idempotencyKey,
+          'updatedBy': actor.uid,
+          'createdAt': serverNow,
+          'updatedAt': serverNow,
+        });
+      }
+
+      transaction.set(auditRef, {
+        'businessId': businessId,
+        'actorId': actor.uid,
+        'actorRole': actorRoleValue,
+        'action': 'accountAdjustmentCreated',
+        'entityType': 'accountAdjustment',
+        'entityId': value.idempotencyKey,
+        'customerId': customerId,
+        'amountPaise': value.amountPaise,
+        'direction': value.direction.value,
+        'reason': value.reason,
+        'billingMonth': monthKey,
+        'createdAt': serverNow,
+      });
+    });
+  }
+
+  void _verifyIdempotentAdjustment(
+    Map<String, dynamic> data,
+    AppUser actor,
+    AccountAdjustmentInput input,
+  ) {
+    if (data['amountPaise'] != input.amountPaise ||
+        data['direction'] != input.direction.value ||
+        data['reason'] != input.reason ||
+        data['createdBy'] != actor.uid ||
+        (input.billingMonth.isNotEmpty &&
+            data['billingMonth'] != input.billingMonth)) {
+      throw const AppException(
+        'An adjustment with this key exists with different parameters.',
+        code: 'idempotency-conflict',
+      );
+    }
+  }
+
+  Future<AccountAdjustmentResult> _adjustmentResult({
+    required String businessId,
+    required String customerId,
+    required String adjustmentId,
+  }) async {
+    final adjSnapshot = await _accountAdjustments(
+      businessId,
+      customerId,
+    ).doc(adjustmentId).get(const GetOptions(source: Source.server));
+    if (!adjSnapshot.exists || adjSnapshot.data() == null) {
+      throw const AppException('Account adjustment was not found.');
+    }
+    final data = adjSnapshot.data()!;
+    final adjustment = AccountAdjustment(
+      id: adjustmentId,
+      businessId: businessId,
+      customerId: customerId,
+      amountPaise: data['amountPaise'] as int? ?? 0,
+      direction: AdjustmentDirection.fromValue(data['direction']),
+      reason: data['reason'] as String? ?? '',
+      actorUid: data['createdBy'] as String? ?? '',
+      actorRole: data['actorRole'] as String? ?? 'head',
+      lastAuditId: data['lastAuditId'] as String? ?? '',
+      billingMonth: data['billingMonth'] as String? ?? '',
+      createdAt: _date(data['createdAt']) ?? DateTime.now(),
+    );
+    final summary = await _fetchOutstanding(
+      businessId: businessId,
+      customerId: customerId,
+    );
+    return AccountAdjustmentResult(
+      adjustment: adjustment,
+      newOutstandingPaise: summary.amountDuePaise,
+      serverConfirmed: summary.serverConfirmed,
+    );
+  }
+
+  Future<AccountAdjustmentResult?> _recoverAccountAdjustment({
+    required String businessId,
+    required String customerId,
+    required AccountAdjustmentInput input,
+  }) async {
+    try {
+      final existing = await _accountAdjustments(
+        businessId,
+        customerId,
+      ).doc(input.idempotencyKey).get(const GetOptions(source: Source.server));
+      if (!existing.exists || existing.data() == null) return null;
+      return _adjustmentResult(
+        businessId: businessId,
+        customerId: customerId,
+        adjustmentId: input.idempotencyKey,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
   bool _mayBeCommittedRace(FirebaseException error) =>
       error.code == 'permission-denied' ||
       error.code == 'aborted' ||
@@ -1096,6 +1463,34 @@ class FirebaseCollectionsRepository implements CollectionsRepository {
         !actor.permissions.contains(PermissionKey.recordPayments)) {
       throw const AppException(
         'Your assignment, area coverage, or permissions do not allow collection.',
+      );
+    }
+  }
+
+  void _ensureCanAdjust(
+    AppUser actor,
+    String businessId,
+    Map<String, dynamic> customer,
+    AdjustmentDirection direction,
+  ) {
+    if (customer['businessId'] != businessId ||
+        customer['status'] != 'active') {
+      throw const AppException(
+        'Adjustments can be recorded only for an active customer in this business.',
+      );
+    }
+    if (actor.isHead) return;
+    final areaId = customer['areaId'] as String? ?? '';
+    final permission = switch (direction) {
+      AdjustmentDirection.increase => PermissionKey.allowIncreaseOutstanding,
+      AdjustmentDirection.decrease => PermissionKey.allowDecreaseOutstanding,
+    };
+    if (customer['assignedEmployeeId'] != actor.uid ||
+        !actor.areaIds.contains(areaId) ||
+        !actor.permissions.contains(permission)) {
+      throw const AppException(
+        'Your assignment, area coverage, or permissions do not allow this outstanding adjustment.',
+        code: 'permission-denied',
       );
     }
   }

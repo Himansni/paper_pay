@@ -5,6 +5,8 @@ abstract final class PermissionKey {
   static const editAssignedCustomers = 'editAssignedCustomers';
   static const manageAssignedSubscriptions = 'manageAssignedSubscriptions';
   static const recordPayments = 'recordPayments';
+  static const allowIncreaseOutstanding = 'allowIncreaseOutstanding';
+  static const allowDecreaseOutstanding = 'allowDecreaseOutstanding';
   static const recordDeliveryExceptions = 'recordDeliveryExceptions';
   static const arrangeDeliveryRoutes = 'arrangeDeliveryRoutes';
 }
@@ -14,10 +16,7 @@ abstract final class PermissionKey {
 class AccessPolicy {
   const AccessPolicy();
 
-  bool canArrangeRoutes({
-    required AppUser member,
-    required String areaId,
-  }) {
+  bool canArrangeRoutes({required AppUser member, required String areaId}) {
     if (!member.hasActiveAccess) return false;
     if (member.isHead) return true;
     return member.areaIds.contains(areaId) &&
@@ -127,4 +126,64 @@ class AccessPolicy {
       (member.isHead ||
           (member.areaIds.contains(customerAreaId) &&
               member.permissions.contains(PermissionKey.recordPayments)));
+
+  bool canIncreaseOutstanding({
+    required AppUser member,
+    required String customerBusinessId,
+    required String assignedEmployeeId,
+    required String customerAreaId,
+    required bool isCustomerArchived,
+  }) =>
+      !isCustomerArchived &&
+      canReadCustomer(
+        member: member,
+        customerBusinessId: customerBusinessId,
+        assignedEmployeeId: assignedEmployeeId,
+      ) &&
+      (member.isHead ||
+          (member.areaIds.contains(customerAreaId) &&
+              member.permissions.contains(
+                PermissionKey.allowIncreaseOutstanding,
+              )));
+
+  bool canDecreaseOutstanding({
+    required AppUser member,
+    required String customerBusinessId,
+    required String assignedEmployeeId,
+    required String customerAreaId,
+    required bool isCustomerArchived,
+  }) =>
+      !isCustomerArchived &&
+      canReadCustomer(
+        member: member,
+        customerBusinessId: customerBusinessId,
+        assignedEmployeeId: assignedEmployeeId,
+      ) &&
+      (member.isHead ||
+          (member.areaIds.contains(customerAreaId) &&
+              member.permissions.contains(
+                PermissionKey.allowDecreaseOutstanding,
+              )));
+
+  bool canAdjustOutstanding({
+    required AppUser member,
+    required String customerBusinessId,
+    required String assignedEmployeeId,
+    required String customerAreaId,
+    required bool isCustomerArchived,
+  }) =>
+      canIncreaseOutstanding(
+        member: member,
+        customerBusinessId: customerBusinessId,
+        assignedEmployeeId: assignedEmployeeId,
+        customerAreaId: customerAreaId,
+        isCustomerArchived: isCustomerArchived,
+      ) ||
+      canDecreaseOutstanding(
+        member: member,
+        customerBusinessId: customerBusinessId,
+        assignedEmployeeId: assignedEmployeeId,
+        customerAreaId: customerAreaId,
+        isCustomerArchived: isCustomerArchived,
+      );
 }

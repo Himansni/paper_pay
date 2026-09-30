@@ -431,6 +431,34 @@ class _FakeCollectionsRepository implements CollectionsRepository {
   final reverseCalls = <PaymentReversalInput>[];
   final upiUpdates = <UpiSettingsInput>[];
   final historyCursors = <PaymentHistoryCursor?>[];
+  final adjustmentCalls = <AccountAdjustmentInput>[];
+
+  @override
+  Future<AccountAdjustmentResult> recordAccountAdjustment({
+    required AppUser actor,
+    required String customerId,
+    required AccountAdjustmentInput input,
+  }) async {
+    adjustmentCalls.add(input);
+    return AccountAdjustmentResult(
+      adjustment: AccountAdjustment(
+        id: input.idempotencyKey,
+        businessId: actor.businessId ?? 'business-a',
+        customerId: customerId,
+        billingMonth: input.billingMonth,
+        amountPaise: input.amountPaise,
+        direction: input.direction,
+        reason: input.reason,
+        actorUid: actor.uid,
+        actorRole: actor.isHead ? 'head' : 'employee',
+        createdAt: DateTime.now(),
+        lastAuditId: 'adj-audit',
+      ),
+      newOutstandingPaise:
+          summary.outstandingPaise + input.signedAmountPaise,
+      serverConfirmed: true,
+    );
+  }
 
   @override
   Stream<CustomerOutstandingSummary> watchCustomerOutstanding({

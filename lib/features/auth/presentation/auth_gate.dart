@@ -12,6 +12,7 @@ import 'package:paper_route/features/billing/presentation/bill_detail_page.dart'
 import 'package:paper_route/features/billing/presentation/bill_preview_page.dart';
 import 'package:paper_route/features/billing/presentation/billing_workspace_page.dart';
 import 'package:paper_route/features/business/presentation/business_settings_page.dart';
+import 'package:paper_route/features/collections/presentation/adjust_outstanding_page.dart';
 import 'package:paper_route/features/collections/presentation/collect_payment_page.dart';
 import 'package:paper_route/features/collections/presentation/collections_workspace_page.dart';
 import 'package:paper_route/features/collections/presentation/payment_receipt_page.dart';
@@ -49,6 +50,7 @@ enum AuthenticatedDestination {
   billDetail,
   collections,
   collectPayment,
+  adjustOutstanding,
   paymentReceipt,
   upiSettings,
   customerCreate,
@@ -164,6 +166,10 @@ class AuthGate extends ConsumerWidget {
             user: user,
             customerId: resourceId ?? '',
           ),
+          AuthenticatedDestination.adjustOutstanding => AdjustOutstandingPage(
+            user: user,
+            customerId: resourceId ?? '',
+          ),
           AuthenticatedDestination.paymentReceipt => PaymentReceiptPage(
             user: user,
             customerId: resourceId ?? '',
@@ -214,12 +220,13 @@ class AuthGate extends ConsumerWidget {
               customerId: resourceId ?? '',
               subscriptionId: secondaryResourceId ?? '',
             ),
-          AuthenticatedDestination.morningRoute =>
-            MorningRoutePage(user: user),
-          AuthenticatedDestination.todayOperations =>
-            TodayOperationsPage(user: user),
-          AuthenticatedDestination.saasSubscription =>
-            SaasSubscriptionPage(user: user),
+          AuthenticatedDestination.morningRoute => MorningRoutePage(user: user),
+          AuthenticatedDestination.todayOperations => TodayOperationsPage(
+            user: user,
+          ),
+          AuthenticatedDestination.saasSubscription => SaasSubscriptionPage(
+            user: user,
+          ),
         };
       },
     );

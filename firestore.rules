@@ -487,6 +487,10 @@ service cloud.firestore {
       return /databases/$(database)/documents/businesses/$(businessId)/customers/$(customerId)/paymentReversals/$(reversalId);
     }
 
+    function accountAdjustmentPath(businessId, customerId, adjustmentId) {
+      return /databases/$(database)/documents/businesses/$(businessId)/customers/$(customerId)/accountAdjustments/$(adjustmentId);
+    }
+
     function collectionStatePath(businessId, customerId) {
       return /databases/$(database)/documents/businesses/$(businessId)/customers/$(customerId)/collectionState/current;
     }
@@ -601,6 +605,42 @@ service cloud.firestore {
         );
     }
 
+    function canAdjustCustomer(businessId, customerId, direction) {
+      let member = exists(memberPath(businessId, request.auth.uid))
+        ? get(memberPath(businessId, request.auth.uid)).data
+        : null;
+      let customer = exists(customerPath(businessId, customerId))
+        ? get(customerPath(businessId, customerId)).data
+        : null;
+      return signedIn()
+        && member != null
+        && member.status == 'active'
+        && member.businessId == businessId
+        && customer != null
+        && customer.businessId == businessId
+        && customer.status == 'active'
+        && (
+          member.role == 'head'
+          || (
+            member.role == 'employee'
+            && member.permissions is list
+            && (
+              (
+                direction == 'increase'
+                && member.permissions.hasAny(['allowIncreaseOutstanding'])
+              )
+              || (
+                direction == 'decrease'
+                && member.permissions.hasAny(['allowDecreaseOutstanding'])
+              )
+            )
+            && customer.assignedEmployeeId == request.auth.uid
+            && member.areaIds is list
+            && member.areaIds.hasAny([customer.areaId])
+          )
+        );
+    }
+
     function canReadCollectionHistory(businessId, customerId) {
       let member = exists(memberPath(businessId, request.auth.uid))
         ? get(memberPath(businessId, request.auth.uid)).data
@@ -704,7 +744,7 @@ service cloud.firestore {
         && data.lastMutationType in [
           'billFinalized', 'paymentConfirmed', 'paymentReversed',
           'customerProfileUpdated', 'customerStatusUpdated',
-          'customerAssignmentUpdated'
+          'customerAssignmentUpdated', 'accountAdjustmentCreated'
         ]
         && data.lastMutationId is string
         && data.lastMutationId.size() > 0
@@ -776,7 +816,8 @@ service cloud.firestore {
         && data.revision is int
         && data.revision >= 0
         && data.lastMutationType in [
-          'billFinalized', 'paymentConfirmed', 'paymentReversed'
+          'billFinalized', 'paymentConfirmed', 'paymentReversed',
+          'accountAdjustmentCreated'
         ]
         && data.lastMutationId is string
         && data.lastMutationId.size() > 0
@@ -1240,6 +1281,221 @@ service cloud.firestore {
         );
     }
 
+    function adjustmentSignedAmount(adj) {
+      return adj.direction == 'increase'
+        ? adj.amountPaise
+        : (0 - adj.amountPaise);
+    }
+
+    function validAdjustmentCollectionStateAfter(
+      businessId,
+      customerId,
+      adjustmentId,
+      adj
+    ) {
+      let path = collectionStatePath(businessId, customerId);
+      let before = get(path).data;
+      let after = getAfter(path).data;
+      let signed = adjustmentSignedAmount(adj);
+      return exists(path)
+        && existsAfter(path)
+        && before.outstandingPaise + signed >= 0
+        && after.outstandingPaise
+          == before.outstandingPaise + signed
+        && after.confirmedPaise == before.confirmedPaise
+        && after.reversedPaise == before.reversedPaise
+        && after.lastMutationType == 'accountAdjustmentCreated'
+        && after.lastMutationId == adjustmentId
+        && (
+          (
+            (before.outstandingPaise + signed) <= 0
+            && after.oldestOutstandingMonth == ''
+          ) || (
+            (before.outstandingPaise + signed) > 0
+            && before.outstandingPaise <= 0
+            && after.oldestOutstandingMonth == adj.billingMonth
+          ) || (
+            (before.outstandingPaise + signed) > 0
+            && before.outstandingPaise > 0
+            && after.oldestOutstandingMonth == before.oldestOutstandingMonth
+          )
+        );
+    }
+
+    function validCollectionStateCreateForAdjustment(businessId, customerId) {
+      let path = collectionStatePath(businessId, customerId);
+      let state = getAfter(path).data;
+      let adjPath = accountAdjustmentPath(
+        businessId,
+        customerId,
+        state.lastMutationId
+      );
+      let adj = getAfter(adjPath).data;
+      return canAdjustCustomer(businessId, customerId, adj.direction)
+        && !exists(path)
+        && existsAfter(path)
+        && adj.direction == 'increase'
+        && state.lastMutationType == 'accountAdjustmentCreated'
+        && state.lastMutationId == adj.adjustmentId
+        && state.outstandingPaise == adj.amountPaise
+        && state.confirmedPaise == 0
+        && state.reversedPaise == 0
+        && state.reportingStatus == 'unpaid'
+        && state.oldestOutstandingMonth == adj.billingMonth
+        && state.revision == 1
+        && state.createdAt == request.time
+        && state.updatedAt == request.time;
+    }
+
+    function validBillBalanceAdjustmentUpdate(
+      businessId,
+      customerId,
+      billId,
+      data
+    ) {
+      let adjPath = accountAdjustmentPath(
+        businessId,
+        customerId,
+        data.lastMutationId
+      );
+      let adj = getAfter(adjPath).data;
+      let signed = adjustmentSignedAmount(adj);
+      return data.lastMutationType == 'accountAdjustmentCreated'
+        && canAdjustCustomer(businessId, customerId, adj.direction)
+        && !exists(adjPath)
+        && existsAfter(adjPath)
+        && adj.billingMonth == billId
+        && data.sourceAmountPaise == resource.data.sourceAmountPaise + signed
+        && data.allocatedPaise == resource.data.allocatedPaise
+        && data.reversedPaise == resource.data.reversedPaise
+        && data.outstandingPaise == resource.data.outstandingPaise + signed;
+    }
+
+    function validBillBalanceCreateForAdjustment(
+      businessId,
+      customerId,
+      billId
+    ) {
+      let path = billBalancePath(businessId, customerId, billId);
+      let balance = getAfter(path).data;
+      let adjPath = accountAdjustmentPath(
+        businessId,
+        customerId,
+        balance.lastMutationId
+      );
+      let adj = getAfter(adjPath).data;
+      return canAdjustCustomer(businessId, customerId, adj.direction)
+        && !exists(path)
+        && existsAfter(path)
+        && adj.direction == 'increase'
+        && balance.lastMutationType == 'accountAdjustmentCreated'
+        && balance.lastMutationId == adj.adjustmentId
+        && balance.billingMonth == billId
+        && balance.billId == billId
+        && adj.billingMonth == billId
+        && balance.sourceAmountPaise == adj.amountPaise
+        && balance.allocatedPaise == 0
+        && balance.reversedPaise == 0
+        && balance.outstandingPaise == adj.amountPaise
+        && balance.status == 'outstanding'
+        && balance.revision == 0
+        && balance.createdAt == request.time
+        && balance.updatedAt == request.time;
+    }
+
+    function validAccountAdjustmentAuditAfter(
+      businessId,
+      customerId,
+      adjustmentId,
+      data
+    ) {
+      let audit = getAfter(auditPath(businessId, data.lastAuditId)).data;
+      return existsAfter(auditPath(businessId, data.lastAuditId))
+        && audit.keys().hasOnly([
+          'businessId', 'actorId', 'actorRole', 'action', 'entityType',
+          'entityId', 'customerId', 'amountPaise', 'direction', 'reason',
+          'billingMonth', 'createdAt'
+        ])
+        && audit.businessId == businessId
+        && audit.actorId == request.auth.uid
+        && audit.actorRole in ['head', 'employee']
+        && audit.actorRole == data.actorRole
+        && audit.action == 'accountAdjustmentCreated'
+        && audit.entityType == 'accountAdjustment'
+        && audit.entityId == adjustmentId
+        && audit.customerId == customerId
+        && audit.amountPaise == data.amountPaise
+        && audit.direction == data.direction
+        && audit.reason == data.reason
+        && audit.billingMonth == data.billingMonth
+        && audit.createdAt == request.time;
+    }
+
+    function validAccountAdjustmentShape(
+      businessId,
+      customerId,
+      adjustmentId,
+      data
+    ) {
+      let customer = get(customerPath(businessId, customerId)).data;
+      return data.keys().hasOnly([
+          'businessId', 'customerId', 'adjustmentId', 'customerCode',
+          'customerName', 'areaId', 'assignedEmployeeId',
+          'idempotencyKey', 'amountPaise', 'direction', 'reason',
+          'billingMonth', 'createdBy', 'actorRole', 'lastAuditId',
+          'createdAt'
+        ])
+        && data.businessId == businessId
+        && data.customerId == customerId
+        && data.adjustmentId == adjustmentId
+        && data.customerCode == customer.customerCode
+        && data.customerName == customer.name
+        && data.areaId == customer.areaId
+        && data.assignedEmployeeId == customer.assignedEmployeeId
+        && data.idempotencyKey == adjustmentId
+        && validLedgerAmount(data.amountPaise)
+        && data.direction in ['increase', 'decrease']
+        && data.actorRole == memberData(businessId).role
+        && data.reason is string
+        && data.reason.size() >= 3
+        && data.reason.size() <= 300
+        && validMonth(data.billingMonth)
+        && data.createdBy == request.auth.uid
+        && data.lastAuditId is string
+        && data.lastAuditId.size() > 0
+        && data.createdAt == request.time;
+    }
+
+    function validAccountAdjustmentCreate(
+      businessId,
+      customerId,
+      adjustmentId
+    ) {
+      let adj = request.resource.data;
+      return canAdjustCustomer(businessId, customerId, adj.direction)
+        && validAccountAdjustmentShape(
+          businessId,
+          customerId,
+          adjustmentId,
+          adj
+        )
+        && !exists(accountAdjustmentPath(businessId, customerId, adjustmentId))
+        && getAfter(collectionStatePath(businessId, customerId)).data.lastMutationType
+          == 'accountAdjustmentCreated'
+        && getAfter(collectionStatePath(businessId, customerId)).data.lastMutationId
+          == adjustmentId
+        && getAfter(billBalancePath(businessId, customerId, adj.billingMonth)).data.lastMutationType
+          == 'accountAdjustmentCreated'
+        && getAfter(billBalancePath(businessId, customerId, adj.billingMonth)).data.lastMutationId
+          == adjustmentId
+        && validAccountAdjustmentAuditAfter(
+          businessId,
+          customerId,
+          adjustmentId,
+          adj
+        );
+    }
+
     function validCollectionStateCreateForBill(businessId, customerId) {
       let state = request.resource.data;
       let bill = getAfter(billPath(
@@ -1257,6 +1513,27 @@ service cloud.firestore {
           customerId,
           state.lastMutationId,
           bill
+        );
+    }
+
+    function validAccountAdjustmentCollectionStateUpdate(
+      businessId,
+      customerId,
+      adjustmentId
+    ) {
+      let adjPath = accountAdjustmentPath(
+        businessId,
+        customerId,
+        adjustmentId
+      );
+      let adj = getAfter(adjPath).data;
+      return canAdjustCustomer(businessId, customerId, adj.direction)
+        && !exists(adjPath)
+        && validAdjustmentCollectionStateAfter(
+          businessId,
+          customerId,
+          adjustmentId,
+          adj
         );
     }
 
@@ -1317,6 +1594,13 @@ service cloud.firestore {
                 customerId,
                 state.lastMutationId
               )).data
+            )
+          ) || (
+            state.lastMutationType == 'accountAdjustmentCreated'
+            && validAccountAdjustmentCollectionStateUpdate(
+              businessId,
+              customerId,
+              state.lastMutationId
             )
           ) || (
             validCustomerReportingStateUpdate(businessId, customerId)
@@ -1399,6 +1683,11 @@ service cloud.firestore {
             billId,
             data
           ) || validBillBalanceReversalUpdate(
+            businessId,
+            customerId,
+            billId,
+            data
+          ) || validBillBalanceAdjustmentUpdate(
             businessId,
             customerId,
             billId,
@@ -1953,7 +2242,27 @@ service cloud.firestore {
           data.action == 'upiSettingsUpdated'
           && getAfter(upiConfigurationPath(businessId)).data.lastAuditId
             == auditId
-        );
+      );
+    }
+
+    function validAuditBase(businessId) {
+      return activeMember(businessId)
+        && request.resource.data.businessId == businessId
+        && request.resource.data.actorId == request.auth.uid
+        && request.resource.data.createdAt == request.time;
+    }
+
+    function validAccountAdjustmentAuditRecord(businessId, auditId) {
+      let audit = request.resource.data;
+      return audit.action == 'accountAdjustmentCreated'
+        && audit.entityType == 'accountAdjustment'
+        && audit.entityId is string
+        && audit.customerId is string
+        && getAfter(accountAdjustmentPath(
+          businessId,
+          audit.customerId,
+          audit.entityId
+        )).data.lastAuditId == auditId;
     }
 
     function validDeliveryExceptionShape(
@@ -3074,7 +3383,8 @@ service cloud.firestore {
       }
 
       match /customers/{customerId} {
-        allow read: if canReadCustomerData(businessId, resource.data);
+        allow read: if activeMember(businessId)
+          && (resource == null || canReadCustomerData(businessId, resource.data));
         allow create: if subscriptionAllowsWrites(businessId)
           && activeMember(businessId)
           && validCustomerShape(businessId, customerId, request.resource.data)
@@ -3534,6 +3844,17 @@ service cloud.firestore {
           allow update, delete: if false;
         }
 
+        match /accountAdjustments/{adjustmentId} {
+          allow read: if canReadCollectionHistory(businessId, customerId);
+          allow create: if subscriptionAllowsWrites(businessId)
+            && validAccountAdjustmentCreate(
+              businessId,
+              customerId,
+              adjustmentId
+            );
+          allow update, delete: if false;
+        }
+
         match /collectionState/{stateId} {
           allow read: if stateId == 'current'
             && canReadCollectionHistory(businessId, customerId);
@@ -3544,7 +3865,10 @@ service cloud.firestore {
               customerId,
               request.resource.data
             )
-            && validCollectionStateCreateForBill(businessId, customerId);
+            && (
+              validCollectionStateCreateForBill(businessId, customerId)
+              || validCollectionStateCreateForAdjustment(businessId, customerId)
+            );
           allow update: if subscriptionAllowsWrites(businessId)
             && stateId == 'current'
             && validCollectionStateUpdate(businessId, customerId);
@@ -3560,10 +3884,16 @@ service cloud.firestore {
               billId,
               request.resource.data
             )
-            && validBillBalanceCreateForBill(
-              businessId,
-              customerId,
-              billId
+            && (
+              validBillBalanceCreateForBill(
+                businessId,
+                customerId,
+                billId
+              ) || validBillBalanceCreateForAdjustment(
+                businessId,
+                customerId,
+                billId
+              )
             );
           allow update: if subscriptionAllowsWrites(businessId)
             && validBillBalanceUpdate(
@@ -3661,61 +3991,62 @@ service cloud.firestore {
 
       match /auditRecords/{auditId} {
         allow read: if head(businessId);
-        allow create: if activeMember(businessId)
-          && request.resource.data.businessId == businessId
-          && request.resource.data.actorId == request.auth.uid
-          && request.resource.data.createdAt == request.time
-          // Delivery drop audits are now target-local. Reject them before the
-          // legacy root dispatcher so this path cannot authorize a second audit.
-          && request.resource.data.entityType != 'deliveryDrop'
+        allow create: if validAuditBase(businessId)
           && (
             (
-              request.resource.data.action == 'customerRemovalRequested'
-              && request.resource.data.entityType == 'customerRemovalRequest'
+              request.resource.data.action == 'accountAdjustmentCreated'
+              && validAccountAdjustmentAuditRecord(businessId, auditId)
             )
             || (
-              phase4AuditAction(request.resource.data.action)
-              && phase4AuditReferencedAfter(
-                businessId,
-                auditId,
-                request.resource.data
-              )
-            )
-            || (
-              phase5AuditAction(request.resource.data.action)
-              && head(businessId)
-              && phase5AuditReferencedAfter(
-                businessId,
-                auditId,
-                request.resource.data
-              )
-            )
-            || (
-              phase6AuditAction(request.resource.data.action)
+              // Delivery drop audits are target-local rather than root records.
+              request.resource.data.entityType != 'deliveryDrop'
+              && request.resource.data.action != 'accountAdjustmentCreated'
               && (
-                request.resource.data.action == 'paymentConfirmed'
-                || head(businessId)
-              )
-              && phase6AuditReferencedAfter(
-                businessId,
-                auditId,
-                request.resource.data
-              )
-            )
-            || (
-              head(businessId)
-              && !phase4AuditAction(request.resource.data.action)
-              && !phase5AuditAction(request.resource.data.action)
-              && !phase6AuditAction(request.resource.data.action)
-              && request.resource.data.entityType != 'customer'
-            )
-            || (
-              request.resource.data.entityType == 'customer'
-              && request.resource.data.entityId is string
-              && customerReferencesAuditAfter(
-                businessId,
-                request.resource.data.entityId,
-                auditId
+                (
+                  request.resource.data.action == 'customerRemovalRequested'
+                  && request.resource.data.entityType == 'customerRemovalRequest'
+                )
+                || (
+                  phase4AuditAction(request.resource.data.action)
+                  && phase4AuditReferencedAfter(
+                    businessId, auditId, request.resource.data
+                  )
+                )
+                || (
+                  phase5AuditAction(request.resource.data.action)
+                  && head(businessId)
+                  && phase5AuditReferencedAfter(
+                    businessId, auditId, request.resource.data
+                  )
+                )
+                || (
+                  phase6AuditAction(request.resource.data.action)
+                  && (
+                    request.resource.data.action == 'paymentConfirmed'
+                    || head(businessId)
+                  )
+                  && phase6AuditReferencedAfter(
+                    businessId, auditId, request.resource.data
+                  )
+                )
+                || (
+                  head(businessId)
+                  && !phase4AuditAction(request.resource.data.action)
+                  && !phase5AuditAction(request.resource.data.action)
+                  && !phase6AuditAction(request.resource.data.action)
+                  && request.resource.data.action != 'accountAdjustmentCreated'
+                  && request.resource.data.entityType != 'deliveryDrop'
+                  && request.resource.data.entityType != 'customer'
+                )
+                || (
+                  request.resource.data.entityType == 'customer'
+                  && request.resource.data.entityId is string
+                  && customerReferencesAuditAfter(
+                    businessId,
+                    request.resource.data.entityId,
+                    auditId
+                  )
+                )
               )
             )
           );

@@ -37,6 +37,12 @@ abstract interface class CollectionsRepository {
     required PaymentReversalInput input,
   });
 
+  Future<AccountAdjustmentResult> recordAccountAdjustment({
+    required AppUser actor,
+    required String customerId,
+    required AccountAdjustmentInput input,
+  });
+
   Stream<UpiSettings> watchUpiSettings(String businessId);
 
   Future<void> updateUpiSettings({

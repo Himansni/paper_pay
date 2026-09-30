@@ -158,7 +158,8 @@ class ConfirmedPayment {
   int get netAmountPaise => amountPaise - reversedPaise;
 
   /// Explicit operational label: collector-confirmed, never automatically bank-verified.
-  String get verificationLabel => 'Collector-confirmed (manual receipt verification)';
+  String get verificationLabel =>
+      'Collector-confirmed (manual receipt verification)';
 
   /// PaperRoute records manual collector confirmation; automatic bank reconciliation is not performed.
   bool get isAutomaticallyBankVerified => false;
@@ -486,4 +487,108 @@ void _validateIdempotencyKey(String value, {required String label}) {
       code: 'invalid-idempotency-key',
     );
   }
+}
+
+enum AdjustmentDirection {
+  increase('increase', 'Increase outstanding'),
+  decrease('decrease', 'Decrease outstanding');
+
+  const AdjustmentDirection(this.value, this.label);
+
+  final String value;
+  final String label;
+
+  static AdjustmentDirection fromValue(Object? value) =>
+      values.firstWhere((d) => d.value == value, orElse: () => increase);
+}
+
+class AccountAdjustment {
+  const AccountAdjustment({
+    required this.id,
+    required this.businessId,
+    required this.customerId,
+    required this.amountPaise,
+    required this.direction,
+    required this.reason,
+    required this.actorUid,
+    required this.actorRole,
+    required this.lastAuditId,
+    this.billingMonth = '',
+    this.createdAt,
+  });
+
+  final String id;
+  final String businessId;
+  final String customerId;
+  final int amountPaise;
+  final AdjustmentDirection direction;
+  final String reason;
+  final String actorUid;
+  final String actorRole;
+  final String lastAuditId;
+  final String billingMonth;
+  final DateTime? createdAt;
+
+  /// The signed amount for projection arithmetic.
+  /// Increase → +amountPaise, Decrease → -amountPaise.
+  int get signedAmountPaise =>
+      direction == AdjustmentDirection.increase ? amountPaise : -amountPaise;
+}
+
+class AccountAdjustmentInput {
+  const AccountAdjustmentInput({
+    required this.amountPaise,
+    required this.direction,
+    required this.reason,
+    required this.idempotencyKey,
+    this.billingMonth = '',
+  });
+
+  final int amountPaise;
+  final AdjustmentDirection direction;
+  final String reason;
+  final String idempotencyKey;
+  final String billingMonth;
+
+  /// The signed amount for projection arithmetic.
+  int get signedAmountPaise =>
+      direction == AdjustmentDirection.increase ? amountPaise : -amountPaise;
+
+  AccountAdjustmentInput normalized() => AccountAdjustmentInput(
+    amountPaise: amountPaise,
+    direction: direction,
+    reason: reason.trim(),
+    idempotencyKey: idempotencyKey.trim(),
+    billingMonth: billingMonth.trim(),
+  );
+
+  void validate() {
+    final value = normalized();
+    if (value.amountPaise <= 0 ||
+        value.amountPaise > maximumCollectionAmountPaise) {
+      throw const AppException('Enter a valid positive adjustment amount.');
+    }
+    if (value.reason.length < 3 || value.reason.length > 300) {
+      throw const AppException(
+        'Enter an adjustment reason between 3 and 300 characters.',
+      );
+    }
+    if (value.billingMonth.isNotEmpty &&
+        !RegExp(r'^\d{4}-(0[1-9]|1[0-2])$').hasMatch(value.billingMonth)) {
+      throw const AppException('Enter a valid adjustment billing month.');
+    }
+    _validateIdempotencyKey(value.idempotencyKey, label: 'adjustment');
+  }
+}
+
+class AccountAdjustmentResult {
+  const AccountAdjustmentResult({
+    required this.adjustment,
+    required this.newOutstandingPaise,
+    required this.serverConfirmed,
+  });
+
+  final AccountAdjustment adjustment;
+  final int newOutstandingPaise;
+  final bool serverConfirmed;
 }

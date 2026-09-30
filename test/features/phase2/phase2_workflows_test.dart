@@ -152,11 +152,26 @@ void main() {
       ' Employee@Example.com ',
     );
     await tester.tap(find.text('Add customers'));
+    for (final permission in const [
+      'Allow Increase Outstanding',
+      'Allow Decrease Outstanding',
+    ]) {
+      final tile = find.ancestor(
+        of: find.text(permission),
+        matching: find.byType(CheckboxListTile),
+      );
+      await tester.ensureVisible(tile);
+      await tester.tap(tile);
+    }
     await tester.tap(find.text('Create invitation'));
     await tester.pumpAndSettle();
 
     expect(employeeRepository.invitedEmail, ' Employee@Example.com ');
-    expect(employeeRepository.invitedPermissions, {'addCustomers'});
+    expect(employeeRepository.invitedPermissions, {
+      'addCustomers',
+      'allowIncreaseOutstanding',
+      'allowDecreaseOutstanding',
+    });
     expect(find.text('Invitation created'), findsOneWidget);
     expect(find.text('invite-code'), findsOneWidget);
   });
@@ -226,7 +241,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byTooltip('Manage employee'));
+      await tester.tap(find.byTooltip('Edit permissions'));
       await tester.pumpAndSettle();
       await tester.enterText(
         find.widgetWithText(TextFormField, 'Display name'),
@@ -250,6 +265,18 @@ void main() {
       await tester.ensureVisible(paymentPermissionTile);
       await tester.tap(paymentPermissionTile);
 
+      for (final permission in const [
+        'Allow Increase Outstanding',
+        'Allow Decrease Outstanding',
+      ]) {
+        final tile = find.ancestor(
+          of: find.text(permission),
+          matching: find.byType(CheckboxListTile),
+        );
+        await tester.ensureVisible(tile);
+        await tester.tap(tile);
+      }
+
       final saveButton = find.text('Save changes');
       await tester.ensureVisible(saveButton);
       await tester.tap(saveButton);
@@ -259,9 +286,141 @@ void main() {
       expect(employeeRepository.updatedDisplayName, 'Employee Updated');
       expect(employeeRepository.updatedNotes, 'Evening route');
       expect(employeeRepository.updatedIsActive, isFalse);
-      expect(employeeRepository.updatedPermissions, {'recordPayments'});
+      expect(employeeRepository.updatedPermissions, {
+        'recordPayments',
+        'allowIncreaseOutstanding',
+        'allowDecreaseOutstanding',
+      });
     },
   );
+
+  testWidgets('Head can revoke outstanding adjustment permissions', (
+    tester,
+  ) async {
+    final memberWithAdjustmentPermissions = EmployeeMember(
+      uid: employee.uid,
+      email: employee.email,
+      displayName: employee.displayName,
+      phone: employee.phone,
+      role: employee.role,
+      status: employee.status,
+      permissions: const {
+        'allowIncreaseOutstanding',
+        'allowDecreaseOutstanding',
+      },
+      areaIds: employee.areaIds,
+      notes: employee.notes,
+    );
+    final employeeRepository = _FakeEmployeeRepository(
+      members: [headMember, memberWithAdjustmentPermissions],
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          employeeRepositoryProvider.overrideWithValue(employeeRepository),
+          areaRepositoryProvider.overrideWithValue(_FakeAreaRepository()),
+        ],
+        child: const MaterialApp(home: EmployeesPage(user: head)),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Edit permissions'));
+    await tester.pumpAndSettle();
+    for (final permission in const [
+      'Allow Increase Outstanding',
+      'Allow Decrease Outstanding',
+    ]) {
+      final tile = find.ancestor(
+        of: find.text(permission),
+        matching: find.byType(CheckboxListTile),
+      );
+      await tester.ensureVisible(tile);
+      await tester.tap(tile);
+    }
+    final saveButton = find.text('Save changes');
+    await tester.ensureVisible(saveButton);
+    await tester.tap(saveButton);
+    await tester.pumpAndSettle();
+
+    expect(employeeRepository.updatedPermissions, isEmpty);
+  });
+
+  testWidgets('Head can grant Increase later while Decrease stays off', (
+    tester,
+  ) async {
+    final employeeRepository = _FakeEmployeeRepository(
+      members: const [headMember, employee],
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          employeeRepositoryProvider.overrideWithValue(employeeRepository),
+          areaRepositoryProvider.overrideWithValue(_FakeAreaRepository()),
+        ],
+        child: const MaterialApp(home: EmployeesPage(user: head)),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Edit permissions'));
+    await tester.pumpAndSettle();
+
+    final increaseLabel = find.text('Allow Increase Outstanding');
+    final decreaseLabel = find.text('Allow Decrease Outstanding');
+    expect(increaseLabel, findsOneWidget);
+    expect(decreaseLabel, findsOneWidget);
+
+    CheckboxListTile checkboxFor(String label) => tester.widget(
+      find.ancestor(
+        of: find.text(label),
+        matching: find.byType(CheckboxListTile),
+      ),
+    );
+
+    await tester.ensureVisible(increaseLabel);
+    expect(checkboxFor('Allow Increase Outstanding').value, isFalse);
+    await tester.ensureVisible(decreaseLabel);
+    expect(checkboxFor('Allow Decrease Outstanding').value, isFalse);
+    await tester.ensureVisible(increaseLabel);
+    await tester.tap(increaseLabel);
+
+    final saveButton = find.text('Save changes');
+    await tester.ensureVisible(saveButton);
+    await tester.tap(saveButton);
+    await tester.pumpAndSettle();
+
+    expect(employeeRepository.updatedPermissions, {
+      'allowIncreaseOutstanding',
+    });
+  });
+
+  testWidgets('Employee cannot see employee permission controls', (
+    tester,
+  ) async {
+    const employeeUser = AppUser(
+      uid: 'employee-1',
+      email: 'employee@example.com',
+      displayName: 'Employee One',
+      isEmailVerified: true,
+      businessId: 'business-a',
+      role: UserRole.employee,
+      status: AccountStatus.active,
+      permissions: {'allowIncreaseOutstanding'},
+    );
+    await tester.pumpWidget(
+      const MaterialApp(home: EmployeesPage(user: employeeUser)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Only the Agency Head can manage employee access.'),
+      findsOneWidget,
+    );
+    expect(find.text('Allow Increase Outstanding'), findsNothing);
+    expect(find.text('Allow Decrease Outstanding'), findsNothing);
+    expect(find.byType(FloatingActionButton), findsNothing);
+  });
 
   testWidgets('Head transfers an existing customer to an authorized employee', (
     tester,
@@ -574,4 +733,3 @@ class _FakeCustomerRepository implements CustomerAssignmentRepository {
     String? reviewNotes,
   }) async {}
 }
-

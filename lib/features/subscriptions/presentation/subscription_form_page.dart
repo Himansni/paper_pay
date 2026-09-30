@@ -162,17 +162,15 @@ class _SubscriptionFormPageState extends ConsumerState<SubscriptionFormPage> {
       _loadError = null;
     });
     try {
-      final page = await ref
-          .read(newspaperRepositoryProvider)
-          .fetchNewspapers(
-            NewspaperListRequest(
-              businessId: widget.user.businessId!,
-              requesterId: widget.user.uid,
-              pageSize: 50,
-            ),
-          );
+      final key = (
+        businessId: widget.user.businessId!,
+        requesterId: widget.user.uid,
+      );
+      final activePapers = await ref.read(
+        activeNewspapersListProvider(key).future,
+      );
       if (!mounted) return;
-      final papers = [...page.newspapers];
+      final papers = [...activePapers];
       final current = widget.subscription;
       if (current != null &&
           !papers.any((paper) => paper.id == current.newspaperId)) {
@@ -193,7 +191,7 @@ class _SubscriptionFormPageState extends ConsumerState<SubscriptionFormPage> {
       }
       final uniqueMap = <String, Newspaper>{};
       for (final p in papers) {
-        final key = p.displayName.trim().toLowerCase();
+        final key = p.semanticIdentityKey;
         final effectiveKey = key.isEmpty ? p.id : key;
         if (!uniqueMap.containsKey(effectiveKey) ||
             (current != null && p.id == current.newspaperId)) {

@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:paper_route/core/errors/app_exception.dart';
 import 'package:paper_route/features/customers/data/firebase_customer_repository.dart';
 import 'package:paper_route/features/customers/domain/customer.dart';
 import 'package:paper_route/features/customers/domain/customer_removal_request.dart';
@@ -36,17 +37,37 @@ final areaCustomersProvider = FutureProvider.autoDispose
     .family<List<Customer>, AreaCustomersKey>((ref, key) async {
   if (key.areaId.isEmpty) return const [];
   final repo = ref.watch(customerRepositoryProvider);
-  final result = await repo.fetchCustomers(
-    CustomerListRequest(
-      businessId: key.businessId,
-      requesterId: '',
-      isHead: true,
-      status: CustomerStatus.active,
-      areaId: key.areaId,
-      pageSize: 250,
-    ),
-  );
-  return result.customers;
+  final customers = <Customer>[];
+  CustomerPageCursor? cursor;
+  do {
+    final customerPage = await repo.fetchCustomers(
+      CustomerListRequest(
+        businessId: key.businessId,
+        requesterId: '',
+        isHead: true,
+        status: CustomerStatus.active,
+        areaId: key.areaId,
+        pageSize: 50,
+        cursor: cursor,
+      ),
+    );
+    customers.addAll(customerPage.customers);
+
+    if (!customerPage.hasMore || customerPage.nextCursor == null) {
+      break;
+    }
+    final nextCursor = customerPage.nextCursor!;
+    if (cursor != null &&
+        nextCursor.customerId == cursor.customerId &&
+        nextCursor.searchName == cursor.searchName) {
+      throw const AppException(
+        'Customer route pagination did not advance. Please refresh and retry.',
+      );
+    }
+    cursor = nextCursor;
+  } while (true);
+
+  return customers;
 });
 
 typedef PendingRemovalRequestsKey = ({

@@ -80,6 +80,14 @@ class _StubSubscriptionRepository implements SubscriptionRepository {
       '';
 
   @override
+  Future<List<String>> createInitialSubscriptions({
+    required AppUser actor,
+    required String customerId,
+    required List<SubscriptionInput> inputs,
+  }) async =>
+      [];
+
+  @override
   Future<void> replaceTerms({
     required AppUser actor,
     required String customerId,

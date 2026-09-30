@@ -82,16 +82,14 @@ class _ReportsPageState extends ConsumerState<ReportsPage> {
 
   Future<void> _loadNewspapers() async {
     try {
-      final page = await ref
-          .read(newspaperRepositoryProvider)
-          .fetchNewspapers(
-            NewspaperListRequest(
-              businessId: widget.user.businessId!,
-              requesterId: widget.user.uid,
-              pageSize: 50,
-            ),
-          );
-      if (mounted) setState(() => _newspapers = page.newspapers);
+      final key = (
+        businessId: widget.user.businessId!,
+        requesterId: widget.user.uid,
+      );
+      final papers = await ref.read(
+        activeNewspapersListProvider(key).future,
+      );
+      if (mounted) setState(() => _newspapers = papers);
     } on Object {
       // The report itself has an independent error state. A failed optional
       // picker must not hide report rows that can still load.

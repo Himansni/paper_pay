@@ -2384,6 +2384,9 @@ service cloud.firestore {
             data.lastMutationId
           )).data.createdAt == request.time
         ) || (
+          data.lastMutationType == 'initialSubscriptionsCreated'
+          && data.lastMutationId is string
+        ) || (
           data.lastMutationType == 'deliveryExceptionCreated'
           && data.lastMutationId is string
           && !exists(deliveryExceptionPath(
@@ -2415,7 +2418,7 @@ service cloud.firestore {
         customerId
       )).data;
       return next.lastMutationType == mutationType
-        && next.lastMutationId == mutationId
+        && (mutationId == null || next.lastMutationId == mutationId)
         && next.updatedBy == request.auth.uid
         && next.updatedAt == request.time;
     }
@@ -2875,11 +2878,18 @@ service cloud.firestore {
           data.lastAuditId,
           'subscriptionCreated'
         )
-        && serviceBillingSourceMatchesAfter(
-          businessId,
-          customerId,
-          'subscriptionCreated',
-          subscriptionId
+        && (
+          serviceBillingSourceMatchesAfter(
+            businessId,
+            customerId,
+            'subscriptionCreated',
+            subscriptionId
+          ) || serviceBillingSourceMatchesAfter(
+            businessId,
+            customerId,
+            'initialSubscriptionsCreated',
+            null
+          )
         );
     }
 

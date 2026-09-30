@@ -81,6 +81,13 @@ class Newspaper {
     return suffix.isEmpty ? name : '$name (${suffix.join(' • ')})';
   }
 
+  String get semanticIdentityKey {
+    final normName = name.trim().toLowerCase();
+    final normEdition = edition.trim().toLowerCase();
+    final normLanguage = language.trim().toLowerCase();
+    return '$normName|$normEdition|$normLanguage';
+  }
+
   NewspaperProfileInput get profileInput =>
       NewspaperProfileInput(name: name, edition: edition, language: language);
 }

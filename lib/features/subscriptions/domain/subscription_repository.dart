@@ -38,6 +38,12 @@ abstract interface class SubscriptionRepository {
     required SubscriptionInput input,
   });
 
+  Future<List<String>> createInitialSubscriptions({
+    required AppUser actor,
+    required String customerId,
+    required List<SubscriptionInput> inputs,
+  });
+
   Future<void> replaceTerms({
     required AppUser actor,
     required String customerId,

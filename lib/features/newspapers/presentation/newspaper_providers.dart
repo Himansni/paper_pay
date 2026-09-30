@@ -34,20 +34,34 @@ final activeNewspapersListProvider = FutureProvider.autoDispose
       ref,
       key,
     ) async {
-      final page = await ref
-          .watch(newspaperRepositoryProvider)
-          .fetchNewspapers(
-            NewspaperListRequest(
-              businessId: key.businessId,
-              requesterId: key.requesterId,
-              status: NewspaperStatus.active,
-              pageSize: 50,
-            ),
-          );
+      final repository = ref.watch(newspaperRepositoryProvider);
+      final all = <Newspaper>[];
+      NewspaperPageCursor? cursor;
+      while (true) {
+        final page = await repository.fetchNewspapers(
+          NewspaperListRequest(
+            businessId: key.businessId,
+            requesterId: key.requesterId,
+            status: NewspaperStatus.active,
+            pageSize: 50,
+            cursor: cursor,
+          ),
+        );
+        all.addAll(page.newspapers);
+        if (!page.hasMore || page.nextCursor == null) break;
+        if (cursor != null && cursor.newspaperId == page.nextCursor!.newspaperId) {
+          break;
+        }
+        cursor = page.nextCursor;
+      }
       final uniqueMap = <String, Newspaper>{};
-      for (final n in page.newspapers) {
-        final key = n.displayName.trim().toLowerCase();
-        uniqueMap.putIfAbsent(key.isEmpty ? n.id : key, () => n);
+      for (final n in all) {
+        if (n.status != NewspaperStatus.active) continue;
+        final semanticKey = n.semanticIdentityKey;
+        uniqueMap.putIfAbsent(
+          semanticKey.isEmpty ? n.id : semanticKey,
+          () => n,
+        );
       }
       return uniqueMap.values.toList();
     });

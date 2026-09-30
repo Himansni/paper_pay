@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:paper_route/core/domain/local_date.dart';
+import 'package:paper_route/core/errors/app_exception.dart';
 import 'package:paper_route/core/presentation/async_state_cards.dart';
 import 'package:paper_route/features/areas/domain/delivery_area.dart';
 import 'package:paper_route/features/areas/presentation/area_providers.dart';
@@ -649,13 +650,13 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
               const SizedBox(height: 14),
 
               // Initial Publication / Multi-Subscription Selector (New Customers)
-              if (!_isEditing && newspapers.isNotEmpty) ...[
+              if (!_isEditing && (newspapers.isNotEmpty || widget.user.isHead)) ...[
                 _SectionCard(
                   title: 'Newspaper Subscriptions',
                   subtitle:
                       'Attach one or more publications right away or configure full details later.',
                   children: [
-                    if (_initialSubscriptions.isEmpty)
+                    if (_initialSubscriptions.isEmpty && newspapers.isNotEmpty)
                       OutlinedButton.icon(
                         key: const ValueKey('add-first-newspaper-btn'),
                         onPressed: () {
@@ -671,6 +672,14 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
                         icon: const Icon(Icons.add),
                         label: const Text('Add newspaper'),
                       )
+                    else if (_initialSubscriptions.isEmpty && newspapers.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 8),
+                        child: Text(
+                          'No newspapers are currently available in the catalog.',
+                          style: TextStyle(color: Color(0xFF486581)),
+                        ),
+                      )
                     else ...[
                       for (int i = 0; i < _initialSubscriptions.length; i++) ...[
                         Builder(
@@ -682,10 +691,17 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
                                 .where((e) => e.key != i)
                                 .map((e) => e.value.newspaperId)
                                 .toSet();
+                            final otherSelectedSemanticKeys = newspapers
+                                .where((p) => otherSelectedIds.contains(p.id))
+                                .map((p) => p.semanticIdentityKey)
+                                .toSet();
                             final availablePapers = newspapers
                                 .where(
                                   (p) =>
-                                      !otherSelectedIds.contains(p.id) ||
+                                      (!otherSelectedIds.contains(p.id) &&
+                                          !otherSelectedSemanticKeys.contains(
+                                            p.semanticIdentityKey,
+                                          )) ||
                                       p.id == draft.newspaperId,
                                 )
                                 .toList();
@@ -829,9 +845,19 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
                                   _initialSubscriptions
                                       .map((s) => s.newspaperId)
                                       .toSet();
+                              final selectedSemanticKeys = newspapers
+                                  .where((p) => selectedIds.contains(p.id))
+                                  .map((p) => p.semanticIdentityKey)
+                                  .toSet();
                               final remaining =
                                   newspapers
-                                      .where((p) => !selectedIds.contains(p.id))
+                                      .where(
+                                        (p) =>
+                                            !selectedIds.contains(p.id) &&
+                                            !selectedSemanticKeys.contains(
+                                              p.semanticIdentityKey,
+                                            ),
+                                      )
                                       .toList();
                               if (remaining.isNotEmpty) {
                                 setState(() {
@@ -848,6 +874,18 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
                             label: const Text('Add another newspaper'),
                           ),
                         ),
+                    ],
+                    if (widget.user.isHead) ...[
+                      const SizedBox(height: 8),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: OutlinedButton.icon(
+                          key: const ValueKey('add-custom-newspaper-btn'),
+                          onPressed: _showAddCustomNewspaperDialog,
+                          icon: const Icon(Icons.add_circle_outline),
+                          label: const Text('Add custom newspaper'),
+                        ),
+                      ),
                     ],
                   ],
                 ),
@@ -1143,36 +1181,42 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
                 .where((draft) => draft.newspaperId.trim().isNotEmpty)
                 .toList();
 
-        final failedPapers = <String>[];
-        for (final draft in validDrafts) {
+        if (validDrafts.isNotEmpty) {
           try {
-            await ref.read(subscriptionRepositoryProvider).createSubscription(
-              actor: widget.user,
-              customerId: id,
-              input: SubscriptionInput(
-                newspaperId: draft.newspaperId,
-                startDate: LocalDate.fromDateTime(DateTime.now()),
-                endDate: null,
-                quantity: draft.quantity,
-                deliveryWeekdays: DeliveryWeekday.all,
-                customPricePaise: null,
-                customPriceReason: '',
-              ),
-            );
-          } catch (_) {
-            failedPapers.add(draft.newspaperId);
-          }
-        }
+            final inputs =
+                validDrafts
+                    .map(
+                      (draft) => SubscriptionInput(
+                        newspaperId: draft.newspaperId,
+                        startDate: LocalDate.fromDateTime(DateTime.now()),
+                        endDate: null,
+                        quantity: draft.quantity,
+                        deliveryWeekdays: DeliveryWeekday.all,
+                        customPricePaise: null,
+                        customPriceReason: '',
+                      ),
+                    )
+                    .toList();
 
-        if (failedPapers.isNotEmpty && mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Customer created, but ${failedPapers.length} subscription(s) could not be set up. Please add them from Customer Details.',
-              ),
-              backgroundColor: Colors.orange.shade800,
-            ),
-          );
+            await ref
+                .read(subscriptionRepositoryProvider)
+                .createInitialSubscriptions(
+                  actor: widget.user,
+                  customerId: id,
+                  inputs: inputs,
+                );
+          } catch (_) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: const Text(
+                    'Customer created, but subscription(s) could not be set up. Please add them from Customer Details.',
+                  ),
+                  backgroundColor: Colors.orange.shade800,
+                ),
+              );
+            }
+          }
         } else if (mounted && !addNext) {
           final l10n = AppLocalizations.of(context);
           ScaffoldMessenger.of(context).showSnackBar(
@@ -1248,6 +1292,182 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _showAddCustomNewspaperDialog() async {
+    final nameController = TextEditingController();
+    final editionController = TextEditingController();
+    final languageController = TextEditingController();
+    final priceController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    var submitting = false;
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Add custom newspaper'),
+          content: SingleChildScrollView(
+            child: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextFormField(
+                    key: const ValueKey('custom-newspaper-name'),
+                    controller: nameController,
+                    enabled: !submitting,
+                    decoration: const InputDecoration(
+                      labelText: 'Newspaper name *',
+                      hintText: 'e.g. Dainik Bhaskar',
+                    ),
+                    validator: (value) {
+                      final text = value?.trim() ?? '';
+                      if (text.length < 2 || text.length > 120) {
+                        return 'Enter a name between 2 and 120 characters.';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    key: const ValueKey('custom-newspaper-edition'),
+                    controller: editionController,
+                    enabled: !submitting,
+                    decoration: const InputDecoration(
+                      labelText: 'Edition (optional)',
+                      hintText: 'e.g. City / Morning',
+                    ),
+                    maxLength: 80,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    key: const ValueKey('custom-newspaper-language'),
+                    controller: languageController,
+                    enabled: !submitting,
+                    decoration: const InputDecoration(
+                      labelText: 'Language (optional)',
+                      hintText: 'e.g. Hindi, English',
+                    ),
+                    maxLength: 80,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    key: const ValueKey('custom-newspaper-price'),
+                    controller: priceController,
+                    enabled: !submitting,
+                    decoration: const InputDecoration(
+                      labelText: 'Default price (₹) *',
+                      prefixText: '₹ ',
+                    ),
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    validator: (value) {
+                      final text = value?.trim() ?? '';
+                      if (text.isEmpty) return 'Enter a default price.';
+                      try {
+                        final paise = NewspaperMoney.parseRupeesToPaise(text);
+                        NewspaperMoney.validatePrice(paise);
+                        return null;
+                      } catch (e) {
+                        return e is AppException ? e.message : 'Invalid price.';
+                      }
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: submitting ? null : () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              key: const ValueKey('custom-newspaper-submit'),
+              onPressed: submitting
+                  ? null
+                  : () async {
+                      if (!formKey.currentState!.validate()) return;
+                      setDialogState(() => submitting = true);
+                      try {
+                        final name = nameController.text.trim();
+                        final edition = editionController.text.trim();
+                        final language = languageController.text.trim();
+                        final pricePaise = NewspaperMoney.parseRupeesToPaise(
+                          priceController.text.trim(),
+                        );
+                        final input = NewspaperInput(
+                          name: name,
+                          edition: edition,
+                          language: language,
+                          defaultPricePaise: pricePaise,
+                        );
+                        input.validate();
+
+                        final repo = ref.read(newspaperRepositoryProvider);
+                        final newId = await repo.createNewspaper(
+                          actor: widget.user,
+                          input: input,
+                        );
+
+                        if (mounted) {
+                          final businessId = widget.user.businessId!;
+                          final key = (
+                            businessId: businessId,
+                            requesterId: widget.user.uid,
+                          );
+                          ref.invalidate(activeNewspapersListProvider(key));
+                          await ref
+                              .read(activeNewspapersListProvider(key).future);
+
+                          setState(() {
+                            final emptySlot = _initialSubscriptions
+                                .indexWhere((s) => s.newspaperId.isEmpty);
+                            if (emptySlot != -1) {
+                              _initialSubscriptions[emptySlot].newspaperId =
+                                  newId;
+                            } else {
+                              _initialSubscriptions.add(
+                                _InitialSubscriptionDraft(
+                                  newspaperId: newId,
+                                  quantity: 1,
+                                ),
+                              );
+                            }
+                          });
+
+                          if (dialogContext.mounted) {
+                            Navigator.pop(dialogContext);
+                          }
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Created publication "$name"'),
+                              ),
+                            );
+                          }
+                        }
+                      } catch (error) {
+                        setDialogState(() => submitting = false);
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(error.toString())),
+                          );
+                        }
+                      }
+                    },
+              child: submitting
+                  ? const SizedBox.square(
+                      dimension: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Create and select'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

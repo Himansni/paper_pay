@@ -294,6 +294,187 @@ class FirebaseSubscriptionRepository implements SubscriptionRepository {
   }
 
   @override
+  Future<List<String>> createInitialSubscriptions({
+    required AppUser actor,
+    required String customerId,
+    required List<SubscriptionInput> inputs,
+  }) async {
+    if (inputs.isEmpty) return const [];
+    final businessId = _businessId(actor);
+    final values = inputs.map((i) => i.normalized()).toList();
+    for (final value in values) {
+      value.validate();
+    }
+    if (!actor.isHead && values.any((v) => v.customPricePaise != null)) {
+      throw const AppException(
+        'Only the Head can authorize customer-specific pricing.',
+      );
+    }
+
+    final requestedIds = <String>{};
+    for (final value in values) {
+      if (!requestedIds.add(value.newspaperId)) {
+        throw const AppException('Duplicate publication selected.');
+      }
+    }
+
+    final billingSourceRef = _serviceBillingSource(businessId, customerId);
+
+    try {
+      await _firestore.runTransaction((transaction) async {
+        final customerSnapshot = await transaction.get(
+          _customer(businessId, customerId),
+        );
+        _validateManageableCustomer(
+          actor,
+          customerSnapshot,
+          requireActive: true,
+        );
+
+        final newspaperSnapshots =
+            <String, DocumentSnapshot<Map<String, dynamic>>>{};
+        final existingSnapshots =
+            <String, DocumentSnapshot<Map<String, dynamic>>>{};
+
+        for (final value in values) {
+          final newspaperSnapshot = await transaction.get(
+            _newspaper(businessId, value.newspaperId),
+          );
+          final existing = await transaction.get(
+            _subscription(businessId, customerId, value.newspaperId),
+          );
+          newspaperSnapshots[value.newspaperId] = newspaperSnapshot;
+          existingSnapshots[value.newspaperId] = existing;
+        }
+
+        final billingSource = await transaction.get(billingSourceRef);
+
+        for (final value in values) {
+          final newspaperSnapshot = newspaperSnapshots[value.newspaperId]!;
+          final newspaperData = newspaperSnapshot.data();
+          if (!newspaperSnapshot.exists ||
+              newspaperData == null ||
+              newspaperData['businessId'] != businessId ||
+              newspaperData['status'] != 'active') {
+            throw const AppException('Select an active newspaper.');
+          }
+
+          final existing = existingSnapshots[value.newspaperId]!;
+          if (existing.exists) {
+            throw const AppException(
+              'This customer already has a history for that newspaper. Restart or change the existing subscription.',
+            );
+          }
+        }
+
+        final now = FieldValue.serverTimestamp();
+        final billingSourceData = billingSource.data();
+        final billingSourceRevision =
+            (billingSourceData?['revision'] as int? ?? 0) + 1;
+
+        for (final value in values) {
+          final subscriptionId = value.newspaperId;
+          final subscriptionRef = _subscription(
+            businessId,
+            customerId,
+            subscriptionId,
+          );
+          final versionId = 'V-${_uuid.v4().replaceAll('-', '').toUpperCase()}';
+          final versionRef = subscriptionRef
+              .collection('versions')
+              .doc(versionId);
+          final auditRef = _audits(businessId).doc();
+          final newspaperData = newspaperSnapshots[value.newspaperId]!.data()!;
+          final newspaperName = newspaperData['name'] as String? ?? '';
+
+          transaction.set(subscriptionRef, {
+            'businessId': businessId,
+            'customerId': customerId,
+            'subscriptionId': subscriptionId,
+            'newspaperId': value.newspaperId,
+            'newspaperName': newspaperName,
+            'currentVersionId': versionId,
+            'currentPauseId': '',
+            'status': SubscriptionStatus.active.value,
+            'startDate': value.startDate.toString(),
+            'endDate': value.endDate?.toString(),
+            'currentEffectiveFrom': value.startDate.toString(),
+            'quantity': value.quantity,
+            'deliveryWeekdays': _sortedWeekdays(value.deliveryWeekdays),
+            'customPricePaise': value.customPricePaise,
+            'customPriceReason': value.customPriceReason,
+            'createdBy': actor.uid,
+            'updatedBy': actor.uid,
+            'lastAuditId': auditRef.id,
+            'createdAt': now,
+            'updatedAt': now,
+          });
+          transaction.set(
+            versionRef,
+            _versionData(
+              businessId: businessId,
+              customerId: customerId,
+              subscriptionId: subscriptionId,
+              versionId: versionId,
+              newspaperId: value.newspaperId,
+              effectiveFrom: value.startDate,
+              input: value,
+              predecessorVersionId: '',
+              actorId: actor.uid,
+              auditId: auditRef.id,
+              now: now,
+            ),
+          );
+          transaction.set(
+            auditRef,
+            _auditData(
+              businessId: businessId,
+              customerId: customerId,
+              subscriptionId: subscriptionId,
+              actorId: actor.uid,
+              action: 'subscriptionCreated',
+              auditId: auditRef.id,
+              now: now,
+              extra: {'newspaperId': value.newspaperId, 'versionId': versionId},
+            ),
+          );
+        }
+
+        final lastMutationType =
+            values.length == 1
+                ? 'subscriptionCreated'
+                : 'initialSubscriptionsCreated';
+        final lastMutationId =
+            values.length == 1
+                ? values.first.newspaperId
+                : values.map((v) => v.newspaperId).join(',');
+
+        transaction.set(billingSourceRef, {
+          'businessId': businessId,
+          'customerId': customerId,
+          'sourceId': 'service',
+          'revision': billingSourceRevision,
+          'lastMutationType': lastMutationType,
+          'lastMutationId': lastMutationId,
+          'updatedBy': actor.uid,
+          'createdAt': billingSourceData?['createdAt'] ?? now,
+          'updatedAt': now,
+        });
+      });
+      return values.map((v) => v.newspaperId).toList();
+    } on AppException {
+      rethrow;
+    } on FirebaseException catch (error) {
+      throw _translate(error, 'Could not create the subscriptions.');
+    } on Object {
+      throw const AppException(
+        'Could not create the subscriptions. Reload and try again.',
+        code: 'transaction-failed',
+      );
+    }
+  }
+
+  @override
   Future<void> replaceTerms({
     required AppUser actor,
     required String customerId,

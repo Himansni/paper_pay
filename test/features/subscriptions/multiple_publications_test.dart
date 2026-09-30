@@ -52,6 +52,27 @@ class _FakeSubRepo implements SubscriptionRepository {
   }
 
   @override
+  Future<List<String>> createInitialSubscriptions({
+    required AppUser actor,
+    required String customerId,
+    required List<SubscriptionInput> inputs,
+  }) async {
+    if (failNext) {
+      throw const AppException('Failed to create subscription: network error');
+    }
+    final ids = <String>{};
+    for (final input in inputs) {
+      if (!ids.add(input.newspaperId)) {
+        throw const AppException('Duplicate publication selected.');
+      }
+    }
+    for (final input in inputs) {
+      createdSubscriptions.add(input);
+    }
+    return inputs.map((i) => 'SUB-ID-${createdSubscriptions.length}').toList();
+  }
+
+  @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 

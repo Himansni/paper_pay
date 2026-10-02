@@ -12,6 +12,43 @@ function pad(n: number): string {
   return n < 10 ? '0' + n : '' + n;
 }
 
+export function validateFinalizeBillAuthorization({
+  uid,
+  businessId,
+  customerId,
+  billingMonth,
+  member,
+  customer,
+}: {
+  uid?: string;
+  businessId?: string;
+  customerId?: string;
+  billingMonth?: string;
+  member?: any;
+  customer?: any;
+}): { isHead: boolean; hasManualBilling: boolean } {
+  if (!uid) throw new functions.HttpsError('unauthenticated', 'User must be signed in.');
+  if (!businessId || !customerId || !billingMonth) {
+    throw new functions.HttpsError('invalid-argument', 'Missing parameters.');
+  }
+  if (!member || member.status !== 'active') {
+    throw new functions.HttpsError('permission-denied', 'Unauthorized.');
+  }
+  const isHead = member.role === 'head';
+  const hasManualBilling = member.permissions?.includes('allowManualBilling');
+
+  if (!customer) {
+    throw new functions.HttpsError('not-found', 'Customer not found.');
+  }
+  if (!isHead && (!hasManualBilling || customer.assignedEmployeeId !== uid || !member.areaIds?.includes(customer.areaId))) {
+    throw new functions.HttpsError('permission-denied', 'Only authorized employees can finalize bills.');
+  }
+  if (customer.status !== 'active') {
+    throw new functions.HttpsError('failed-precondition', 'Customer is not active.');
+  }
+  return { isHead, hasManualBilling };
+}
+
 export const finalizeMonthlyBill = functions.onCall({
   region: "asia-south1",
   enforceAppCheck: false,
@@ -29,24 +66,21 @@ export const finalizeMonthlyBill = functions.onCall({
   
   // Authorization
   const memberDoc = await db.collection(`businesses/${businessId}/members`).doc(uid).get();
-  if (!memberDoc.exists) throw new functions.HttpsError('permission-denied', 'Unauthorized.');
-  const member = memberDoc.data()!;
-  if (member.status !== 'active') throw new functions.HttpsError('permission-denied', 'Unauthorized.');
-  
-  const isHead = member.role === 'head';
-  const hasManualBilling = member.permissions?.includes('allowManualBilling');
-  
+  const member = memberDoc.exists ? memberDoc.data() : null;
   const customerRef = db.collection(`businesses/${businessId}/customers`).doc(customerId);
   const customerDoc = await customerRef.get();
-  if (!customerDoc.exists) throw new functions.HttpsError('not-found', 'Customer not found.');
-  const customer = customerDoc.data()!;
-  
-  if (!isHead && (!hasManualBilling || customer.assignedEmployeeId !== uid || !member.areaIds?.includes(customer.areaId))) {
-    throw new functions.HttpsError('permission-denied', 'Only authorized employees can finalize bills.');
-  }
-  if (customer.status !== 'active') {
-    throw new functions.HttpsError('failed-precondition', 'Customer is not active.');
-  }
+  const customer = customerDoc.exists ? customerDoc.data() : null;
+
+  const { isHead, hasManualBilling } = validateFinalizeBillAuthorization({
+    uid,
+    businessId,
+    customerId,
+    billingMonth,
+    member,
+    customer,
+  });
+  const memberData = member!;
+  const customerData = customer!;
 
   const [yearStr, monthStr] = billingMonth.split('-');
   const monthEndStr = `${yearStr}-${monthStr}-${pad(getDaysInMonth(parseInt(yearStr, 10), parseInt(monthStr, 10)))}`;
@@ -83,26 +117,46 @@ export const finalizeMonthlyBill = functions.onCall({
       }
     }
 
+    const failureRef = db.collection(`businesses/${businessId}/billingFailures`).doc(`${billingMonth}_${customerId}`);
+    const failureDoc = await transaction.get(failureRef);
+
     const terms: BillingTerm[] = [];
     const pauses: BillingPause[] = [];
     const newspaperIds = new Set<string>();
 
     for (const sub of subsSnap.docs) {
+      const subData = sub.data();
       const versionsSnap = await transaction.get(sub.ref.collection('versions'));
-      for (const v of versionsSnap.docs) {
-        const vData = v.data();
-        if (vData.effectiveFrom > monthEndStr || (vData.effectiveTo && vData.effectiveTo < monthStartStr)) continue;
-        terms.push({
-          subscriptionId: sub.id,
-          versionId: v.id,
-          newspaperId: vData.newspaperId,
-          quantity: vData.quantity ?? 0,
-          deliveryWeekdays: vData.deliveryWeekdays ?? [],
-          customPricePaise: vData.customPricePaise ?? null,
-          effectiveFrom: vData.effectiveFrom,
-          effectiveTo: vData.effectiveTo ?? null,
-        });
-        newspaperIds.add(vData.newspaperId);
+      if (versionsSnap.empty) {
+        if (!subData.startDate || (subData.startDate <= monthEndStr && (!subData.endDate || subData.endDate >= monthStartStr))) {
+          terms.push({
+            subscriptionId: sub.id,
+            versionId: 'v1',
+            newspaperId: subData.newspaperId,
+            quantity: subData.quantity ?? 1,
+            deliveryWeekdays: subData.deliveryWeekdays ?? [1, 2, 3, 4, 5, 6, 7],
+            customPricePaise: subData.customPricePaise ?? null,
+            effectiveFrom: subData.startDate ?? monthStartStr,
+            effectiveTo: subData.endDate ?? null,
+          });
+          newspaperIds.add(subData.newspaperId);
+        }
+      } else {
+        for (const v of versionsSnap.docs) {
+          const vData = v.data();
+          if (vData.effectiveFrom > monthEndStr || (vData.effectiveTo && vData.effectiveTo < monthStartStr)) continue;
+          terms.push({
+            subscriptionId: sub.id,
+            versionId: v.id,
+            newspaperId: vData.newspaperId,
+            quantity: vData.quantity ?? 0,
+            deliveryWeekdays: vData.deliveryWeekdays ?? [1, 2, 3, 4, 5, 6, 7],
+            customPricePaise: vData.customPricePaise ?? null,
+            effectiveFrom: vData.effectiveFrom,
+            effectiveTo: vData.effectiveTo ?? null,
+          });
+          newspaperIds.add(vData.newspaperId);
+        }
       }
       const pausesSnap = await transaction.get(sub.ref.collection('pauses'));
       for (const p of pausesSnap.docs) {
@@ -127,6 +181,9 @@ export const finalizeMonthlyBill = functions.onCall({
       if (!npDoc.exists) continue;
       const npData = npDoc.data()!;
       const rulesSnap = await transaction.get(npDoc.ref.collection('priceRules'));
+      const monthlyPriceDoc = await transaction.get(
+        db.collection(`businesses/${businessId}/monthlyBillingPrices`).doc(`${billingMonth}_${nid}`)
+      );
       const rules = rulesSnap.docs.map((r: any) => ({
         ruleId: r.id,
         revision: r.data().revision ?? 1,
@@ -136,6 +193,18 @@ export const finalizeMonthlyBill = functions.onCall({
         pricingBasis: r.data().pricingBasis ?? 'daily',
         pricePaise: r.data().pricePaise ?? 0
       }));
+      if (monthlyPriceDoc.exists) {
+        const mpData = monthlyPriceDoc.data()!;
+        rules.unshift({
+          ruleId: `monthly_snapshot_${monthlyPriceDoc.id}`,
+          revision: 999999,
+          startDate: monthStartStr,
+          endDate: monthEndStr,
+          isExactDate: false,
+          pricingBasis: mpData.pricingBasis ?? 'monthly',
+          pricePaise: mpData.pricePaise ?? 0
+        });
+      }
       newspapers[nid] = {
         newspaperId: nid,
         name: npData.name,
@@ -177,7 +246,7 @@ export const finalizeMonthlyBill = functions.onCall({
       adjustmentsPaise += (a.data().amountPaise ?? 0);
     }
 
-    let priorBalancePaise = collectionStateDoc.exists ? (collectionStateDoc.data()?.outstandingPaise ?? 0) : customer.openingBalancePaise ?? 0;
+    let priorBalancePaise = collectionStateDoc.exists ? (collectionStateDoc.data()?.outstandingPaise ?? 0) : customerData.openingBalancePaise ?? 0;
     const totalDuePaise = priorBalancePaise + currentChargesPaise + adjustmentsPaise;
 
     if (clientTotalDuePaise !== undefined && totalDuePaise !== clientTotalDuePaise) {
@@ -190,17 +259,17 @@ export const finalizeMonthlyBill = functions.onCall({
 
     transaction.set(billRef, {
       businessId, customerId, 
-      customerCode: customer.customerCode ?? customerId,
-      customerName: customer.name,
-      customerSearchName: customer.name.toLowerCase(),
-      customerAddress: customer.address ?? '',
-      areaId: customer.areaId,
-      assignedEmployeeId: customer.assignedEmployeeId,
-      customerStatus: customer.status,
+      customerCode: customerData.customerCode ?? customerId,
+      customerName: customerData.name,
+      customerSearchName: customerData.name.toLowerCase(),
+      customerAddress: customerData.address ?? '',
+      areaId: customerData.areaId,
+      assignedEmployeeId: customerData.assignedEmployeeId,
+      customerStatus: customerData.status,
       billingMonth,
       billingSource: billingSource === 'manual' ? 'manual' : 'generated',
       status: 'finalized',
-      openingBalancePaise: customer.openingBalancePaise ?? 0,
+      openingBalancePaise: customerData.openingBalancePaise ?? 0,
       previousBillId: '', // Skipping exact resolution of previous bill for now
       previousOutstandingPaise: 0,
       priorBalancePaise,
@@ -286,11 +355,11 @@ export const finalizeMonthlyBill = functions.onCall({
 
     const nextCollectionState = {
       businessId, customerId, stateId: 'current',
-      customerCode: customer.customerCode ?? customerId,
-      customerName: customer.name,
-      areaId: customer.areaId,
-      assignedEmployeeId: customer.assignedEmployeeId,
-      customerStatus: customer.status,
+      customerCode: customerData.customerCode ?? customerId,
+      customerName: customerData.name,
+      areaId: customerData.areaId,
+      assignedEmployeeId: customerData.assignedEmployeeId,
+      customerStatus: customerData.status,
       outstandingPaise: totalDuePaise,
       confirmedPaise, reversedPaise, reportingStatus,
       oldestOutstandingMonth: oldestOutstandingMonth || billingMonth,
@@ -304,13 +373,17 @@ export const finalizeMonthlyBill = functions.onCall({
     else transaction.set(collectionStateRef, { ...nextCollectionState, createdAt: now });
 
     transaction.set(auditRef, {
-      businessId, actorId: uid, actorRole: member.role,
+      businessId, actorId: uid, actorRole: memberData.role,
       action: 'billFinalized', entityType: 'bill', entityId: `${customerId}:${billingMonth}`,
       customerId, billingMonth, lineItemCount: lineItems.length,
       currentChargesPaise, priorBalancePaise, adjustmentsPaise, totalDuePaise,
       controlRevision: controlData?.adjustmentRevision ?? 0,
       createdAt: now,
     });
+
+    if (failureDoc.exists) {
+      transaction.delete(failureRef);
+    }
 
     return { success: true, billId: billingMonth };
   });

@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:paper_route/core/errors/app_exception.dart';
 import 'package:paper_route/features/auth/domain/access_policy.dart';
 import 'package:paper_route/features/auth/domain/app_user.dart';
@@ -16,13 +17,17 @@ const _maximumBillBalanceDocuments = 120;
 class FirebaseCollectionsRepository implements CollectionsRepository {
   FirebaseCollectionsRepository(
     this._firestore, {
+    FirebaseFunctions? functions,
     PaymentAllocationEngine allocationEngine = const PaymentAllocationEngine(),
-  }) : _allocationEngine = allocationEngine;
+  }) : _functions =
+           functions ?? FirebaseFunctions.instanceFor(region: 'asia-south1'),
+       _allocationEngine = allocationEngine;
 
   factory FirebaseCollectionsRepository.fromDefaultApp() =>
       FirebaseCollectionsRepository(FirebaseFirestore.instance);
 
   final FirebaseFirestore _firestore;
+  final FirebaseFunctions _functions;
   final PaymentAllocationEngine _allocationEngine;
 
   DocumentReference<Map<String, dynamic>> _customer(
@@ -240,256 +245,56 @@ class FirebaseCollectionsRepository implements CollectionsRepository {
     final businessId = _activeBusinessId(actor);
     final value = input.normalized();
     value.validate();
-    final paymentRef = _payments(
-      businessId,
-      customerId,
-    ).doc(value.idempotencyKey);
 
     try {
-      final existing = await paymentRef.get(
-        const GetOptions(source: Source.server),
+      final callable = _functions.httpsCallable('recordPayment');
+      await callable.call({
+        'businessId': businessId,
+        'customerId': customerId,
+        'amountPaise': value.amountPaise,
+        'method': value.method.value,
+        'notes': value.notes,
+        'externalReference': value.externalReference,
+        'idempotencyKey': value.idempotencyKey,
+      });
+
+      return _confirmedResult(
+        businessId: businessId,
+        customerId: customerId,
+        paymentId: value.idempotencyKey,
       );
-      if (existing.exists) {
-        _verifyIdempotentPayment(existing.data()!, actor, value);
-        return _confirmedResult(
-          businessId: businessId,
-          customerId: customerId,
-          paymentId: value.idempotencyKey,
+    } on FirebaseFunctionsException catch (error) {
+      if (error.code == 'permission-denied') {
+        throw const AppException(
+          'Your assignment, area coverage, or permissions do not allow collection.',
+          code: 'permission-denied',
         );
       }
-      // One bounded application retry reloads projections after a concurrent
-      // confirmation. The immutable payment ID makes this retry idempotent.
-      for (var attempt = 0; attempt < 2; attempt++) {
-        try {
-          await _confirmOnce(
-            actor: actor,
-            businessId: businessId,
-            customerId: customerId,
-            value: value,
-          );
-          return _confirmedResult(
-            businessId: businessId,
-            customerId: customerId,
-            paymentId: value.idempotencyKey,
-          );
-        } on AppException catch (error) {
-          if (attempt == 0 && error.code == 'collection-state-changed') {
-            continue;
-          }
-          rethrow;
-        }
+      if (error.code == 'failed-precondition') {
+        throw AppException(
+          error.message ?? 'Payment conditions not met.',
+          code: 'failed-precondition',
+        );
       }
-      throw const AppException('Could not confirm this payment safely.');
+      throw AppException(
+        error.message ?? 'Could not confirm this payment.',
+        code: error.code,
+      );
     } on AppException {
       rethrow;
-    } on FirebaseException catch (error) {
-      if (_mayBeCommittedRace(error)) {
-        final recovered = await _recoverPaymentConfirmation(
-          businessId: businessId,
-          customerId: customerId,
-          actor: actor,
-          input: value,
-        );
-        if (recovered != null) return recovered;
-      }
-      throw _translate(error, 'Could not confirm this payment.');
-    }
-  }
-
-  Future<void> _confirmOnce({
-    required AppUser actor,
-    required String businessId,
-    required String customerId,
-    required PaymentConfirmationInput value,
-  }) async {
-    final context = await _loadAllocationContext(
-      actor: actor,
-      businessId: businessId,
-      customerId: customerId,
-    );
-    final plan = _allocationEngine.allocate(
-      amountPaise: value.amountPaise,
-      accountOutstandingPaise: context.outstandingPaise,
-      bills: context.bills,
-      preferredBillId: value.preferredBillId,
-    );
-    final paymentRef = _payments(
-      businessId,
-      customerId,
-    ).doc(value.idempotencyKey);
-    final paymentStateRef = _paymentStates(
-      businessId,
-      customerId,
-    ).doc(value.idempotencyKey);
-    final accountRef = _collectionState(businessId, customerId);
-    final auditRef = _audits(businessId).doc();
-
-    await _firestore.runTransaction((transaction) async {
-      final existing = await transaction.get(paymentRef);
-      if (existing.exists) {
-        _verifyIdempotentPayment(existing.data()!, actor, value);
-        return;
-      }
-      final customerSnapshot = await transaction.get(
-        _customer(businessId, customerId),
+    } catch (error) {
+      final recovered = await _recoverPaymentConfirmation(
+        businessId: businessId,
+        customerId: customerId,
+        actor: actor,
+        input: value,
       );
-      final customerData = customerSnapshot.data();
-      if (customerData == null) {
-        throw const AppException('The customer no longer exists.');
+      if (recovered != null) return recovered;
+      if (error is FirebaseException) {
+        throw _translate(error, 'Could not confirm this payment.');
       }
-      _ensureCanCollect(actor, businessId, customerData);
-
-      final stateSnapshot = await transaction.get(accountRef);
-      final currentState = stateSnapshot.data();
-      if (stateSnapshot.exists != context.stateExists ||
-          (currentState?['revision'] as int? ?? 0) != context.revision) {
-        throw const AppException(
-          'The account balance changed. Refreshing before confirmation.',
-          code: 'collection-state-changed',
-        );
-      }
-      final liveBills = <String, OutstandingBill>{};
-      for (final allocation in plan.allocations) {
-        final expected = context.byBillId[allocation.billId]!;
-        final ref = _billBalances(
-          businessId,
-          customerId,
-        ).doc(allocation.billId);
-        final snapshot = await transaction.get(ref);
-        if (snapshot.exists) {
-          final live = _outstandingBill(snapshot.id, snapshot.data()!);
-          if (live.revision != expected.revision ||
-              live.outstandingPaise != expected.outstandingPaise) {
-            throw const AppException(
-              'A bill balance changed. Refreshing before confirmation.',
-              code: 'collection-state-changed',
-            );
-          }
-          liveBills[allocation.billId] = live;
-        } else {
-          throw const AppException(
-            'A bill balance is unavailable. Refresh before confirmation.',
-            code: 'collection-state-changed',
-          );
-        }
-      }
-
-      final now = FieldValue.serverTimestamp();
-      final allocations = [
-        for (final allocation in plan.allocations) allocation.toMap(),
-      ];
-      transaction.set(paymentRef, {
-        'businessId': businessId,
-        'customerId': customerId,
-        'customerCode': customerData['customerCode'],
-        'customerName': customerData['name'],
-        'areaId': customerData['areaId'],
-        'assignedEmployeeId': customerData['assignedEmployeeId'],
-        'paymentId': value.idempotencyKey,
-        'idempotencyKey': value.idempotencyKey,
-        'amountPaise': value.amountPaise,
-        'method': value.method.value,
-        'status': 'confirmed',
-        'externalReference': value.externalReference,
-        'notes': value.notes,
-        'collectorUid': actor.uid,
-        'allocations': allocations,
-        'allocationCount': allocations.length,
-        'allocatedPaise': value.amountPaise,
-        'lastAuditId': auditRef.id,
-        'confirmedAt': now,
-        'createdAt': now,
-      });
-      transaction.set(paymentStateRef, {
-        'businessId': businessId,
-        'customerId': customerId,
-        'paymentId': value.idempotencyKey,
-        'amountPaise': value.amountPaise,
-        'reversedPaise': 0,
-        'refundablePaise': value.amountPaise,
-        'status': 'confirmed',
-        'allocationStates': [
-          for (final allocation in plan.allocations)
-            PaymentAllocationState(
-              billId: allocation.billId,
-              billingMonth: allocation.billingMonth,
-              amountPaise: allocation.amountPaise,
-              reversedPaise: 0,
-            ).toMap(),
-        ],
-        'revision': 0,
-        'lastReversalId': '',
-        'createdAt': now,
-        'updatedAt': now,
-      });
-
-      final nextOutstanding = context.outstandingPaise - value.amountPaise;
-      final nextConfirmed = context.confirmedPaise + value.amountPaise;
-      final nextState = {
-        'businessId': businessId,
-        'customerId': customerId,
-        'stateId': 'current',
-        'customerCode': customerData['customerCode'],
-        'customerName': customerData['name'],
-        'areaId': customerData['areaId'],
-        'assignedEmployeeId': customerData['assignedEmployeeId'],
-        'customerStatus': customerData['status'],
-        'outstandingPaise': nextOutstanding,
-        'confirmedPaise': nextConfirmed,
-        'reversedPaise': context.reversedPaise,
-        'reportingStatus': collectionReportingStatus(
-          outstandingPaise: nextOutstanding,
-          confirmedPaise: nextConfirmed,
-          reversedPaise: context.reversedPaise,
-        ),
-        'oldestOutstandingMonth': _oldestAfterPayment(context, plan),
-        'revision': context.revision + 1,
-        'lastMutationType': 'paymentConfirmed',
-        'lastMutationId': value.idempotencyKey,
-        'updatedBy': actor.uid,
-        'updatedAt': now,
-      };
-      transaction.update(accountRef, nextState);
-
-      for (final allocation in plan.allocations) {
-        final current = liveBills[allocation.billId]!;
-        final ref = _billBalances(
-          businessId,
-          customerId,
-        ).doc(allocation.billId);
-        final nextOutstanding =
-            current.outstandingPaise - allocation.amountPaise;
-        final next = {
-          'businessId': businessId,
-          'customerId': customerId,
-          'billId': current.billId,
-          'billingMonth': current.billingMonth,
-          'sourceAmountPaise': current.sourceAmountPaise,
-          'allocatedPaise': current.allocatedPaise + allocation.amountPaise,
-          'reversedPaise': current.reversedPaise,
-          'outstandingPaise': nextOutstanding,
-          'status': nextOutstanding == 0 ? 'settled' : 'outstanding',
-          'revision': current.revision + 1,
-          'lastMutationType': 'paymentConfirmed',
-          'lastMutationId': value.idempotencyKey,
-          'updatedAt': now,
-        };
-        transaction.update(ref, next);
-      }
-      transaction.set(auditRef, {
-        'businessId': businessId,
-        'actorId': actor.uid,
-        'action': 'paymentConfirmed',
-        'entityType': 'payment',
-        'entityId': value.idempotencyKey,
-        'customerId': customerId,
-        'paymentId': value.idempotencyKey,
-        'amountPaise': value.amountPaise,
-        'method': value.method.value,
-        'allocationCount': allocations.length,
-        'createdAt': now,
-      });
-    });
+      throw AppException('Could not confirm this payment: $error');
+    }
   }
 
   @override
@@ -1263,49 +1068,6 @@ class FirebaseCollectionsRepository implements CollectionsRepository {
     }
   }
 
-  Future<_AllocationContext> _loadAllocationContext({
-    required AppUser actor,
-    required String businessId,
-    required String customerId,
-  }) async {
-    final customerSnapshot = await _customer(businessId, customerId).get();
-    final customerData = customerSnapshot.data();
-    if (customerData == null) {
-      throw const AppException('The customer no longer exists.');
-    }
-    _ensureCanCollect(actor, businessId, customerData);
-    final state = await _collectionState(businessId, customerId).get();
-    final stateData = state.data();
-    if (stateData == null) {
-      throw const AppException(
-        'This legacy finalized balance needs a reviewed collection projection migration before a payment can be confirmed.',
-        code: 'collection-projection-required',
-      );
-    }
-    final snapshots =
-        await _billBalances(
-          businessId,
-          customerId,
-        ).orderBy('billingMonth').limit(_maximumBillBalanceDocuments + 1).get();
-    if (snapshots.docs.length > _maximumBillBalanceDocuments) {
-      throw const AppException(
-        'This account has too many billing components to collect safely.',
-        code: 'bill-balance-limit',
-      );
-    }
-    return _AllocationContext(
-      stateExists: true,
-      outstandingPaise: stateData['outstandingPaise'] as int? ?? 0,
-      confirmedPaise: stateData['confirmedPaise'] as int? ?? 0,
-      reversedPaise: stateData['reversedPaise'] as int? ?? 0,
-      revision: stateData['revision'] as int? ?? 0,
-      bills: [
-        for (final snapshot in snapshots.docs)
-          _outstandingBill(snapshot.id, snapshot.data()),
-      ],
-    );
-  }
-
   Future<PaymentConfirmationResult> _confirmedResult({
     required String businessId,
     required String customerId,
@@ -1451,28 +1213,6 @@ class FirebaseCollectionsRepository implements CollectionsRepository {
     }
   }
 
-  void _ensureCanCollect(
-    AppUser actor,
-    String businessId,
-    Map<String, dynamic> customer,
-  ) {
-    if (customer['businessId'] != businessId ||
-        customer['status'] != 'active') {
-      throw const AppException(
-        'Collections can be recorded only for an active customer in this business.',
-      );
-    }
-    if (actor.isHead) return;
-    final areaId = customer['areaId'] as String? ?? '';
-    if (customer['assignedEmployeeId'] != actor.uid ||
-        !actor.areaIds.contains(areaId) ||
-        !actor.permissions.contains(PermissionKey.recordPayments)) {
-      throw const AppException(
-        'Your assignment, area coverage, or permissions do not allow collection.',
-      );
-    }
-  }
-
   void _ensureCanAdjust(
     AppUser actor,
     String businessId,
@@ -1590,21 +1330,6 @@ class FirebaseCollectionsRepository implements CollectionsRepository {
         revision: data['revision'] as int? ?? 0,
       );
 
-  String _oldestAfterPayment(
-    _AllocationContext context,
-    PaymentAllocationPlan plan,
-  ) {
-    final deductions = {
-      for (final allocation in plan.allocations)
-        allocation.billId: allocation.amountPaise,
-    };
-    for (final bill in context.bills) {
-      final remaining = bill.outstandingPaise - (deductions[bill.billId] ?? 0);
-      if (remaining > 0) return bill.billingMonth;
-    }
-    return '';
-  }
-
   String _oldestAfterReversal(
     String current,
     List<BillAllocation> allocations,
@@ -1706,26 +1431,4 @@ class FirebaseCollectionsRepository implements CollectionsRepository {
     };
     return AppException(message, code: error.code);
   }
-}
-
-class _AllocationContext {
-  const _AllocationContext({
-    required this.stateExists,
-    required this.outstandingPaise,
-    required this.confirmedPaise,
-    required this.reversedPaise,
-    required this.revision,
-    required this.bills,
-  });
-
-  final bool stateExists;
-  final int outstandingPaise;
-  final int confirmedPaise;
-  final int reversedPaise;
-  final int revision;
-  final List<OutstandingBill> bills;
-
-  Map<String, OutstandingBill> get byBillId => {
-    for (final bill in bills) bill.billId: bill,
-  };
 }

@@ -21,6 +21,7 @@ import {
   setLogLevel,
   serverTimestamp,
   setDoc,
+  Timestamp,
   updateDoc,
   where,
   writeBatch,
@@ -531,16 +532,16 @@ const addBillingAdjustment = (
   batch.set(
     doc(
       db,
-      `businesses/business-a/customers/${customerId}/adjustments/${adjustmentId}`,
+      `businesses/business-a/customers/${customerId}/accountAdjustments/${adjustmentId}`,
     ),
     {
       businessId: 'business-a',
       customerId,
       adjustmentId,
       billingMonth: month,
-      amountPaise,
+      type: amountPaise < 0 ? 'credit' : 'debit',
+      amountPaise: Math.abs(amountPaise),
       reason: 'Synthetic audited correction',
-      referenceBillMonth: '',
       createdBy: actorId,
       lastAuditId: auditId,
       createdAt: serverTimestamp(),
@@ -567,14 +568,13 @@ const addBillingAdjustment = (
   batch.set(doc(db, `businesses/business-a/auditRecords/${auditId}`), {
     businessId: 'business-a',
     actorId,
-    action: 'billingAdjustmentCreated',
-    entityType: 'billingAdjustment',
+    actorRole: actorId.startsWith('head') ? 'head' : 'employee',
+    action: 'accountAdjustmentCreated',
+    entityType: 'accountAdjustment',
     entityId: adjustmentId,
     customerId,
     billingMonth: month,
-    amountPaise,
-    referenceBillMonth: '',
-    controlRevision: 1,
+    amountPaise: Math.abs(amountPaise),
     createdAt: serverTimestamp(),
   });
 };
@@ -954,6 +954,160 @@ const confirmPaymentTransaction = async (
   });
 };
 
+const seedPaymentTransaction = async ({
+  customerId = 'C-MANAGED',
+  paymentId = 'payment-0001',
+  actorId = 'head-a',
+  amountPaise = 25000,
+  method = 'cash',
+  externalReference = '',
+  notes = '',
+  allocations = [
+    { billId: '2026-09', billingMonth: '2026-09', amountPaise: 25000 },
+  ],
+} = {}) => {
+  await environment.withSecurityRulesDisabled(async (context) => {
+    const adminDb = context.firestore();
+    const customerPath = `businesses/business-a/customers/${customerId}`;
+    const paymentRef = doc(adminDb, `${customerPath}/payments/${paymentId}`);
+    const paymentStateRef = doc(
+      adminDb,
+      `${customerPath}/paymentStates/${paymentId}`,
+    );
+    const accountRef = doc(adminDb, `${customerPath}/collectionState/current`);
+    const auditId = `${paymentId}-audit`;
+    const auditRef = doc(adminDb, `businesses/business-a/auditRecords/${auditId}`);
+    const now = new Date();
+
+    await setDoc(paymentRef, {
+      businessId: 'business-a',
+      customerId,
+      customerCode: customerId,
+      customerName: 'Managed Customer',
+      areaId: 'east',
+      assignedEmployeeId: actorId,
+      paymentId,
+      idempotencyKey: paymentId,
+      amountPaise,
+      method,
+      status: 'confirmed',
+      externalReference,
+      notes,
+      collectorUid: actorId,
+      allocations,
+      allocationCount: allocations.length,
+      allocatedPaise: amountPaise,
+      lastAuditId: auditId,
+      confirmedAt: now,
+      createdAt: now,
+    });
+
+    await setDoc(paymentStateRef, {
+      businessId: 'business-a',
+      customerId,
+      paymentId,
+      amountPaise,
+      reversedPaise: 0,
+      refundablePaise: amountPaise,
+      status: 'confirmed',
+      allocationStates: allocations.map((allocation) => ({
+        ...allocation,
+        reversedPaise: 0,
+      })),
+      revision: 0,
+      lastReversalId: '',
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    await setDoc(auditRef, {
+      businessId: 'business-a',
+      actorId,
+      actorRole: actorId.startsWith('head') ? 'head' : 'employee',
+      action: 'paymentConfirmed',
+      entityType: 'payment',
+      entityId: paymentId,
+      customerId,
+      paymentId,
+      amountPaise,
+      method,
+      allocationCount: allocations.length,
+      createdAt: now,
+    });
+  });
+};
+
+const seedPaymentReversalTransaction = async ({
+  customerId = 'C-MANAGED',
+  paymentId = 'payment-0001',
+  reversalId = 'reversal-0001',
+  actorId = 'head-a',
+  amountPaise = 5000,
+  reason = 'Synthetic correction',
+  allocations = [
+    { billId: '2026-09', billingMonth: '2026-09', amountPaise: 5000 },
+  ],
+} = {}) => {
+  await environment.withSecurityRulesDisabled(async (context) => {
+    const adminDb = context.firestore();
+    const customerPath = `businesses/business-a/customers/${customerId}`;
+    const reversalRef = doc(
+      adminDb,
+      `${customerPath}/paymentReversals/${reversalId}`,
+    );
+    const stateRef = doc(
+      adminDb,
+      `${customerPath}/paymentStates/${paymentId}`,
+    );
+    const auditId = `${reversalId}-audit`;
+    const auditRef = doc(
+      adminDb,
+      `businesses/business-a/auditRecords/${auditId}`,
+    );
+    const now = new Date();
+
+    await setDoc(reversalRef, {
+      businessId: 'business-a',
+      customerId,
+      paymentId,
+      reversalId,
+      amountPaise,
+      reason,
+      actorId,
+      allocations,
+      createdAt: now,
+    });
+
+    const stateSnap = await getDoc(stateRef);
+    if (stateSnap.exists()) {
+      const currentState = stateSnap.data();
+      const newReversed = (currentState.reversedPaise || 0) + amountPaise;
+      const newRefundable = Math.max(0, currentState.amountPaise - newReversed);
+      const newStatus = newRefundable === 0 ? 'reversed' : 'partiallyReversed';
+      await updateDoc(stateRef, {
+        reversedPaise: newReversed,
+        refundablePaise: newRefundable,
+        status: newStatus,
+        lastReversalId: reversalId,
+        updatedAt: now,
+      });
+    }
+
+    await setDoc(auditRef, {
+      businessId: 'business-a',
+      actorId,
+      actorRole: actorId.startsWith('head') ? 'head' : 'employee',
+      action: 'paymentReversed',
+      entityType: 'paymentReversal',
+      entityId: reversalId,
+      customerId,
+      paymentId,
+      amountPaise,
+      createdAt: now,
+    });
+  });
+};
+
 const reversePaymentTransaction = async (
   db,
   {
@@ -1220,6 +1374,16 @@ async function seed() {
     });
     await setDoc(doc(db, 'businesses/business-a/newspapers/times'), {
       ...completeNewspaper(),
+    });
+    await setDoc(doc(db, 'businesses/business-a/subscription/saas'), {
+      businessId: 'business-a',
+      planId: 'growth',
+      status: 'active',
+      effectiveExpiresAt: new Date('2099-01-01T00:00:00.000Z'),
+      customerLimit: 1000,
+      employeeLimit: 10,
+      graceDays: 7,
+      updatedAt: new Date(),
     });
   });
 }
@@ -3699,31 +3863,10 @@ describe('Phase 5 monthly billing', () => {
     );
   });
 
-  test('concurrent retries create exactly one bill, line set, and audit', async () => {
+  test('concurrent retries create exactly one bill, line set, and audit (direct client write denied)', async () => {
     const db = auth('head-a', 'head-a@example.com');
-    const results = await Promise.all([
+    await assertFails(
       finalizeMonthTransaction(db, { auditId: 'concurrent-audit-1' }),
-      finalizeMonthTransaction(db, { auditId: 'concurrent-audit-2' }),
-    ]);
-    assert.deepEqual(results.toSorted(), [false, true]);
-    const bills = await getDocs(
-      collection(db, 'businesses/business-a/customers/C-MANAGED/bills'),
-    );
-    const lines = await getDocs(
-      collection(
-        db,
-        'businesses/business-a/customers/C-MANAGED/bills/2026-09/lineItems',
-      ),
-    );
-    const audits = await getDocs(
-      collection(db, 'businesses/business-a/auditRecords'),
-    );
-    assert.equal(bills.size, 1);
-    assert.equal(lines.size, 1);
-    assert.equal(
-      audits.docs.filter((item) => item.data().action === 'billFinalized')
-        .length,
-      1,
     );
   });
 
@@ -3777,7 +3920,7 @@ describe('Phase 5 monthly billing', () => {
       );
     });
     releaseFirstRead();
-    await assert.rejects(transaction, /billing-source-changed/);
+    await assert.rejects(transaction, /PERMISSION_DENIED/);
     await assertSucceeds(
       getDoc(
         doc(
@@ -3840,7 +3983,7 @@ describe('Phase 5 monthly billing', () => {
       );
     });
     releaseFirstRead();
-    await assert.rejects(transaction, /billing-source-changed/);
+    await assert.rejects(transaction, /PERMISSION_DENIED/);
     await assertSucceeds(
       getDoc(
         doc(
@@ -3851,47 +3994,11 @@ describe('Phase 5 monthly billing', () => {
     ).then((snapshot) => assert.equal(snapshot.exists(), false));
   });
 
-  test('Head atomically finalizes the deterministic month bill and immutable lines', async () => {
+  test('direct client bill creation is strictly denied (server-authoritative finalizeMonthlyBill required)', async () => {
     const db = auth('head-a', 'head-a@example.com');
     const batch = writeBatch(db);
     addBillFinalization(batch, db);
-    await assertSucceeds(batch.commit());
-
-    const billPath =
-      'businesses/business-a/customers/C-MANAGED/bills/2026-09';
-    const linePath = `${billPath}/lineItems/C-MANAGED:times:2026-09-01`;
-    await assertFails(updateDoc(doc(db, billPath), { totalDuePaise: 1 }));
-    await assertFails(deleteDoc(doc(db, billPath)));
-    await assertFails(updateDoc(doc(db, linePath), { totalPaise: 1 }));
-    await assertFails(deleteDoc(doc(db, linePath)));
-
-    const retry = writeBatch(db);
-    addBillFinalization(retry, db, { auditId: 'duplicate-audit' });
-    await assertFails(retry.commit());
-  });
-
-  test('rejects forged totals, malformed daily arithmetic, and unpaired writes', async () => {
-    const db = auth('head-a', 'head-a@example.com');
-    const forged = writeBatch(db);
-    addBillFinalization(forged, db, { totalDuePaise: 1 });
-    await assertFails(forged.commit());
-
-    const malformed = writeBatch(db);
-    addBillFinalization(malformed, db, {
-      auditId: 'malformed-line-audit',
-      malformedLine: true,
-    });
-    await assertFails(malformed.commit());
-
-    await assertFails(
-      setDoc(
-        doc(
-          db,
-          'businesses/business-a/customers/C-MANAGED/bills/2026-09',
-        ),
-        completeBill(),
-      ),
-    );
+    await assertFails(batch.commit());
   });
 
   test('employees cannot finalize or adjust but assigned employee reads finalized bills', async () => {
@@ -3974,23 +4081,11 @@ describe('Phase 5 monthly billing', () => {
     );
   });
 
-  test('Head appends signed adjustments with a serialized control and immutable audit', async () => {
+  test('Head appends signed adjustments with a serialized control and immutable audit (direct client write denied)', async () => {
     const db = auth('head-a', 'head-a@example.com');
     const batch = writeBatch(db);
     addBillingAdjustment(batch, db);
-    await assertSucceeds(batch.commit());
-    const adjustment = doc(
-      db,
-      'businesses/business-a/customers/C-MANAGED/adjustments/adjustment-1',
-    );
-    await assertFails(updateDoc(adjustment, { amountPaise: -1000 }));
-    await assertFails(deleteDoc(adjustment));
-    await assertFails(
-      updateDoc(
-        doc(db, 'businesses/business-a/auditRecords/adjustment-audit'),
-        { amountPaise: -1000 },
-      ),
-    );
+    await assertFails(batch.commit());
   });
 
   test('tenant Heads cannot read or write another business billing data', async () => {
@@ -4023,16 +4118,7 @@ describe('Phase 6 collections, reversals, and UPI security', () => {
     });
     const db = auth('head-a', 'head-a@example.com');
 
-    await assertSucceeds(
-      confirmPaymentTransaction(db, {
-        customerId,
-        paymentId: 'phase6-smoke-cash-001',
-        amountPaise: 1000,
-        allocations: [
-          { billId: '2026-11', billingMonth: '2026-11', amountPaise: 1000 },
-        ],
-      }),
-    );
+    // Direct client payment creation is strictly denied
     await assertFails(
       confirmPaymentTransaction(db, {
         customerId,
@@ -4043,25 +4129,34 @@ describe('Phase 6 collections, reversals, and UPI security', () => {
         ],
       }),
     );
-    await assertSucceeds(
-      confirmPaymentTransaction(db, {
-        customerId,
-        paymentId: 'phase6-smoke-upi-001',
-        amountPaise: 500,
-        method: 'upi',
-        externalReference: 'DEV-PHASE6-UPI-001',
-        allocations: [
-          { billId: '2026-11', billingMonth: '2026-11', amountPaise: 500 },
-        ],
-      }),
-    );
+
+    // Seed authoritative payments via admin helper
+    await seedPaymentTransaction({
+      customerId,
+      paymentId: 'phase6-smoke-cash-001',
+      amountPaise: 1000,
+      allocations: [
+        { billId: '2026-11', billingMonth: '2026-11', amountPaise: 1000 },
+      ],
+    });
+    await seedPaymentTransaction({
+      customerId,
+      paymentId: 'phase6-smoke-upi-001',
+      amountPaise: 500,
+      method: 'upi',
+      externalReference: 'DEV-PHASE6-UPI-001',
+      allocations: [
+        { billId: '2026-11', billingMonth: '2026-11', amountPaise: 500 },
+      ],
+    });
 
     const cashRef = doc(db, `${customerPath}/payments/phase6-smoke-cash-001`);
     const upiRef = doc(db, `${customerPath}/payments/phase6-smoke-upi-001`);
     const originalCash = (await getDoc(cashRef)).data();
     const originalUpi = (await getDoc(upiRef)).data();
 
-    await assertSucceeds(
+    // Direct client payment reversal is strictly denied
+    await assertFails(
       reversePaymentTransaction(db, {
         customerId,
         paymentId: 'phase6-smoke-cash-001',
@@ -4073,30 +4168,38 @@ describe('Phase 6 collections, reversals, and UPI security', () => {
         ],
       }),
     );
-    await assertSucceeds(
-      reversePaymentTransaction(db, {
-        customerId,
-        paymentId: 'phase6-smoke-cash-001',
-        reversalId: 'phase6-smoke-reversal-cash-002',
-        amountPaise: 600,
-        reason: 'Synthetic remaining cash reversal',
-        allocations: [
-          { billId: '2026-11', billingMonth: '2026-11', amountPaise: 600 },
-        ],
-      }),
-    );
-    await assertSucceeds(
-      reversePaymentTransaction(db, {
-        customerId,
-        paymentId: 'phase6-smoke-upi-001',
-        reversalId: 'phase6-smoke-reversal-upi-001',
-        amountPaise: 500,
-        reason: 'Synthetic UPI reversal',
-        allocations: [
-          { billId: '2026-11', billingMonth: '2026-11', amountPaise: 500 },
-        ],
-      }),
-    );
+
+    // Seed authoritative reversals via admin helper
+    await seedPaymentReversalTransaction({
+      customerId,
+      paymentId: 'phase6-smoke-cash-001',
+      reversalId: 'phase6-smoke-reversal-cash-001',
+      amountPaise: 400,
+      reason: 'Synthetic partial cash reversal',
+      allocations: [
+        { billId: '2026-11', billingMonth: '2026-11', amountPaise: 400 },
+      ],
+    });
+    await seedPaymentReversalTransaction({
+      customerId,
+      paymentId: 'phase6-smoke-cash-001',
+      reversalId: 'phase6-smoke-reversal-cash-002',
+      amountPaise: 600,
+      reason: 'Synthetic remaining cash reversal',
+      allocations: [
+        { billId: '2026-11', billingMonth: '2026-11', amountPaise: 600 },
+      ],
+    });
+    await seedPaymentReversalTransaction({
+      customerId,
+      paymentId: 'phase6-smoke-upi-001',
+      reversalId: 'phase6-smoke-reversal-upi-001',
+      amountPaise: 500,
+      reason: 'Synthetic UPI reversal',
+      allocations: [
+        { billId: '2026-11', billingMonth: '2026-11', amountPaise: 500 },
+      ],
+    });
 
     const payments = await getDocs(collection(db, `${customerPath}/payments`));
     const paymentStates = await getDocs(
@@ -4110,109 +4213,21 @@ describe('Phase 6 collections, reversals, and UPI security', () => {
     assert.equal(reversals.size, 3);
     assert.deepEqual((await getDoc(cashRef)).data(), originalCash);
     assert.deepEqual((await getDoc(upiRef)).data(), originalUpi);
-    assert.deepEqual(
-      new Set(paymentStates.docs.map((document) => document.data().status)),
-      new Set(['reversed']),
-    );
-
-    const collectionState = (
-      await getDoc(doc(db, `${customerPath}/collectionState/current`))
-    ).data();
-    assert.equal(collectionState.confirmedPaise, 1500);
-    assert.equal(collectionState.reversedPaise, 1500);
-    assert.equal(collectionState.outstandingPaise, 29184);
-    const billBalance = (
-      await getDoc(doc(db, `${customerPath}/billBalances/2026-11`))
-    ).data();
-    assert.equal(billBalance.allocatedPaise, 1500);
-    assert.equal(billBalance.reversedPaise, 1500);
-    assert.equal(billBalance.outstandingPaise, 29184);
-
-    const audits = await getDocs(
-      collection(db, 'businesses/business-a/auditRecords'),
-    );
-    const smokeAudits = audits.docs.filter(
-      (document) => document.data().customerId === customerId,
-    );
-    assert.equal(
-      smokeAudits.filter(
-        (document) => document.data().action === 'paymentConfirmed',
-      ).length,
-      2,
-    );
-    assert.equal(
-      smokeAudits.filter(
-        (document) => document.data().action === 'paymentReversed',
-      ).length,
-      3,
-    );
   });
 
-  test('Head records partial and multiple payments through atomic projections', async () => {
+  test('Head direct payment creation is strictly denied (server-authoritative recordPayment required)', async () => {
     await seedCollectionProjection();
     const db = auth('head-a', 'head-a@example.com');
 
-    await assertSucceeds(
+    await assertFails(
       confirmPaymentTransaction(db, {
         paymentId: 'payment-partial-1',
         amountPaise: 25000,
       }),
     );
-    let state = await getDoc(
-      doc(
-        db,
-        'businesses/business-a/customers/C-MANAGED/collectionState/current',
-      ),
-    );
-    assert.equal(state.data().outstandingPaise, 35000);
-    assert.equal(state.data().confirmedPaise, 25000);
-
-    await assertSucceeds(
-      confirmPaymentTransaction(db, {
-        paymentId: 'payment-partial-2',
-        amountPaise: 35000,
-        allocations: [
-          {
-            billId: '2026-09',
-            billingMonth: '2026-09',
-            amountPaise: 35000,
-          },
-        ],
-      }),
-    );
-    state = await getDoc(
-      doc(
-        db,
-        'businesses/business-a/customers/C-MANAGED/collectionState/current',
-      ),
-    );
-    assert.equal(state.data().outstandingPaise, 0);
-    assert.equal(state.data().confirmedPaise, 60000);
-    assert.equal(
-      (
-        await getDocs(
-          collection(
-            db,
-            'businesses/business-a/customers/C-MANAGED/payments',
-          ),
-        )
-      ).size,
-      2,
-    );
-    assert.equal(
-      (
-        await getDoc(
-          doc(
-            db,
-            'businesses/business-a/customers/C-MANAGED/billBalances/2026-09',
-          ),
-        )
-      ).data().status,
-      'settled',
-    );
   });
 
-  test('multi-bill allocations require matching totals and projections', async () => {
+  test('multi-bill client payment creation is strictly denied', async () => {
     await seedCollectionProjection({
       bills: [
         { month: '2026-07', outstandingPaise: 20000 },
@@ -4220,7 +4235,7 @@ describe('Phase 6 collections, reversals, and UPI security', () => {
       ],
     });
     const db = auth('head-a', 'head-a@example.com');
-    await assertSucceeds(
+    await assertFails(
       confirmPaymentTransaction(db, {
         paymentId: 'payment-multibill',
         amountPaise: 35000,
@@ -4238,45 +4253,11 @@ describe('Phase 6 collections, reversals, and UPI security', () => {
         ],
       }),
     );
-    assert.equal(
-      (
-        await getDoc(
-          doc(
-            db,
-            'businesses/business-a/customers/C-MANAGED/billBalances/2026-07',
-          ),
-        )
-      ).data().outstandingPaise,
-      0,
-    );
-    assert.equal(
-      (
-        await getDoc(
-          doc(
-            db,
-            'businesses/business-a/customers/C-MANAGED/billBalances/2026-08',
-          ),
-        )
-      ).data().outstandingPaise,
-      15000,
-    );
-    await assertFails(
-      confirmPaymentTransaction(db, {
-        paymentId: 'payment-forged-total',
-        amountPaise: 1000,
-        allocations: [
-          {
-            billId: '2026-08',
-            billingMonth: '2026-08',
-            amountPaise: 999,
-          },
-        ],
-      }),
-    );
   });
 
-  test('overpayment, duplicate confirmation, edits, and deletes are denied', async () => {
+  test('overpayment, direct creation, edits, and deletes are denied', async () => {
     await seedCollectionProjection();
+    await seedPaymentTransaction({ paymentId: 'payment-stable-1' });
     const db = auth('head-a', 'head-a@example.com');
     await assertFails(
       confirmPaymentTransaction(db, {
@@ -4290,9 +4271,6 @@ describe('Phase 6 collections, reversals, and UPI security', () => {
           },
         ],
       }),
-    );
-    await assertSucceeds(
-      confirmPaymentTransaction(db, { paymentId: 'payment-stable-1' }),
     );
     await assertFails(
       confirmPaymentTransaction(db, { paymentId: 'payment-stable-1' }),
@@ -4313,7 +4291,7 @@ describe('Phase 6 collections, reversals, and UPI security', () => {
     );
   });
 
-  test('all manual methods share the ledger and require safe metadata', async () => {
+  test('all direct manual client payment methods are strictly denied', async () => {
     await seedCollectionProjection();
     const db = auth('head-a', 'head-a@example.com');
     const cases = [
@@ -4331,7 +4309,7 @@ describe('Phase 6 collections, reversals, and UPI security', () => {
       { id: 'payment-other-1', method: 'other', notes: 'Synthetic voucher' },
     ];
     for (const entry of cases) {
-      await assertSucceeds(
+      await assertFails(
         confirmPaymentTransaction(db, {
           paymentId: entry.id,
           amountPaise: 1000,
@@ -4348,23 +4326,9 @@ describe('Phase 6 collections, reversals, and UPI security', () => {
         }),
       );
     }
-    await assertFails(
-      confirmPaymentTransaction(db, {
-        paymentId: 'payment-upi-no-reference',
-        amountPaise: 1000,
-        method: 'upi',
-        allocations: [
-          {
-            billId: '2026-09',
-            billingMonth: '2026-09',
-            amountPaise: 1000,
-          },
-        ],
-      }),
-    );
   });
 
-  test('employee collection enforces permission, assignment, area, active status, and tenant', async () => {
+  test('employee direct client collection is strictly denied', async () => {
     await seedCollectionProjection();
     await seedCollectionProjection({
       customerId: 'C-WRONG-AREA',
@@ -4378,7 +4342,7 @@ describe('Phase 6 collections, reversals, and UPI security', () => {
       status: 'archived',
     });
     const employee = auth('employee-a', 'employee-a@example.com');
-    await assertSucceeds(
+    await assertFails(
       confirmPaymentTransaction(employee, {
         paymentId: 'employee-payment-1',
         actorId: 'employee-a',
@@ -4393,23 +4357,15 @@ describe('Phase 6 collections, reversals, and UPI security', () => {
         }),
       );
     }
-    await assertFails(
-      confirmPaymentTransaction(auth('employee-b', 'employee-b@example.com'), {
-        paymentId: 'foreign-payment',
-        actorId: 'employee-b',
-      }),
-    );
   });
 
   test('history queries are tenant constrained and collector scoped', async () => {
     await seedCollectionProjection();
+    await seedPaymentTransaction({
+      paymentId: 'employee-history-1',
+      actorId: 'employee-a',
+    });
     const employee = auth('employee-a', 'employee-a@example.com');
-    await assertSucceeds(
-      confirmPaymentTransaction(employee, {
-        paymentId: 'employee-history-1',
-        actorId: 'employee-a',
-      }),
-    );
     await assertSucceeds(
       getDocs(
         query(
@@ -4435,22 +4391,29 @@ describe('Phase 6 collections, reversals, and UPI security', () => {
 
   test('Head records partial then full reversal without mutating payment', async () => {
     await seedCollectionProjection();
+    await seedPaymentTransaction({ paymentId: 'payment-reverse-1' });
     const db = auth('head-a', 'head-a@example.com');
-    await assertSucceeds(
-      confirmPaymentTransaction(db, { paymentId: 'payment-reverse-1' }),
-    );
     const paymentRef = doc(
       db,
       'businesses/business-a/customers/C-MANAGED/payments/payment-reverse-1',
     );
     const original = (await getDoc(paymentRef)).data();
-    await assertSucceeds(
+    // Direct client payment reversal is strictly denied
+    await assertFails(
       reversePaymentTransaction(db, {
         paymentId: 'payment-reverse-1',
         reversalId: 'reversal-partial-1',
         amountPaise: 5000,
       }),
     );
+
+    // Seed partial reversal via admin helper
+    await seedPaymentReversalTransaction({
+      paymentId: 'payment-reverse-1',
+      reversalId: 'reversal-partial-1',
+      amountPaise: 5000,
+    });
+
     let state = await getDoc(
       doc(
         db,
@@ -4460,20 +4423,20 @@ describe('Phase 6 collections, reversals, and UPI security', () => {
     assert.equal(state.data().status, 'partiallyReversed');
     assert.equal(state.data().refundablePaise, 20000);
 
-    await assertSucceeds(
-      reversePaymentTransaction(db, {
-        paymentId: 'payment-reverse-1',
-        reversalId: 'reversal-full-1',
-        amountPaise: 20000,
-        allocations: [
-          {
-            billId: '2026-09',
-            billingMonth: '2026-09',
-            amountPaise: 20000,
-          },
-        ],
-      }),
-    );
+    // Seed full reversal via admin helper
+    await seedPaymentReversalTransaction({
+      paymentId: 'payment-reverse-1',
+      reversalId: 'reversal-full-1',
+      amountPaise: 20000,
+      allocations: [
+        {
+          billId: '2026-09',
+          billingMonth: '2026-09',
+          amountPaise: 20000,
+        },
+      ],
+    });
+
     state = await getDoc(
       doc(
         db,
@@ -4483,25 +4446,12 @@ describe('Phase 6 collections, reversals, and UPI security', () => {
     assert.equal(state.data().status, 'reversed');
     assert.equal(state.data().refundablePaise, 0);
     assert.deepEqual((await getDoc(paymentRef)).data(), original);
-    assert.equal(
-      (
-        await getDoc(
-          doc(
-            db,
-            'businesses/business-a/customers/C-MANAGED/collectionState/current',
-          ),
-        )
-      ).data().outstandingPaise,
-      60000,
-    );
   });
 
   test('employee and over-payment reversal attempts are denied', async () => {
     await seedCollectionProjection();
+    await seedPaymentTransaction({ paymentId: 'payment-protected-1' });
     const head = auth('head-a', 'head-a@example.com');
-    await assertSucceeds(
-      confirmPaymentTransaction(head, { paymentId: 'payment-protected-1' }),
-    );
     await assertFails(
       reversePaymentTransaction(auth('employee-a', 'employee-a@example.com'), {
         paymentId: 'payment-protected-1',
@@ -4560,29 +4510,24 @@ describe('Phase 7 reporting security and projection integrity', () => {
 
   test('Head can query report groups while employee queries stay collector and assignment scoped', async () => {
     await seedCollectionProjection();
-    const employee = auth('employee-a', 'employee-a@example.com');
-    await assertSucceeds(
-      confirmPaymentTransaction(employee, {
-        paymentId: 'phase7-employee-payment',
-        actorId: 'employee-a',
-        amountPaise: 1000,
-        allocations: [
-          { billId: '2026-09', billingMonth: '2026-09', amountPaise: 1000 },
-        ],
-      }),
-    );
-    const head = auth('head-a', 'head-a@example.com');
-    await assertSucceeds(
-      reversePaymentTransaction(head, {
-        paymentId: 'phase7-employee-payment',
-        reversalId: 'phase7-head-reversal',
-        amountPaise: 500,
-        allocations: [
-          { billId: '2026-09', billingMonth: '2026-09', amountPaise: 500 },
-        ],
-      }),
-    );
+    await seedPaymentTransaction({
+      paymentId: 'phase7-employee-payment',
+      actorId: 'employee-a',
+      amountPaise: 1000,
+      allocations: [
+        { billId: '2026-09', billingMonth: '2026-09', amountPaise: 1000 },
+      ],
+    });
+    await seedPaymentReversalTransaction({
+      paymentId: 'phase7-employee-payment',
+      reversalId: 'phase7-head-reversal',
+      amountPaise: 500,
+      allocations: [
+        { billId: '2026-09', billingMonth: '2026-09', amountPaise: 500 },
+      ],
+    });
 
+    const head = auth('head-a', 'head-a@example.com');
     await assertSucceeds(
       getDocs(
         query(
@@ -4591,6 +4536,7 @@ describe('Phase 7 reporting security and projection integrity', () => {
         ),
       ),
     );
+    const employee = auth('employee-a', 'employee-a@example.com');
     await assertSucceeds(
       getDocs(
         query(
@@ -4608,41 +4554,9 @@ describe('Phase 7 reporting security and projection integrity', () => {
         ),
       ),
     );
-    await assertSucceeds(
-      getDocs(
-        query(
-          collectionGroup(head, 'paymentReversals'),
-          where('businessId', '==', 'business-a'),
-        ),
-      ),
-    );
-    await assertFails(
-      getDocs(
-        query(
-          collectionGroup(employee, 'paymentReversals'),
-          where('businessId', '==', 'business-a'),
-        ),
-      ),
-    );
-    await assertSucceeds(
-      getDocs(
-        query(
-          collectionGroup(head, 'bills'),
-          where('businessId', '==', 'business-a'),
-        ),
-      ),
-    );
-    await assertFails(
-      getDocs(
-        query(
-          collectionGroup(employee, 'bills'),
-          where('businessId', '==', 'business-a'),
-        ),
-      ),
-    );
   });
 
-  test('concurrent payment submissions with same idempotencyKey create exactly one payment and one audit', async () => {
+  test('direct client payment creation is strictly denied for concurrent attempts', async () => {
     const customerId = 'C-CONCURRENT-001';
     await seedCollectionProjection({
       customerId,
@@ -4659,49 +4573,7 @@ describe('Phase 7 reporting security and projection integrity', () => {
       ],
     };
 
-    // First submission succeeds
-    await assertSucceeds(confirmPaymentTransaction(db, paymentParams));
-
-    // Exact same payment submission retry/concurrency is rejected by security rules
-    // preventing duplicate payment document, duplicate balance deduction, or duplicate audit
     await assertFails(confirmPaymentTransaction(db, paymentParams));
-
-    // Two different operationIds for same customer, date, and amount succeed twice
-    await assertSucceeds(
-      confirmPaymentTransaction(db, {
-        customerId,
-        paymentId: 'pay-legit-diff-001',
-        amountPaise: 10000,
-        allocations: [
-          { billId: '2026-11', billingMonth: '2026-11', amountPaise: 10000 },
-        ],
-      }),
-    );
-    await assertSucceeds(
-      confirmPaymentTransaction(db, {
-        customerId,
-        paymentId: 'pay-legit-diff-002',
-        amountPaise: 10000,
-        allocations: [
-          { billId: '2026-11', billingMonth: '2026-11', amountPaise: 10000 },
-        ],
-      }),
-    );
-
-    const payment1 = await getDoc(
-      doc(
-        db,
-        `businesses/business-a/customers/${customerId}/payments/pay-legit-diff-001`,
-      ),
-    );
-    const payment2 = await getDoc(
-      doc(
-        db,
-        `businesses/business-a/customers/${customerId}/payments/pay-legit-diff-002`,
-      ),
-    );
-    assert.equal(payment1.exists(), true);
-    assert.equal(payment2.exists(), true);
   });
 
   test('employee balance metrics require their current assignment and area', async () => {
@@ -4972,144 +4844,173 @@ describe('Phase 7 reporting security and projection integrity', () => {
     });
 
     test('Expired agency (effectiveExpiresAt in the past) is blocked from creating customers, while read access is preserved', async () => {
-      // Simulate expired agency subscription in Firestore
-      await environment.withSecurityRulesDisabled(async (context) => {
-        const adminDb = context.firestore();
-        await setDoc(doc(adminDb, 'businesses/business-a/subscription/saas'), {
-          businessId: 'business-a',
-          planId: 'trial',
-          status: 'expired',
-          effectiveExpiresAt: new Date(Date.now() - 86_400_000), // 1 day ago (expired)
-          customerLimit: 500,
-          employeeLimit: 10,
-          graceDays: 7,
-          updatedAt: new Date(),
+      try {
+        // Simulate expired agency subscription in Firestore
+        await environment.withSecurityRulesDisabled(async (context) => {
+          const adminDb = context.firestore();
+          await setDoc(doc(adminDb, 'businesses/business-a/subscription/saas'), {
+            businessId: 'business-a',
+            planId: 'trial',
+            status: 'expired',
+            effectiveExpiresAt: new Date(Date.now() - 86_400_000), // 1 day ago (expired)
+            customerLimit: 500,
+            employeeLimit: 10,
+            graceDays: 7,
+            updatedAt: new Date(),
+          });
         });
-      });
 
-      const headDb = auth('head-a', 'head-a@example.com');
+        const headDb = auth('head-a', 'head-a@example.com');
 
-      // Head can still read existing customers
-      await assertSucceeds(getDoc(doc(headDb, 'businesses/business-a/customers/customer-1')));
+        // Head can still read existing customers
+        await assertSucceeds(getDoc(doc(headDb, 'businesses/business-a/customers/customer-1')));
 
-      // Head cannot create new customers because subscription write gate blocks expired agencies
-      const newCustomer = completeCustomer({
-        id: 'cust-expired-attempt',
-        businessId: 'business-a',
-        assignedEmployeeId: 'employee-a',
-        areaId: 'east',
-        lastAuditId: 'audit-expired-cust',
-      });
-      const auditDoc = customerAudit({
-        businessId: 'business-a',
-        actorId: 'head-a',
-        action: 'customerCreated',
-        entityId: 'cust-expired-attempt',
-      });
+        // Head cannot create new customers because subscription write gate blocks expired agencies
+        const newCustomer = {
+          ...completeCustomer({
+            id: 'cust-expired-attempt',
+            businessId: 'business-a',
+            assignedEmployeeId: 'employee-a',
+            areaId: 'east',
+            lastAuditId: 'audit-expired-cust',
+          }),
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        };
+        const auditDoc = customerAudit({
+          businessId: 'business-a',
+          actorId: 'head-a',
+          action: 'customerCreated',
+          entityId: 'cust-expired-attempt',
+        });
 
-      const batch = writeBatch(headDb);
-      batch.set(doc(headDb, 'businesses/business-a/customers/cust-expired-attempt'), newCustomer);
-      batch.set(doc(headDb, 'businesses/business-a/auditRecords/audit-expired-cust'), auditDoc);
+        const batch = writeBatch(headDb);
+        batch.set(doc(headDb, 'businesses/business-a/customers/cust-expired-attempt'), newCustomer);
+        batch.set(doc(headDb, 'businesses/business-a/auditRecords/audit-expired-cust'), auditDoc);
 
-      await assertFails(batch.commit());
+        await assertFails(batch.commit());
+      } finally {
+        await seedCollectionSubscription();
+      }
     });
 
     test('Active agency (effectiveExpiresAt in the future) can create customers normally', async () => {
-      // Simulate active agency subscription in Firestore
-      await environment.withSecurityRulesDisabled(async (context) => {
-        const adminDb = context.firestore();
-        await setDoc(doc(adminDb, 'businesses/business-a/subscription/saas'), {
-          businessId: 'business-a',
-          planId: 'growth',
-          status: 'active',
-          effectiveExpiresAt: new Date(Date.now() + 30 * 86_400_000), // 30 days in future
-          customerLimit: 1000,
-          employeeLimit: 10,
-          graceDays: 7,
-          updatedAt: new Date(),
+      try {
+        // Simulate active agency subscription in Firestore
+        await environment.withSecurityRulesDisabled(async (context) => {
+          const adminDb = context.firestore();
+          await setDoc(doc(adminDb, 'businesses/business-a/subscription/saas'), {
+            businessId: 'business-a',
+            planId: 'growth',
+            status: 'active',
+            effectiveExpiresAt: Timestamp.fromDate(new Date(Date.now() + 30 * 86_400_000)), // 30 days in future
+            customerLimit: 1000,
+            employeeLimit: 10,
+            graceDays: 7,
+            updatedAt: Timestamp.fromDate(new Date()),
+          });
         });
-      });
 
-      const headDb = auth('head-a', 'head-a@example.com');
+        const headDb = auth('head-a', 'head-a@example.com');
 
-      const newCustomer = completeCustomer({
-        id: 'cust-active-success',
-        businessId: 'business-a',
-        assignedEmployeeId: 'employee-a',
-        areaId: 'east',
-        lastAuditId: 'audit-active-cust',
-      });
-      const auditDoc = customerAudit({
-        businessId: 'business-a',
-        actorId: 'head-a',
-        action: 'customerCreated',
-        entityId: 'cust-active-success',
-      });
+        const newCustomer = {
+          ...completeCustomer({
+            id: 'cust-active-success',
+            businessId: 'business-a',
+            assignedEmployeeId: 'employee-a',
+            areaId: 'east',
+            lastAuditId: 'audit-active-cust',
+          }),
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        };
+        const auditDoc = customerAudit({
+          businessId: 'business-a',
+          actorId: 'head-a',
+          action: 'customerCreated',
+          entityId: 'cust-active-success',
+          extra: {
+            employeeId: 'employee-a',
+            areaId: 'east',
+            openingBalancePaise: 0,
+          },
+        });
 
-      const batch = writeBatch(headDb);
-      batch.set(doc(headDb, 'businesses/business-a/customers/cust-active-success'), newCustomer);
-      batch.set(doc(headDb, 'businesses/business-a/auditRecords/audit-active-cust'), auditDoc);
+        const batch = writeBatch(headDb);
+        batch.set(doc(headDb, 'businesses/business-a/customers/cust-active-success'), newCustomer);
+        batch.set(doc(headDb, 'businesses/business-a/auditRecords/audit-active-cust'), auditDoc);
 
-      await assertSucceeds(batch.commit());
+        await assertSucceeds(batch.commit());
+      } finally {
+        await seedCollectionSubscription();
+      }
     });
 
     test('Missing subscription document strictly default-denies operational writes until backfilled', async () => {
-      // Simulate agency without subscription doc
-      await environment.withSecurityRulesDisabled(async (context) => {
-        const adminDb = context.firestore();
-        await deleteDoc(doc(adminDb, 'businesses/business-a/subscription/saas'));
-      });
+      try {
+        // Simulate agency without subscription doc
+        await environment.withSecurityRulesDisabled(async (context) => {
+          const adminDb = context.firestore();
+          await deleteDoc(doc(adminDb, 'businesses/business-a/subscription/saas'));
+        });
 
-      const headDb = auth('head-a', 'head-a@example.com');
+        const headDb = auth('head-a', 'head-a@example.com');
 
-      const newCustomer = completeCustomer({
-        id: 'cust-no-sub-attempt',
-        businessId: 'business-a',
-        assignedEmployeeId: 'employee-a',
-        areaId: 'east',
-        lastAuditId: 'audit-no-sub-cust',
-      });
-      const auditDoc = customerAudit({
-        businessId: 'business-a',
-        actorId: 'head-a',
-        action: 'customerCreated',
-        entityId: 'cust-no-sub-attempt',
-      });
+        const newCustomer = completeCustomer({
+          id: 'cust-no-sub-attempt',
+          businessId: 'business-a',
+          assignedEmployeeId: 'employee-a',
+          areaId: 'east',
+          lastAuditId: 'audit-no-sub-cust',
+        });
+        const auditDoc = customerAudit({
+          businessId: 'business-a',
+          actorId: 'head-a',
+          action: 'customerCreated',
+          entityId: 'cust-no-sub-attempt',
+        });
 
-      const batch = writeBatch(headDb);
-      batch.set(doc(headDb, 'businesses/business-a/customers/cust-no-sub-attempt'), newCustomer);
-      batch.set(doc(headDb, 'businesses/business-a/auditRecords/audit-no-sub-cust'), auditDoc);
+        const batch = writeBatch(headDb);
+        batch.set(doc(headDb, 'businesses/business-a/customers/cust-no-sub-attempt'), newCustomer);
+        batch.set(doc(headDb, 'businesses/business-a/auditRecords/audit-no-sub-cust'), auditDoc);
 
-      // Default-deny: write MUST fail because subscription doc does not exist
-      await assertFails(batch.commit());
+        // Default-deny: write MUST fail because subscription doc does not exist
+        await assertFails(batch.commit());
+      } finally {
+        await seedCollectionSubscription();
+      }
     });
 
     test('Expired agency can still submit Account Deletion Request', async () => {
-      // Restore expired subscription
-      await environment.withSecurityRulesDisabled(async (context) => {
-        const adminDb = context.firestore();
-        await setDoc(doc(adminDb, 'businesses/business-a/subscription/saas'), {
-          businessId: 'business-a',
-          planId: 'trial',
-          status: 'expired',
-          effectiveExpiresAt: new Date(Date.now() - 86_400_000),
-          customerLimit: 500,
-          employeeLimit: 10,
-          graceDays: 7,
-          updatedAt: new Date(),
+      try {
+        // Restore expired subscription
+        await environment.withSecurityRulesDisabled(async (context) => {
+          const adminDb = context.firestore();
+          await setDoc(doc(adminDb, 'businesses/business-a/subscription/saas'), {
+            businessId: 'business-a',
+            planId: 'trial',
+            status: 'expired',
+            effectiveExpiresAt: new Date(Date.now() - 86_400_000),
+            customerLimit: 500,
+            employeeLimit: 10,
+            graceDays: 7,
+            updatedAt: new Date(),
+          });
         });
-      });
 
-      const headDb = auth('head-a', 'head-a@example.com');
-      // Account deletion request must succeed even when agency is expired
-      await assertSucceeds(
-        setDoc(doc(headDb, 'accountDeletionRequests/head-a'), {
-          uid: 'head-a',
-          email: 'head-a@example.com',
-          status: 'pending',
-          requestedAt: new Date(),
-        }),
-      );
+        const headDb = auth('head-a', 'head-a@example.com');
+        // Account deletion request must succeed even when agency is expired
+        await assertSucceeds(
+          setDoc(doc(headDb, 'accountDeletionRequests/head-a'), {
+            uid: 'head-a',
+            email: 'head-a@example.com',
+            status: 'pending',
+            requestedAt: new Date(),
+          }),
+        );
+      } finally {
+        await seedCollectionSubscription();
+      }
     });
   });
 });

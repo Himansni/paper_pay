@@ -8,6 +8,7 @@ import {
 } from '@firebase/rules-unit-testing';
 import {
   collection,
+  deleteDoc,
   doc,
   getDoc,
   runTransaction,
@@ -402,11 +403,36 @@ beforeEach(async () => {
       permissions: ['allowGlobalPricing'],
     });
 
-    // Active Area in Business A
+    batch.set(doc(adminDb, 'businesses/business-a/members/employee-a'), {
+      businessId: 'business-a',
+      uid: 'employee-a',
+      email: 'employee-a@test.com',
+      role: 'employee',
+      status: 'active',
+      permissions: ['allowManualBilling'],
+      areaIds: ['east'],
+    });
+    batch.set(doc(adminDb, 'businesses/business-a/members/employee-other'), {
+      businessId: 'business-a',
+      uid: 'employee-other',
+      email: 'employee-other@test.com',
+      role: 'employee',
+      status: 'active',
+      permissions: ['allowManualBilling'],
+      areaIds: ['west'],
+    });
+
+    // Active Areas in Business A
     batch.set(doc(adminDb, 'businesses/business-a/areas/east'), {
       businessId: 'business-a',
       areaId: 'east',
       name: 'East Area',
+      status: 'active',
+    });
+    batch.set(doc(adminDb, 'businesses/business-a/areas/west'), {
+      businessId: 'business-a',
+      areaId: 'west',
+      name: 'West Area',
       status: 'active',
     });
 
@@ -426,6 +452,17 @@ beforeEach(async () => {
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
+
+    // Customer C-MANAGED in Business A
+    batch.set(
+      doc(adminDb, 'businesses/business-a/customers/C-MANAGED'),
+      completeCustomer({
+        id: 'C-MANAGED',
+        assignedEmployeeId: 'employee-a',
+        areaId: 'east',
+        status: 'active',
+      }),
+    );
 
     await batch.commit();
   });
@@ -1411,5 +1448,182 @@ describe('18 Comprehensive Global Pricing Authorization & Security Requirements'
         status: 'active',
       }),
     );
+  });
+
+  test('19. Head can create and update monthlyBillingPrices for their business', async () => {
+    const db = auth('head-a', 'head-a@test.com');
+    const priceRef = doc(db, 'businesses/business-a/monthlyBillingPrices/2026-09_paper-et');
+    await assertSucceeds(
+      setDoc(priceRef, {
+        businessId: 'business-a',
+        billingMonth: '2026-09',
+        newspaperId: 'paper-et',
+        newspaperName: 'Economic Times',
+        pricePaise: 19900,
+        pricingBasis: 'monthly',
+        updatedBy: 'head-a',
+      }),
+    );
+  });
+
+  test('20. Unauthorized user from another business cannot create or read monthlyBillingPrices', async () => {
+    const db = auth('head-b', 'head-b@test.com');
+    const priceRef = doc(db, 'businesses/business-a/monthlyBillingPrices/2026-09_paper-et');
+    await assertFails(
+      setDoc(priceRef, {
+        businessId: 'business-a',
+        billingMonth: '2026-09',
+        newspaperId: 'paper-et',
+        newspaperName: 'Economic Times',
+        pricePaise: 19900,
+        pricingBasis: 'monthly',
+        updatedBy: 'head-b',
+      }),
+    );
+  });
+
+  test('21. Authorized user can record billing failure for customer', async () => {
+    const db = auth('head-a', 'head-a@test.com');
+    const failRef = doc(db, 'businesses/business-a/billingFailures/2026-09_C-MANAGED');
+    await assertSucceeds(
+      setDoc(failRef, {
+        businessId: 'business-a',
+        customerId: 'C-MANAGED',
+        billingMonth: '2026-09',
+        error: 'Finalization failed due to lock',
+        failedBy: 'head-a',
+      }),
+    );
+  });
+
+  test('22. Unauthorized employee without billing permission or assignment cannot record billing failure', async () => {
+    const db = auth('emp-unauthorized', 'emp-unauth@test.com');
+    const failRef = doc(db, 'businesses/business-a/billingFailures/2026-09_C-MANAGED');
+    await assertFails(
+      setDoc(failRef, {
+        businessId: 'business-a',
+        customerId: 'C-MANAGED',
+        billingMonth: '2026-09',
+        error: 'Unauthorized employee failure report',
+        failedBy: 'emp-unauthorized',
+      }),
+    );
+  });
+
+  test('23. Head can delete an authorized billing failure', async () => {
+    // Seed failure document
+    await environment.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await setDoc(doc(db, 'businesses/business-a/billingFailures/2026-09_C-MANAGED'), {
+        businessId: 'business-a',
+        customerId: 'C-MANAGED',
+        billingMonth: '2026-09',
+        error: 'Finalization failed due to lock',
+        failedBy: 'employee-a',
+      });
+    });
+
+    const db = auth('head-a', 'head-a@test.com');
+    const failRef = doc(db, 'businesses/business-a/billingFailures/2026-09_C-MANAGED');
+    await assertSucceeds(deleteDoc(failRef));
+  });
+
+  test('24. Assigned employee with allowManualBilling can delete an authorized billing failure', async () => {
+    await environment.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await setDoc(doc(db, 'businesses/business-a/billingFailures/2026-09_C-MANAGED'), {
+        businessId: 'business-a',
+        customerId: 'C-MANAGED',
+        billingMonth: '2026-09',
+        error: 'Temporary operational error',
+        failedBy: 'head-a',
+      });
+    });
+
+    const db = auth('employee-a', 'employee-a@test.com');
+    const failRef = doc(db, 'businesses/business-a/billingFailures/2026-09_C-MANAGED');
+    await assertSucceeds(deleteDoc(failRef));
+  });
+
+  test('25. Employee without allowManualBilling cannot delete billing failure', async () => {
+    await environment.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await setDoc(doc(db, 'businesses/business-a/billingFailures/2026-09_C-MANAGED'), {
+        businessId: 'business-a',
+        customerId: 'C-MANAGED',
+        billingMonth: '2026-09',
+        error: 'Failure',
+        failedBy: 'head-a',
+      });
+    });
+
+    const db = auth('emp-unauthorized', 'emp-unauth@test.com');
+    const failRef = doc(db, 'businesses/business-a/billingFailures/2026-09_C-MANAGED');
+    await assertFails(deleteDoc(failRef));
+  });
+
+  test('26. Employee assigned to a different customer/area cannot delete billing failure', async () => {
+    await environment.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await setDoc(doc(db, 'businesses/business-a/billingFailures/2026-09_C-MANAGED'), {
+        businessId: 'business-a',
+        customerId: 'C-MANAGED',
+        billingMonth: '2026-09',
+        error: 'Failure',
+        failedBy: 'employee-a',
+      });
+    });
+
+    const db = auth('employee-other', 'employee-other@test.com');
+    const failRef = doc(db, 'businesses/business-a/billingFailures/2026-09_C-MANAGED');
+    await assertFails(deleteDoc(failRef));
+  });
+
+  test('27. Cross-business member cannot delete billing failure', async () => {
+    await environment.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await setDoc(doc(db, 'businesses/business-a/billingFailures/2026-09_C-MANAGED'), {
+        businessId: 'business-a',
+        customerId: 'C-MANAGED',
+        billingMonth: '2026-09',
+        error: 'Failure',
+        failedBy: 'head-a',
+      });
+    });
+
+    const db = auth('head-b', 'head-b@test.com');
+    const failRef = doc(db, 'businesses/business-a/billingFailures/2026-09_C-MANAGED');
+    await assertFails(deleteDoc(failRef));
+  });
+
+  test('28. Deletion of billingFailures grants NO financial authority (bills and balances unchanged)', async () => {
+    await seedCollectionProjection();
+    await environment.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await setDoc(doc(db, 'businesses/business-a/billingFailures/2026-09_C-MANAGED'), {
+        businessId: 'business-a',
+        customerId: 'C-MANAGED',
+        billingMonth: '2026-09',
+        error: 'Temporary error',
+        failedBy: 'head-a',
+      });
+    });
+
+    const db = auth('head-a', 'head-a@test.com');
+    const failRef = doc(db, 'businesses/business-a/billingFailures/2026-09_C-MANAGED');
+    await assertSucceeds(deleteDoc(failRef));
+
+    // Confirm that deleting failure did not mutate any financial records
+    const billRef = doc(db, 'businesses/business-a/customers/C-MANAGED/bills/2026-09');
+    const balanceRef = doc(db, 'businesses/business-a/customers/C-MANAGED/billBalances/2026-09');
+    const stateRef = doc(db, 'businesses/business-a/customers/C-MANAGED/collectionState/current');
+
+    const billSnap = await getDoc(billRef);
+    const balanceSnap = await getDoc(balanceRef);
+    const stateSnap = await getDoc(stateRef);
+
+    // Bill still has its original state, outstanding is untouched
+    assert.equal(balanceSnap.data().outstandingPaise, 100000);
+    assert.equal(stateSnap.data().outstandingPaise, 100000);
   });
 });

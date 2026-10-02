@@ -31,3 +31,15 @@ final billingAdjustmentsProvider = StreamProvider.autoDispose
             billingMonth: key.billingMonth,
           );
     });
+
+typedef MonthlyBillingPriceKey = ({String businessId, String billingMonth});
+
+final monthlyBillingPricesProvider = StreamProvider.autoDispose
+    .family<List<BillingMonthlyPrice>, MonthlyBillingPriceKey>((ref, key) {
+      return ref
+          .watch(billingRepositoryProvider)
+          .watchBillingMonthlyPrices(
+            businessId: key.businessId,
+            billingMonth: key.billingMonth,
+          );
+    });

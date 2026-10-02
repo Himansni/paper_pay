@@ -246,10 +246,11 @@ class BillingAdjustment {
         billingMonth: parseBillingMonthFromFirestore(data['billingMonth']),
         amountPaise: (data['amountPaise'] as num?)?.toInt() ?? 0,
         reason: data['reason'] as String? ?? '',
-        referenceBillMonth: data['referenceBillMonth'] != null &&
-                data['referenceBillMonth'].toString().isNotEmpty
-            ? parseBillingMonthFromFirestore(data['referenceBillMonth'])
-            : '',
+        referenceBillMonth:
+            data['referenceBillMonth'] != null &&
+                    data['referenceBillMonth'].toString().isNotEmpty
+                ? parseBillingMonthFromFirestore(data['referenceBillMonth'])
+                : '',
         createdBy: data['createdBy'] as String? ?? '',
         createdAt: data['createdAt'] as DateTime?,
       );
@@ -350,6 +351,21 @@ class MonthlyBillLineItem {
   final int priceRuleRevision;
 
   int get totalPaise => unitPricePaise * quantity;
+
+  Map<String, Object> toMap() => {
+    'chargeKey': chargeKey,
+    'serviceDate': serviceDate.toString(),
+    'subscriptionId': subscriptionId,
+    'versionId': versionId,
+    'newspaperId': newspaperId,
+    'newspaperName': newspaperName,
+    'unitPricePaise': unitPricePaise,
+    'quantity': quantity,
+    'totalPaise': totalPaise,
+    'priceSource': priceSource.value,
+    'priceSourceId': priceSourceId,
+    'priceRuleRevision': priceRuleRevision,
+  };
 }
 
 class BillNewspaperSummary {
@@ -365,7 +381,8 @@ class BillNewspaperSummary {
         newspaperId: data['newspaperId'] as String? ?? '',
         newspaperName: data['newspaperName'] as String? ?? '',
         deliveryCount: (data['deliveryCount'] as num?)?.toInt() ?? 0,
-        subtotalPaise: (data['subtotalPaise'] as num?)?.toInt() ??
+        subtotalPaise:
+            (data['subtotalPaise'] as num?)?.toInt() ??
             (data['totalPaise'] as num?)?.toInt() ??
             0,
       );
@@ -475,6 +492,14 @@ class MonthlyBillPreview {
     );
     return result;
   }
+
+  Map<String, Object> toMap() => {
+    'currentChargesPaise': currentChargesPaise,
+    'lineItems': [for (final item in lineItems) item.toMap()],
+    'newspaperSummaries': [
+      for (final summary in newspaperSummaries) summary.toMap(),
+    ],
+  };
 }
 
 class FinalizedMonthlyBill {
@@ -505,51 +530,51 @@ class FinalizedMonthlyBill {
     this.finalizedAt,
   });
 
-  factory FinalizedMonthlyBill.fromMap(String id, Map<String, Object?> data) =>
-      FinalizedMonthlyBill(
-        id: id,
-        businessId: data['businessId'] as String? ?? '',
-        customerId: data['customerId'] as String? ?? '',
-        customerCode: data['customerCode'] as String? ?? '',
-        customerName: data['customerName'] as String? ?? '',
-        customerAddress: data['customerAddress'] as String? ?? '',
-        billingMonth: parseBillingMonthFromFirestore(
-          data['billingMonth'],
-          fallbackId: id,
-        ),
-        openingBalancePaise:
-            (data['openingBalancePaise'] as num?)?.toInt() ?? 0,
-        previousBillId: data['previousBillId']?.toString() ?? '',
-        previousOutstandingPaise:
-            (data['previousOutstandingPaise'] as num?)?.toInt() ?? 0,
-        priorBalancePaise: (data['priorBalancePaise'] as num?)?.toInt() ?? 0,
-        currentChargesPaise:
-            (data['currentChargesPaise'] as num?)?.toInt() ?? 0,
-        adjustmentsPaise: (data['adjustmentsPaise'] as num?)?.toInt() ?? 0,
-        totalDuePaise: (data['totalDuePaise'] as num?)?.toInt() ?? 0,
-        lineItemCount: (data['lineItemCount'] as num?)?.toInt() ?? 0,
-        newspaperSummaries:
-            data['newspaperSummaries'] is List
-                ? (data['newspaperSummaries'] as List)
-                    .whereType<Map>()
-                    .map(
-                      (value) => BillNewspaperSummary.fromMap(
-                        value.cast<String, Object?>(),
-                      ),
-                    )
-                    .toList()
-                : const [],
-        calculationVersion: parseCalculationVersionFromFirestore(
-          data['calculationVersion'],
-        ),
-        finalizedBy: data['finalizedBy'] as String? ?? '',
-        lastAuditId: data['lastAuditId'] as String? ?? '',
-        areaId: data['areaId'] as String? ?? '',
-        assignedEmployeeId: data['assignedEmployeeId'] as String? ?? '',
-        customerStatus: data['customerStatus'] as String? ?? 'active',
-        billingSource: data['billingSource'] as String? ?? 'generated',
-        finalizedAt: data['finalizedAt'] as DateTime?,
-      );
+  factory FinalizedMonthlyBill.fromMap(
+    String id,
+    Map<String, Object?> data,
+  ) => FinalizedMonthlyBill(
+    id: id,
+    businessId: data['businessId'] as String? ?? '',
+    customerId: data['customerId'] as String? ?? '',
+    customerCode: data['customerCode'] as String? ?? '',
+    customerName: data['customerName'] as String? ?? '',
+    customerAddress: data['customerAddress'] as String? ?? '',
+    billingMonth: parseBillingMonthFromFirestore(
+      data['billingMonth'],
+      fallbackId: id,
+    ),
+    openingBalancePaise: (data['openingBalancePaise'] as num?)?.toInt() ?? 0,
+    previousBillId: data['previousBillId']?.toString() ?? '',
+    previousOutstandingPaise:
+        (data['previousOutstandingPaise'] as num?)?.toInt() ?? 0,
+    priorBalancePaise: (data['priorBalancePaise'] as num?)?.toInt() ?? 0,
+    currentChargesPaise: (data['currentChargesPaise'] as num?)?.toInt() ?? 0,
+    adjustmentsPaise: (data['adjustmentsPaise'] as num?)?.toInt() ?? 0,
+    totalDuePaise: (data['totalDuePaise'] as num?)?.toInt() ?? 0,
+    lineItemCount: (data['lineItemCount'] as num?)?.toInt() ?? 0,
+    newspaperSummaries:
+        data['newspaperSummaries'] is List
+            ? (data['newspaperSummaries'] as List)
+                .whereType<Map>()
+                .map(
+                  (value) => BillNewspaperSummary.fromMap(
+                    value.cast<String, Object?>(),
+                  ),
+                )
+                .toList()
+            : const [],
+    calculationVersion: parseCalculationVersionFromFirestore(
+      data['calculationVersion'],
+    ),
+    finalizedBy: data['finalizedBy'] as String? ?? '',
+    lastAuditId: data['lastAuditId'] as String? ?? '',
+    areaId: data['areaId'] as String? ?? '',
+    assignedEmployeeId: data['assignedEmployeeId'] as String? ?? '',
+    customerStatus: data['customerStatus'] as String? ?? 'active',
+    billingSource: data['billingSource'] as String? ?? 'generated',
+    finalizedAt: data['finalizedAt'] as DateTime?,
+  );
 
   final String id;
   final String businessId;
@@ -599,6 +624,53 @@ class BillLinePage {
   final bool hasMore;
 }
 
+class BillingMonthlyPrice {
+  const BillingMonthlyPrice({
+    required this.id,
+    required this.businessId,
+    required this.billingMonth,
+    required this.newspaperId,
+    required this.newspaperName,
+    required this.pricePaise,
+    required this.pricingBasis,
+    this.updatedBy = '',
+    this.updatedAt,
+  });
+
+  factory BillingMonthlyPrice.fromMap(String id, Map<String, Object?> data) =>
+      BillingMonthlyPrice(
+        id: id,
+        businessId: data['businessId'] as String? ?? '',
+        billingMonth: data['billingMonth'] as String? ?? '',
+        newspaperId: data['newspaperId'] as String? ?? '',
+        newspaperName: data['newspaperName'] as String? ?? '',
+        pricePaise: (data['pricePaise'] as num?)?.toInt() ?? 0,
+        pricingBasis: PricingBasis.fromValue(data['pricingBasis']),
+        updatedBy: data['updatedBy'] as String? ?? '',
+        updatedAt: data['updatedAt'] as DateTime?,
+      );
+
+  final String id;
+  final String businessId;
+  final String billingMonth;
+  final String newspaperId;
+  final String newspaperName;
+  final int pricePaise;
+  final PricingBasis pricingBasis;
+  final String updatedBy;
+  final DateTime? updatedAt;
+
+  Map<String, Object> toMap() => {
+    'businessId': businessId,
+    'billingMonth': billingMonth,
+    'newspaperId': newspaperId,
+    'newspaperName': newspaperName,
+    'pricePaise': pricePaise,
+    'pricingBasis': pricingBasis.value,
+    'updatedBy': updatedBy,
+  };
+}
+
 class BillingWorkspaceRow {
   const BillingWorkspaceRow({
     required this.customerId,
@@ -606,6 +678,14 @@ class BillingWorkspaceRow {
     required this.customerName,
     required this.areaId,
     required this.finalizedBill,
+    this.assignedEmployeeId = '',
+    this.publicationId = '',
+    this.publicationName = '',
+    this.publicationIds = const {},
+    this.hasPricing = true,
+    this.estimatedTotalPaise = 0,
+    this.hasFailed = false,
+    this.lastFailureReason,
   });
 
   final String customerId;
@@ -613,6 +693,14 @@ class BillingWorkspaceRow {
   final String customerName;
   final String areaId;
   final FinalizedMonthlyBill? finalizedBill;
+  final String assignedEmployeeId;
+  final String publicationId;
+  final String publicationName;
+  final Set<String> publicationIds;
+  final bool hasPricing;
+  final int estimatedTotalPaise;
+  final bool hasFailed;
+  final String? lastFailureReason;
 }
 
 class BillingWorkspaceCursor {
@@ -675,17 +763,20 @@ class MonthlyBillPlanner {
           code: 'missing-price',
         );
       }
-      final monthlyRules = paper.rules
-          .where(
-            (rule) =>
-                !rule.isExactDate &&
-                rule.pricingBasis == PricingBasis.monthly &&
-                !rule.startDate.isAfter(
-                  LocalDate(month.year, month.month, month.daysInMonth),
-                ) &&
-                !rule.endDate.isBefore(LocalDate(month.year, month.month, 1)),
-          )
-          .toList();
+      final monthlyRules =
+          paper.rules
+              .where(
+                (rule) =>
+                    !rule.isExactDate &&
+                    rule.pricingBasis == PricingBasis.monthly &&
+                    !rule.startDate.isAfter(
+                      LocalDate(month.year, month.month, month.daysInMonth),
+                    ) &&
+                    !rule.endDate.isBefore(
+                      LocalDate(month.year, month.month, 1),
+                    ),
+              )
+              .toList();
       if (monthlyRules.isNotEmpty) {
         final monthlyRule = monthlyRules.single;
         final activeDates = <LocalDate>[];
@@ -718,18 +809,20 @@ class MonthlyBillPlanner {
               versionId: term.versionId,
               newspaperId: term.newspaperId,
               newspaperName: paper.name,
-              unitPricePaise: hasCustomerOverride
-                  ? term.customPricePaise!
-                  : monthlyRule.pricePaise,
+              unitPricePaise:
+                  hasCustomerOverride
+                      ? term.customPricePaise!
+                      : monthlyRule.pricePaise,
               quantity: term.quantity,
-              priceSource: hasCustomerOverride
-                  ? BillPriceSource.customerSpecific
-                  : BillPriceSource.effectivePeriod,
-              priceSourceId: hasCustomerOverride
-                  ? term.subscriptionId
-                  : monthlyRule.ruleId,
-              priceRuleRevision:
-                  hasCustomerOverride ? 0 : monthlyRule.revision,
+              priceSource:
+                  hasCustomerOverride
+                      ? BillPriceSource.customerSpecific
+                      : BillPriceSource.effectivePeriod,
+              priceSourceId:
+                  hasCustomerOverride
+                      ? term.subscriptionId
+                      : monthlyRule.ruleId,
+              priceRuleRevision: hasCustomerOverride ? 0 : monthlyRule.revision,
             ),
           );
         }

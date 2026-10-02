@@ -11,6 +11,7 @@ import 'package:paper_route/features/billing/presentation/bill_detail_page.dart'
 import 'package:paper_route/features/billing/presentation/bill_preview_page.dart';
 import 'package:paper_route/features/billing/presentation/billing_providers.dart';
 import 'package:paper_route/features/billing/presentation/billing_workspace_page.dart';
+import 'package:paper_route/features/newspapers/domain/newspaper.dart';
 
 void main() {
   const head = AppUser(
@@ -364,4 +365,35 @@ class _FakeBillingRepository implements BillingRepository {
           isDone: true,
         ),
       );
+
+  @override
+  Future<void> saveBillingMonthlyPrice({
+    required AppUser actor,
+    required String billingMonth,
+    required String newspaperId,
+    required String newspaperName,
+    required int pricePaise,
+    required PricingBasis pricingBasis,
+  }) async {}
+
+  @override
+  Stream<List<BillingMonthlyPrice>> watchBillingMonthlyPrices({
+    required String businessId,
+    required String billingMonth,
+  }) => Stream.value(const []);
+
+  @override
+  Future<void> recordBillingFailure({
+    required AppUser actor,
+    required String customerId,
+    required String billingMonth,
+    required String error,
+  }) async {}
+
+  @override
+  Future<void> clearBillingFailure({
+    required String businessId,
+    required String customerId,
+    required String billingMonth,
+  }) async {}
 }

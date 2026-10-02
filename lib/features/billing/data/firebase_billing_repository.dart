@@ -6,7 +6,6 @@ import 'package:paper_route/features/auth/domain/access_policy.dart';
 import 'package:paper_route/features/auth/domain/app_user.dart';
 import 'package:paper_route/features/billing/domain/billing_repository.dart';
 import 'package:paper_route/features/billing/domain/monthly_bill.dart';
-import 'package:paper_route/features/collections/domain/collection_balance_engine.dart';
 import 'package:paper_route/features/customers/data/firebase_customer_repository.dart';
 import 'package:paper_route/features/customers/domain/customer.dart';
 import 'package:paper_route/features/newspapers/domain/newspaper.dart';
@@ -15,15 +14,19 @@ import 'package:uuid/uuid.dart';
 class FirebaseBillingRepository implements BillingRepository {
   FirebaseBillingRepository(
     this._firestore, {
+    FirebaseFunctions? functions,
     Uuid? uuid,
     MonthlyBillPlanner planner = const MonthlyBillPlanner(),
-  }) : _uuid = uuid ?? const Uuid(),
+  }) : _functions =
+           functions ?? FirebaseFunctions.instanceFor(region: 'asia-south1'),
+       _uuid = uuid ?? const Uuid(),
        _planner = planner;
 
   factory FirebaseBillingRepository.fromDefaultApp() =>
       FirebaseBillingRepository(FirebaseFirestore.instance);
 
   final FirebaseFirestore _firestore;
+  final FirebaseFunctions _functions;
   final Uuid _uuid;
   final MonthlyBillPlanner _planner;
 
@@ -113,22 +116,71 @@ class FirebaseBillingRepository implements BillingRepository {
         ),
       );
       final monthKey = billingMonthKey(month);
-      final bills = await Future.wait([
-        for (final customer in customerPage.customers)
-          _bill(businessId, customer.id, monthKey).get(),
+      final customerDataList = customerPage.customers;
+      final extraFutures = await Future.wait([
+        for (final customer in customerDataList)
+          Future.wait([
+            _bill(businessId, customer.id, monthKey).get(),
+            _customer(businessId, customer.id).collection('subscriptions').get(),
+            _firestore
+                .collection('businesses')
+                .doc(businessId)
+                .collection('billingFailures')
+                .doc('${monthKey}_${customer.id}')
+                .get(),
+          ]),
       ]);
+
+      final rows = <BillingWorkspaceRow>[];
+      for (var index = 0; index < customerDataList.length; index++) {
+        final customer = customerDataList[index];
+        final billSnapshot =
+            extraFutures[index][0] as DocumentSnapshot<Map<String, dynamic>>;
+        final subsSnapshot =
+            extraFutures[index][1] as QuerySnapshot<Map<String, dynamic>>;
+        final failureSnapshot =
+            extraFutures[index][2] as DocumentSnapshot<Map<String, dynamic>>;
+
+        final pubIds = <String>{};
+        String primaryPubId = '';
+        String primaryPubName = '';
+        for (final doc in subsSnapshot.docs) {
+          final data = doc.data();
+          final npId = data['newspaperId'] as String? ?? '';
+          final npName = data['newspaperName'] as String? ?? '';
+          if (npId.isNotEmpty) {
+            pubIds.add(npId);
+            if (primaryPubId.isEmpty) {
+              primaryPubId = npId;
+              primaryPubName = npName;
+            }
+          }
+        }
+
+        final failureData = failureSnapshot.data();
+        final hasFailed = failureSnapshot.exists;
+        final failureReason = failureData?['error'] as String?;
+
+        rows.add(
+          BillingWorkspaceRow(
+            customerId: customer.id,
+            customerCode: customer.customerCode,
+            customerName: customer.name,
+            areaId: customer.areaId,
+            assignedEmployeeId: customer.assignedEmployeeId,
+            finalizedBill:
+                billSnapshot.exists ? _billFromSnapshot(billSnapshot) : null,
+            publicationId: primaryPubId,
+            publicationName: primaryPubName,
+            publicationIds: pubIds,
+            hasFailed: hasFailed,
+            lastFailureReason: failureReason,
+          ),
+        );
+      }
+
       return BillingWorkspaceResult(
-        rows: [
-          for (var index = 0; index < customerPage.customers.length; index++)
-            BillingWorkspaceRow(
-              customerId: customerPage.customers[index].id,
-              customerCode: customerPage.customers[index].customerCode,
-              customerName: customerPage.customers[index].name,
-              areaId: customerPage.customers[index].areaId,
-              finalizedBill:
-                  bills[index].exists ? _billFromSnapshot(bills[index]) : null,
-            ),
-        ],
+        rows: rows,
         nextCursor:
             customerPage.nextCursor == null
                 ? null
@@ -215,7 +267,7 @@ class FirebaseBillingRepository implements BillingRepository {
     final billRef = _bill(businessId, customerId, monthKey);
 
     try {
-      final callable = FirebaseFunctions.instance.httpsCallable('finalizeMonthlyBill');
+      final callable = _functions.httpsCallable('finalizeMonthlyBill');
       await callable.call({
         'businessId': businessId,
         'customerId': customerId,
@@ -227,7 +279,16 @@ class FirebaseBillingRepository implements BillingRepository {
         if (preview.billingSource == 'manual') 'manualPreview': preview.toMap(),
       });
       final snapshot = await billRef.get();
-      if (!snapshot.exists) throw AppException('Bill not found after finalization.');
+      if (!snapshot.exists) {
+        throw AppException('Bill not found after finalization.');
+      }
+      try {
+        await clearBillingFailure(
+          businessId: businessId,
+          customerId: customerId,
+          billingMonth: monthKey,
+        );
+      } catch (_) {}
       return _billFromSnapshot(snapshot);
     } on FirebaseFunctionsException catch (error) {
       if (error.code == 'permission-denied') {
@@ -238,9 +299,6 @@ class FirebaseBillingRepository implements BillingRepository {
     } catch (error) {
       throw AppException('Failed to finalize bill: $error');
     }
-  }
-
-
   }
 
   @override
@@ -640,9 +698,30 @@ class FirebaseBillingRepository implements BillingRepository {
                 .where('endDate', isGreaterThanOrEqualTo: month.toString())
                 .where('startDate', isLessThanOrEqualTo: monthEnd.toString())
                 .get();
+        final monthlyPriceFuture = _firestore
+            .collection('businesses')
+            .doc(businessId)
+            .collection('monthlyBillingPrices')
+            .doc('${monthKey}_$newspaperId')
+            .get();
         final exactDocuments = await exactFuture;
         final periodDocuments = await periodFuture;
+        final monthlyPriceSnapshot = await monthlyPriceFuture;
         final priceRules = <BillingPriceRuleSnapshot>[];
+        if (monthlyPriceSnapshot.exists) {
+          final mpData = monthlyPriceSnapshot.data()!;
+          priceRules.add(
+            BillingPriceRuleSnapshot(
+              ruleId: 'monthly_snapshot_${monthlyPriceSnapshot.id}',
+              startDate: LocalDate(month.year, month.month, 1),
+              endDate: LocalDate(month.year, month.month, month.daysInMonth),
+              pricePaise: (mpData['pricePaise'] as num?)?.toInt() ?? -1,
+              isExactDate: false,
+              revision: 999999,
+              pricingBasis: PricingBasis.fromValue(mpData['pricingBasis']),
+            ),
+          );
+        }
         for (final document in [
           ...exactDocuments.docs,
           ...periodDocuments.docs,
@@ -1020,8 +1099,7 @@ class FirebaseBillingRepository implements BillingRepository {
         );
       }
 
-      final versionId =
-          activeVersion['versionId'] as String? ?? subSnapshot.id;
+      final versionId = activeVersion['versionId'] as String? ?? subSnapshot.id;
       final newspaperId = activeVersion['newspaperId'] as String? ?? '';
       final newspaperName = activeVersion['newspaperName'] as String? ?? '';
       final quantity = (activeVersion['quantity'] as num?)?.toInt() ?? 1;
@@ -1310,12 +1388,13 @@ class FirebaseBillingRepository implements BillingRepository {
       );
     }
 
-    final paperDoc = await _firestore
-        .collection('businesses')
-        .doc(businessId)
-        .collection('newspapers')
-        .doc(publicationId)
-        .get();
+    final paperDoc =
+        await _firestore
+            .collection('businesses')
+            .doc(businessId)
+            .collection('newspapers')
+            .doc(publicationId)
+            .get();
     final paperData = paperDoc.data();
     final publicationName = paperData?['name'] as String? ?? 'Publication';
 
@@ -1323,13 +1402,14 @@ class FirebaseBillingRepository implements BillingRepository {
     final monthStart = LocalDate(month.year, month.month, 1);
     final monthEnd = LocalDate(month.year, month.month, month.daysInMonth);
 
-    final customersSnap = await _firestore
-        .collection('businesses')
-        .doc(businessId)
-        .collection('customers')
-        .where('businessId', isEqualTo: businessId)
-        .where('status', isEqualTo: 'active')
-        .get();
+    final customersSnap =
+        await _firestore
+            .collection('businesses')
+            .doc(businessId)
+            .collection('customers')
+            .where('businessId', isEqualTo: businessId)
+            .where('status', isEqualTo: 'active')
+            .get();
 
     final subscriberItems = <BulkMonthEndSubscriberItem>[];
     var alreadyFinalizedCount = 0;
@@ -1343,12 +1423,13 @@ class FirebaseBillingRepository implements BillingRepository {
       final customerName = custData['name'] as String? ?? 'Customer';
       final customerCode = custData['customerCode'] as String? ?? customerId;
 
-      final subsSnap = await custDoc.reference
-          .collection('subscriptions')
-          .where('businessId', isEqualTo: businessId)
-          .where('newspaperId', isEqualTo: publicationId)
-          .where('status', isEqualTo: 'active')
-          .get();
+      final subsSnap =
+          await custDoc.reference
+              .collection('subscriptions')
+              .where('businessId', isEqualTo: businessId)
+              .where('newspaperId', isEqualTo: publicationId)
+              .where('status', isEqualTo: 'active')
+              .get();
 
       if (subsSnap.docs.isEmpty) continue;
 
@@ -1539,6 +1620,101 @@ class FirebaseBillingRepository implements BillingRepository {
       currentCustomerName: 'Completed',
       isDone: true,
     );
+  }
+
+  @override
+  Future<void> saveBillingMonthlyPrice({
+    required AppUser actor,
+    required String billingMonth,
+    required String newspaperId,
+    required String newspaperName,
+    required int pricePaise,
+    required PricingBasis pricingBasis,
+  }) async {
+    final businessId = _headBusinessId(actor);
+    billingMonthFromKey(billingMonth);
+    if (pricePaise < 0 || pricePaise > 10000000) {
+      throw const AppException('Price must be between ₹0 and ₹1,00,000.');
+    }
+    final docId = '${billingMonth}_$newspaperId';
+    final ref = _firestore
+        .collection('businesses')
+        .doc(businessId)
+        .collection('monthlyBillingPrices')
+        .doc(docId);
+    final now = FieldValue.serverTimestamp();
+    await ref.set({
+      'businessId': businessId,
+      'billingMonth': billingMonth,
+      'newspaperId': newspaperId,
+      'newspaperName': newspaperName,
+      'pricePaise': pricePaise,
+      'pricingBasis': pricingBasis.value,
+      'updatedBy': actor.uid,
+      'updatedAt': now,
+      'createdAt': now,
+    }, SetOptions(merge: true),);
+  }
+
+  @override
+  Stream<List<BillingMonthlyPrice>> watchBillingMonthlyPrices({
+    required String businessId,
+    required String billingMonth,
+  }) {
+    billingMonthFromKey(billingMonth);
+    return _firestore
+        .collection('businesses')
+        .doc(businessId)
+        .collection('monthlyBillingPrices')
+        .where('billingMonth', isEqualTo: billingMonth)
+        .snapshots()
+        .map(
+          (snap) => [
+            for (final doc in snap.docs)
+              BillingMonthlyPrice.fromMap(doc.id, _withDartDates(doc.data())),
+          ],
+        );
+  }
+
+  @override
+  Future<void> recordBillingFailure({
+    required AppUser actor,
+    required String customerId,
+    required String billingMonth,
+    required String error,
+  }) async {
+    final businessId = _activeBusinessId(actor);
+    final docId = '${billingMonth}_$customerId';
+    final ref = _firestore
+        .collection('businesses')
+        .doc(businessId)
+        .collection('billingFailures')
+        .doc(docId);
+    final now = FieldValue.serverTimestamp();
+    await ref.set({
+      'businessId': businessId,
+      'customerId': customerId,
+      'billingMonth': billingMonth,
+      'error': error,
+      'failedBy': actor.uid,
+      'failedAt': now,
+      'status': 'failed',
+    }, SetOptions(merge: true),);
+  }
+
+  @override
+  Future<void> clearBillingFailure({
+    required String businessId,
+    required String customerId,
+    required String billingMonth,
+  }) async {
+    final docId = '${billingMonth}_$customerId';
+    final ref = _firestore
+        .collection('businesses')
+        .doc(businessId)
+        .collection('billingFailures')
+        .doc(docId);
+    await ref.delete();
   }
 }
 

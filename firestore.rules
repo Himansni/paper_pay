@@ -15,36 +15,43 @@ service cloud.firestore {
     }
 
     function memberData(businessId) {
-      return get(memberPath(businessId, request.auth.uid)).data;
+      return exists(memberPath(businessId, request.auth.uid))
+        ? get(memberPath(businessId, request.auth.uid)).data
+        : null;
     }
 
     function activeMember(businessId) {
+      let m = memberData(businessId);
       return signedIn()
-        && exists(memberPath(businessId, request.auth.uid))
-        && memberData(businessId).status == 'active'
-        && memberData(businessId).businessId == businessId;
+        && m != null
+        && m.status == 'active'
+        && m.businessId == businessId;
     }
 
     function head(businessId) {
-      return activeMember(businessId) && memberData(businessId).role == 'head';
+      let m = memberData(businessId);
+      return signedIn()
+        && m != null
+        && m.status == 'active'
+        && m.businessId == businessId
+        && m.role == 'head';
     }
 
     function permission(businessId, name) {
-      return activeMember(businessId)
-        && memberData(businessId).permissions is list
-        && memberData(businessId).permissions.hasAny([name]);
+      let m = memberData(businessId);
+      return signedIn()
+        && m != null
+        && m.status == 'active'
+        && m.businessId == businessId
+        && (
+          m.role == 'head'
+          || (m.permissions is list && m.permissions.hasAny([name]))
+        );
     }
 
     function canManageGlobalPricing(businessId) {
       return subscriptionAllowsWrites(businessId)
-        && activeMember(businessId)
-        && (
-          head(businessId)
-          || (
-            memberData(businessId).role == 'employee'
-            && permission(businessId, 'allowGlobalPricing')
-          )
-        );
+        && permission(businessId, 'allowGlobalPricing');
     }
 
     function customerPath(businessId, customerId) {
@@ -337,30 +344,24 @@ service cloud.firestore {
         && audit.areaId == request.resource.data.areaId;
     }
 
-    function customerReferencesAuditAfter(businessId, customerId, auditId) {
-      let customer = getAfter(customerPath(businessId, customerId)).data;
-      let audit = getAfter(auditPath(businessId, auditId)).data;
+    function customerReferencesAuditAfter(businessId, customerId, auditId, audit) {
+      let custPath = customerPath(businessId, customerId);
       let statePath = collectionStatePath(businessId, customerId);
-      let state = getAfter(statePath).data;
-      return existsAfter(customerPath(businessId, customerId))
-        && customer.businessId == businessId
-        && customer.lastAuditId == auditId
-        && customer.updatedBy == request.auth.uid
-        && customer.updatedAt == request.time
+      return existsAfter(custPath)
         && (
-          !exists(statePath) || (
-            existsAfter(statePath)
-            && state.lastMutationId == auditId
+          !existsAfter(statePath)
+          || (
+            getAfter(statePath).data.lastMutationId == auditId
             && (
               (
                 audit.action == 'customerUpdated'
-                && state.lastMutationType == 'customerProfileUpdated'
+                && getAfter(statePath).data.lastMutationType == 'customerProfileUpdated'
               ) || (
                 audit.action in ['customerArchived', 'customerReactivated']
-                && state.lastMutationType == 'customerStatusUpdated'
+                && getAfter(statePath).data.lastMutationType == 'customerStatusUpdated'
               ) || (
                 audit.action == 'customerAssignmentUpdated'
-                && state.lastMutationType == 'customerAssignmentUpdated'
+                && getAfter(statePath).data.lastMutationType == 'customerAssignmentUpdated'
               )
             )
           )
@@ -368,6 +369,7 @@ service cloud.firestore {
     }
 
     function validCustomerProfileUpdate(businessId, customerId) {
+      let statePath = collectionStatePath(businessId, customerId);
       return resource.data.status == 'active'
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'name', 'searchName', 'phone', 'searchPhone', 'alternatePhone',
@@ -379,6 +381,13 @@ service cloud.firestore {
         && request.resource.data.updatedBy == request.auth.uid
         && request.resource.data.updatedAt == request.time
         && request.resource.data.lastAuditId != resource.data.lastAuditId
+        && (
+          !existsAfter(statePath)
+          || (
+            getAfter(statePath).data.lastMutationId == request.resource.data.lastAuditId
+            && getAfter(statePath).data.lastMutationType == 'customerProfileUpdated'
+          )
+        )
         && validCustomerProfileAuditAfter(
           businessId,
           customerId,
@@ -1542,8 +1551,7 @@ service cloud.firestore {
         customerId,
         state.lastMutationId
       )).data;
-      return false; // Prevent client updates
-        && !exists(billPath(businessId, customerId, state.lastMutationId))
+      return !exists(billPath(businessId, customerId, state.lastMutationId))
         && bill.customerId == customerId
         && bill.billingMonth == state.lastMutationId
         && validBillCollectionStateAfter(
@@ -1581,7 +1589,9 @@ service cloud.firestore {
         && state.createdAt == resource.data.createdAt
         && state.revision == resource.data.revision + 1
         && (
-      return false; // Prevent client updates
+          (
+            state.lastMutationType == 'billFinalized'
+            && !exists(billPath(
               businessId,
               customerId,
               state.lastMutationId
@@ -1650,7 +1660,7 @@ service cloud.firestore {
     ) {
       let billPathValue = billPath(businessId, customerId, billingMonth);
       let bill = getAfter(billPathValue).data;
-      return false; // Prevent client creates
+      return !exists(billPathValue)
         && validBillBalanceAfter(
           businessId,
           customerId,
@@ -3199,26 +3209,17 @@ service cloud.firestore {
     function phase4AuditReferencedAfter(businessId, auditId, data) {
       return (
           data.entityType == 'newspaper'
-          && getAfter(newspaperPath(businessId, data.entityId)).data.lastAuditId
-            == auditId
+          && existsAfter(newspaperPath(businessId, data.entityId))
         ) || (
           data.entityType == 'subscription'
           && data.customerId is string
           && data.subscriptionId is string
           && (
-            getAfter(subscriptionPath(
-              businessId,
-              data.customerId,
-              data.subscriptionId
-            )).data.lastAuditId == auditId
+            head(businessId)
             || (
-              data.pauseId is string
-              && getAfter(subscriptionPausePath(
-                businessId,
-                data.customerId,
-                data.subscriptionId,
-                data.pauseId
-              )).data.lastAuditId == auditId
+              activeMember(businessId)
+              && memberData(businessId).role == 'employee'
+              && permission(businessId, 'manageAssignedSubscriptions')
             )
           )
         );
@@ -3281,7 +3282,11 @@ service cloud.firestore {
 
     match /accountDeletionRequests/{uid} {
       allow get: if signedIn() && uid == request.auth.uid;
-      allow list, create, update, delete: if false;
+      allow create: if signedIn()
+        && uid == request.auth.uid
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.status == 'pending';
+      allow list, update, delete: if false;
     }
 
     match /businesses/{businessId} {
@@ -3523,16 +3528,11 @@ service cloud.firestore {
               && request.resource.data.updatedBy == request.auth.uid
               && request.resource.data.createdAt == request.time
               && request.resource.data.updatedAt == request.time
-              && getAfter(subscriptionPath(
+              && existsAfter(subscriptionPath(
                 businessId,
                 customerId,
                 subscriptionId
-              )).data.currentVersionId == versionId
-              && getAfter(subscriptionPath(
-                businessId,
-                customerId,
-                subscriptionId
-              )).data.lastAuditId == request.resource.data.lastAuditId
+              ))
               && (
                 head(businessId)
                 || request.resource.data.predecessorVersionId == ''
@@ -3575,13 +3575,11 @@ service cloud.firestore {
                   'effectiveTo', 'successorVersionId', 'status', 'updatedBy',
                   'lastAuditId', 'updatedAt'
                 ])
-              && request.resource.data.updatedBy == request.auth.uid
-              && request.resource.data.updatedAt == request.time
-              && getAfter(subscriptionPath(
+              && existsAfter(subscriptionPath(
                 businessId,
                 customerId,
                 subscriptionId
-              )).data.lastAuditId == request.resource.data.lastAuditId;
+              ));
             allow delete: if false;
           }
 
@@ -3711,48 +3709,18 @@ service cloud.firestore {
 
         match /bills/{billId} {
           allow read: if canReadCustomer(businessId, customerId);
-          allow create: if false;
-            && get(customerPath(businessId, customerId)).data.status == 'active'
-            && validBillShape(
-              businessId,
-              customerId,
-              billId,
-              request.resource.data
-            )
-            && getAfter(billingControlPath(
-              businessId,
-              customerId,
-              billId
-            )).data.status == 'finalized'
-            && getAfter(billingControlPath(
-              businessId,
-              customerId,
-              billId
-            )).data.finalizedBillId == billId
-            && getAfter(billingControlPath(
-              businessId,
-              customerId,
-              billId
-            )).data.lastAuditId == request.resource.data.lastAuditId;
-          allow update, delete: if false;
+          allow create, update, delete: if false;
 
           match /lineItems/{lineItemId} {
             allow read: if canReadCustomer(businessId, customerId);
-            allow create: if false;
-              && validBillLineShape(
-                businessId,
-                customerId,
-                billId,
-                lineItemId,
-                request.resource.data
-              );
-            allow update, delete: if false;
+            allow create, update, delete: if false;
           }
         }
 
         match /billingControls/{billingMonth} {
           allow read: if head(businessId) || canCreateBillForCustomer(businessId, customerId);
-          allow create: if false;
+          allow create: if subscriptionAllowsWrites(businessId)
+            && head(businessId)
             && validBillingControlShape(
               businessId,
               customerId,
@@ -3761,24 +3729,15 @@ service cloud.firestore {
             )
             && request.resource.data.createdAt == request.time
             && (
-              (
-                request.resource.data.status == 'finalized'
-                && request.resource.data.finalizedBillId == billingMonth
-                && getAfter(billPath(
-                  businessId,
-                  customerId,
-                  billingMonth
-                )).data.lastAuditId == request.resource.data.lastAuditId
-              ) || (
-                request.resource.data.status == 'open'
-                && request.resource.data.finalizedBillId == ''
-                && getAfter(auditPath(
-                  businessId,
-                  request.resource.data.lastAuditId
-                )).data.action == 'billingAdjustmentCreated'
-              )
+              request.resource.data.status == 'open'
+              && request.resource.data.finalizedBillId == ''
+              && getAfter(auditPath(
+                businessId,
+                request.resource.data.lastAuditId
+              )).data.action == 'billingAdjustmentCreated'
             );
-          allow update: if false;
+          allow update: if subscriptionAllowsWrites(businessId)
+            && head(businessId)
             && validBillingControlShape(
               businessId,
               customerId,
@@ -3788,26 +3747,14 @@ service cloud.firestore {
             && request.resource.data.createdAt == resource.data.createdAt
             && resource.data.status == 'open'
             && (
-              (
-                request.resource.data.status == 'finalized'
-                && request.resource.data.adjustmentRevision
-                  == resource.data.adjustmentRevision
-                && request.resource.data.finalizedBillId == billingMonth
-                && getAfter(billPath(
-                  businessId,
-                  customerId,
-                  billingMonth
-                )).data.lastAuditId == request.resource.data.lastAuditId
-              ) || (
-                request.resource.data.status == 'open'
-                && request.resource.data.adjustmentRevision
-                  == resource.data.adjustmentRevision + 1
-                && request.resource.data.finalizedBillId == ''
-                && getAfter(auditPath(
-                  businessId,
-                  request.resource.data.lastAuditId
-                )).data.action == 'billingAdjustmentCreated'
-              )
+              request.resource.data.status == 'open'
+              && request.resource.data.adjustmentRevision
+                == resource.data.adjustmentRevision + 1
+              && request.resource.data.finalizedBillId == ''
+              && getAfter(auditPath(
+                businessId,
+                request.resource.data.lastAuditId
+              )).data.action == 'billingAdjustmentCreated'
             );
           allow delete: if false;
         }
@@ -3842,13 +3789,7 @@ service cloud.firestore {
             customerId,
             resource.data
           );
-          allow create: if subscriptionAllowsWrites(businessId)
-            && validPaymentCreate(
-              businessId,
-              customerId,
-              paymentId
-            );
-          allow update, delete: if false;
+          allow create, update, delete: if false;
         }
 
         match /paymentStates/{paymentId} {
@@ -3857,20 +3798,7 @@ service cloud.firestore {
             customerId,
             paymentId
           );
-          allow create: if subscriptionAllowsWrites(businessId)
-            && validPaymentStateCreate(
-              businessId,
-              customerId,
-              paymentId
-            );
-          allow update: if subscriptionAllowsWrites(businessId)
-            && head(businessId)
-            && validPaymentStateUpdate(
-              businessId,
-              customerId,
-              paymentId
-            );
-          allow delete: if false;
+          allow create, update, delete: if false;
         }
 
         match /paymentReversals/{reversalId} {
@@ -4028,6 +3956,34 @@ service cloud.firestore {
         allow create, update, delete: if false;
       }
 
+      match /monthlyBillingPrices/{priceDocId} {
+        allow read: if activeMember(businessId);
+        allow create, update: if subscriptionAllowsWrites(businessId)
+          && canManageGlobalPricing(businessId)
+          && request.resource.data.businessId == businessId
+          && request.resource.data.billingMonth is string
+          && request.resource.data.newspaperId is string
+          && request.resource.data.pricePaise is int
+          && request.resource.data.pricePaise >= 0
+          && request.resource.data.pricePaise <= 10000000
+          && request.resource.data.pricingBasis in ['monthly', 'daily']
+          && request.resource.data.updatedBy == request.auth.uid;
+        allow delete: if subscriptionAllowsWrites(businessId)
+          && canManageGlobalPricing(businessId);
+      }
+
+      match /billingFailures/{failureId} {
+        allow read: if activeMember(businessId);
+        allow create, update: if subscriptionAllowsWrites(businessId)
+          && request.resource.data.businessId == businessId
+          && request.resource.data.customerId is string
+          && request.resource.data.billingMonth is string
+          && request.resource.data.failedBy == request.auth.uid
+          && canCreateBillForCustomer(businessId, request.resource.data.customerId);
+        allow delete: if subscriptionAllowsWrites(businessId)
+          && canCreateBillForCustomer(businessId, resource.data.customerId);
+      }
+
       match /auditRecords/{auditId} {
         allow read: if head(businessId);
         allow create: if validAuditBase(businessId)
@@ -4089,10 +4045,34 @@ service cloud.firestore {
                 || (
                   request.resource.data.entityType == 'customer'
                   && request.resource.data.entityId is string
-                  && customerReferencesAuditAfter(
-                    businessId,
-                    request.resource.data.entityId,
-                    auditId
+                  && (
+                    (
+                      request.resource.data.action == 'customerCreated'
+                      && ('employeeId' in request.resource.data)
+                      && ('areaId' in request.resource.data)
+                      && ('openingBalancePaise' in request.resource.data)
+                    ) || (
+                      request.resource.data.action == 'customerUpdated'
+                      && ('changedFields' in request.resource.data)
+                      && request.resource.data.changedFields is list
+                      && request.resource.data.changedFields.size() > 0
+                    ) || (
+                      request.resource.data.action in [
+                        'customerArchived', 'customerReactivated',
+                        'customerAssignmentUpdated'
+                      ]
+                    )
+                  )
+                  && (
+                    head(businessId)
+                    || (
+                      activeMember(businessId)
+                      && memberData(businessId).role == 'employee'
+                      && (
+                        permission(businessId, 'editAssignedCustomers')
+                        || permission(businessId, 'addCustomers')
+                      )
+                    )
                   )
                 )
               )

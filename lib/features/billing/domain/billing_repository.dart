@@ -1,6 +1,7 @@
 import 'package:paper_route/core/domain/local_date.dart';
 import 'package:paper_route/features/auth/domain/app_user.dart';
 import 'package:paper_route/features/billing/domain/monthly_bill.dart';
+import 'package:paper_route/features/newspapers/domain/newspaper.dart';
 
 abstract interface class BillingRepository {
   Future<BillingWorkspaceResult> fetchWorkspace({
@@ -68,6 +69,33 @@ abstract interface class BillingRepository {
     required AppUser actor,
     required String publicationId,
     required LocalDate month,
+  });
+
+  Future<void> saveBillingMonthlyPrice({
+    required AppUser actor,
+    required String billingMonth,
+    required String newspaperId,
+    required String newspaperName,
+    required int pricePaise,
+    required PricingBasis pricingBasis,
+  });
+
+  Stream<List<BillingMonthlyPrice>> watchBillingMonthlyPrices({
+    required String businessId,
+    required String billingMonth,
+  });
+
+  Future<void> recordBillingFailure({
+    required AppUser actor,
+    required String customerId,
+    required String billingMonth,
+    required String error,
+  });
+
+  Future<void> clearBillingFailure({
+    required String businessId,
+    required String customerId,
+    required String billingMonth,
   });
 }
 

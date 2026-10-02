@@ -228,11 +228,15 @@ class _UpiSettingsFormState extends ConsumerState<_UpiSettingsForm> {
                         fontWeight: FontWeight.w800,
                       ),
                     ),
-                    const SizedBox(height: 12),
-                    QrImageView(
-                      key: const ValueKey('static-business-upi-qr'),
-                      data: staticUri.toString(),
-                      size: 220,
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final qrSize = (constraints.maxWidth * 0.7).clamp(140.0, 220.0);
+                        return QrImageView(
+                          key: const ValueKey('static-business-upi-qr'),
+                          data: staticUri.toString(),
+                          size: qrSize,
+                        );
+                      },
                     ),
                     const SizedBox(height: 8),
                     const Text(

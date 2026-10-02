@@ -22,6 +22,16 @@ abstract interface class BillingRepository {
     required LocalDate month,
   });
 
+  Future<MonthlyBillPreview> previewManualBill({
+    required AppUser actor,
+    required ManualBillInput input,
+  });
+
+  Future<FinalizedMonthlyBill> finalizeManualBill({
+    required AppUser actor,
+    required ManualBillInput input,
+  });
+
   Future<String> createAdjustment({
     required AppUser actor,
     required String customerId,
@@ -47,4 +57,85 @@ abstract interface class BillingRepository {
     required String customerId,
     required String billingMonth,
   });
+
+  Future<BulkMonthEndBillSummary> previewBulkMonthEndBills({
+    required AppUser actor,
+    required String publicationId,
+    required LocalDate month,
+  });
+
+  Stream<BulkMonthEndProgress> generateBulkMonthEndBills({
+    required AppUser actor,
+    required String publicationId,
+    required LocalDate month,
+  });
+}
+
+enum BulkMonthEndSubscriberStatus {
+  readyToBill,
+  alreadyFinalized,
+  missingPricing,
+  pausedNoCharge,
+}
+
+class BulkMonthEndSubscriberItem {
+  const BulkMonthEndSubscriberItem({
+    required this.customerId,
+    required this.customerName,
+    required this.customerCode,
+    required this.status,
+    required this.totalDuePaise,
+    this.statusMessage,
+  });
+
+  final String customerId;
+  final String customerName;
+  final String customerCode;
+  final BulkMonthEndSubscriberStatus status;
+  final int totalDuePaise;
+  final String? statusMessage;
+}
+
+class BulkMonthEndBillSummary {
+  const BulkMonthEndBillSummary({
+    required this.publicationId,
+    required this.publicationName,
+    required this.month,
+    required this.eligibleSubscribersCount,
+    required this.alreadyFinalizedCount,
+    required this.readyToBillCount,
+    required this.missingPricingCount,
+    required this.pausedNoChargeCount,
+    required this.subscribers,
+  });
+
+  final String publicationId;
+  final String publicationName;
+  final LocalDate month;
+  final int eligibleSubscribersCount;
+  final int alreadyFinalizedCount;
+  final int readyToBillCount;
+  final int missingPricingCount;
+  final int pausedNoChargeCount;
+  final List<BulkMonthEndSubscriberItem> subscribers;
+}
+
+class BulkMonthEndProgress {
+  const BulkMonthEndProgress({
+    required this.totalCount,
+    required this.completedCount,
+    required this.alreadyFinalizedCount,
+    required this.failedCount,
+    required this.currentCustomerName,
+    required this.isDone,
+    this.errorMessage,
+  });
+
+  final int totalCount;
+  final int completedCount;
+  final int alreadyFinalizedCount;
+  final int failedCount;
+  final String currentCustomerName;
+  final bool isDone;
+  final String? errorMessage;
 }

@@ -30,6 +30,9 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      await tester.tap(find.text('Daily Pricing'));
+      await tester.pumpAndSettle();
+
       expect(find.text("Today's Paper Prices — Raipur"), findsOneWidget);
       expect(find.text('Chhattisgarh · Central'), findsOneWidget);
       expect(find.text('Add Custom Newspaper'), findsOneWidget);
@@ -50,6 +53,67 @@ void main() {
       expect(newspapers.created.single.kind, PriceRuleKind.exactDate);
       expect(newspapers.created.single.pricePaise, 725);
       expect(find.textContaining('Unfinalized previews'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'Multi-newspaper workspace shows all papers and bulk updates only changed prices',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(1000, 1800);
+      addTearDown(tester.view.reset);
+      final newspapers = _FakeNewspapers(catalog: [_paper, _paper2]);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            businessRepositoryProvider.overrideWithValue(_FakeBusiness()),
+            newspaperRepositoryProvider.overrideWithValue(newspapers),
+          ],
+          child: const MaterialApp(home: DailyPricingPage(user: _head)),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Daily Pricing'));
+      await tester.pumpAndSettle();
+
+      // Verify both newspapers appear
+      expect(find.text('Synthetic Daily'), findsOneWidget);
+      expect(find.text('Navbharat Times'), findsOneWidget);
+
+      // Verify price inputs exist for each paper
+      expect(
+        find.byKey(const ValueKey('price-input-paper-a')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('price-input-paper-b')),
+        findsOneWidget,
+      );
+
+      // Change only paper-b's price
+      await tester.enterText(
+        find.byKey(const ValueKey('price-input-paper-b')),
+        '8.00',
+      );
+
+      // Save all prices
+      await tester.tap(
+        find.byKey(const ValueKey('save-all-prices-button')),
+      );
+      await tester.pumpAndSettle();
+
+      // Only paper-b was changed and saved
+      expect(newspapers.bulkUpdates, hasLength(1));
+      expect(newspapers.bulkUpdates.single, hasLength(1));
+      expect(newspapers.bulkUpdates.single.single.newspaperId, 'paper-b');
+      expect(newspapers.bulkUpdates.single.single.pricePaise, 800);
+
+      // SnackBar confirms update count
+      expect(
+        find.textContaining('Daily price saved for 1 newspaper(s)'),
+        findsOneWidget,
+      );
     },
   );
 }
@@ -98,7 +162,11 @@ class _FakeBusiness implements BusinessRepository {
 }
 
 class _FakeNewspapers implements NewspaperRepository {
+  _FakeNewspapers({List<Newspaper>? catalog}) : catalog = catalog ?? const [_paper];
+
+  final List<Newspaper> catalog;
   final created = <PriceRuleInput>[];
+  final bulkUpdates = <List<DailyPriceUpdateItem>>[];
   var resolved = const ResolvedNewspaperPrice(
     pricePaise: 650,
     source: ResolvedPriceSource.defaultPrice,
@@ -106,8 +174,8 @@ class _FakeNewspapers implements NewspaperRepository {
 
   @override
   Future<NewspaperPage> fetchNewspapers(NewspaperListRequest request) async =>
-      const NewspaperPage(
-        newspapers: [_paper],
+      NewspaperPage(
+        newspapers: catalog,
         nextCursor: null,
         hasMore: false,
       );
@@ -117,7 +185,13 @@ class _FakeNewspapers implements NewspaperRepository {
     required String businessId,
     required String newspaperId,
     required LocalDate date,
-  }) async => resolved;
+  }) async {
+    final paper = catalog.firstWhere((p) => p.id == newspaperId, orElse: () => _paper);
+    return ResolvedNewspaperPrice(
+      pricePaise: paper.defaultPricePaise,
+      source: ResolvedPriceSource.defaultPrice,
+    );
+  }
 
   @override
   Future<String> createPriceRule({
@@ -141,6 +215,32 @@ class _FakeNewspapers implements NewspaperRepository {
     required String replacedRuleId,
     required PriceRuleInput replacement,
   }) => throw UnimplementedError();
+
+  @override
+  Future<BulkDailyPriceUpdateResult> updateDailyPrices({
+    required AppUser actor,
+    required LocalDate date,
+    required List<DailyPriceUpdateItem> updates,
+  }) async {
+    bulkUpdates.add(updates);
+    for (final update in updates) {
+      await createPriceRule(
+        actor: actor,
+        newspaperId: update.newspaperId,
+        input: PriceRuleInput(
+          kind: PriceRuleKind.exactDate,
+          startDate: date,
+          endDate: null,
+          pricePaise: update.pricePaise,
+          reason: update.reason,
+        ),
+      );
+    }
+    return BulkDailyPriceUpdateResult(
+      updatedCount: updates.length,
+      updatedNewspaperIds: updates.map((u) => u.newspaperId).toList(),
+    );
+  }
 
   @override
   Future<String> createNewspaper({
@@ -170,13 +270,40 @@ class _FakeNewspapers implements NewspaperRepository {
   Stream<Newspaper?> watchNewspaper({
     required String businessId,
     required String newspaperId,
-  }) => Stream.value(_paper);
+  }) {
+    final matches = catalog.where((n) => n.id == newspaperId);
+    return Stream.value(matches.isEmpty ? null : matches.first);
+  }
 
   @override
   Stream<List<NewspaperAuditEntry>> watchNewspaperHistory({
     required String businessId,
     required String newspaperId,
   }) => Stream.value(const []);
+
+  @override
+  Future<PricingImpactPreview> calculatePricingImpact({
+    required AppUser actor,
+    required String newspaperId,
+    required PriceRuleInput input,
+  }) async {
+    final paper = catalog.firstWhere((p) => p.id == newspaperId, orElse: () => _paper);
+    return PricingImpactPreview(
+      newspaperId: newspaperId,
+      newspaperName: paper.name,
+      currentPricePaise: paper.defaultPricePaise,
+      proposedPricePaise: input.pricePaise,
+      pricingBasis: input.pricingBasis,
+      startDate: input.startDate,
+      endDate: input.endDate ?? input.startDate,
+      affectedSubscriptionsCount: 12,
+      unfinalizedBillsCount: 10,
+      finalizedBillsCount: 2,
+      customerOverridesCount: 1,
+      pausedSubscriptionsCount: 1,
+      projectedAdditionalBillingPaise: 5000,
+    );
+  }
 }
 
 const _paper = Newspaper(
@@ -192,4 +319,19 @@ const _paper = Newspaper(
   createdBy: 'head-a',
   updatedBy: 'head-a',
   lastAuditId: 'audit-a',
+);
+
+const _paper2 = Newspaper(
+  id: 'paper-b',
+  businessId: 'business-a',
+  newspaperCode: 'N-PAPER-B',
+  name: 'Navbharat Times',
+  searchName: 'navbharat times',
+  edition: 'Raipur',
+  language: 'Hindi',
+  defaultPricePaise: 500,
+  status: NewspaperStatus.active,
+  createdBy: 'head-a',
+  updatedBy: 'head-a',
+  lastAuditId: 'audit-b',
 );

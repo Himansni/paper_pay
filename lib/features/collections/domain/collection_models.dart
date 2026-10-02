@@ -365,6 +365,16 @@ class CustomerOutstandingSummary {
   int get amountDuePaise => math.max(0, outstandingPaise);
   int get creditPaise => math.max(0, -outstandingPaise);
 
+  /// Total collectible amount across finalized outstanding bills.
+  int get collectiblePaise => bills.fold<int>(
+    0,
+    (sum, bill) => sum + math.max(0, bill.outstandingPaise),
+  );
+
+  /// Unbilled opening balance not yet included in any finalized monthly bill.
+  int get unbilledOpeningPaise =>
+      bills.isEmpty ? amountDuePaise : math.max(0, amountDuePaise - collectiblePaise);
+
   /// Posted balance due from finalized bills and opening balance.
   int get postedBalancePaise => amountDuePaise;
 

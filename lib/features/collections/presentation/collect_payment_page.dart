@@ -275,11 +275,9 @@ class _CollectPaymentFormState extends ConsumerState<_CollectPaymentForm> {
               key: const ValueKey('adjust-outstanding-action'),
               icon: const Icon(Icons.edit_document),
               tooltip: 'Adjust outstanding balance',
-              onPressed:
-                  () => _showAddOutstandingDialog(
-                    canIncrease: widget.canIncreaseOutstanding,
-                    canDecrease: canDecrease,
-                  ),
+              onPressed: () => context.push<void>(
+                '/customers/${Uri.encodeComponent(customer.id)}/adjust-outstanding',
+              ),
             ),
         ],
       ),
@@ -1149,13 +1147,18 @@ class _UpiRequestPanel extends StatelessWidget {
                     style: TextStyle(fontWeight: FontWeight.w800),
                   ),
                   const SizedBox(height: 12),
-                  Semantics(
-                    label: 'Amount-specific UPI payment QR code',
-                    child: QrImageView(
-                      key: const ValueKey('upi-payment-qr'),
-                      data: uri.toString(),
-                      size: 220,
-                    ),
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final qrSize = (constraints.maxWidth * 0.7).clamp(140.0, 220.0);
+                      return Semantics(
+                        label: 'Amount-specific UPI payment QR code',
+                        child: QrImageView(
+                          key: const ValueKey('upi-payment-qr'),
+                          data: uri.toString(),
+                          size: qrSize,
+                        ),
+                      );
+                    },
                   ),
                   const SizedBox(height: 10),
                   SelectableText(

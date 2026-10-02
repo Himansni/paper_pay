@@ -52,4 +52,16 @@ abstract interface class NewspaperRepository {
     required String newspaperId,
     required LocalDate date,
   });
+
+  Future<BulkDailyPriceUpdateResult> updateDailyPrices({
+    required AppUser actor,
+    required LocalDate date,
+    required List<DailyPriceUpdateItem> updates,
+  });
+
+  Future<PricingImpactPreview> calculatePricingImpact({
+    required AppUser actor,
+    required String newspaperId,
+    required PriceRuleInput input,
+  });
 }

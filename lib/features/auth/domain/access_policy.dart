@@ -9,6 +9,8 @@ abstract final class PermissionKey {
   static const allowDecreaseOutstanding = 'allowDecreaseOutstanding';
   static const recordDeliveryExceptions = 'recordDeliveryExceptions';
   static const arrangeDeliveryRoutes = 'arrangeDeliveryRoutes';
+  static const allowManualBilling = 'allowManualBilling';
+  static const allowGlobalPricing = 'allowGlobalPricing';
 }
 
 /// Mirrors important client-side visibility checks. Firestore Rules remain the
@@ -186,4 +188,26 @@ class AccessPolicy {
         customerAreaId: customerAreaId,
         isCustomerArchived: isCustomerArchived,
       );
+
+  bool canCreateManualBill({
+    required AppUser member,
+    required String customerBusinessId,
+    required String assignedEmployeeId,
+    required String customerAreaId,
+    required bool isCustomerArchived,
+  }) =>
+      !isCustomerArchived &&
+      canReadCustomer(
+        member: member,
+        customerBusinessId: customerBusinessId,
+        assignedEmployeeId: assignedEmployeeId,
+      ) &&
+      (member.isHead ||
+          (member.areaIds.contains(customerAreaId) &&
+              member.permissions.contains(PermissionKey.allowManualBilling)));
+
+  bool canManageGlobalPricing(AppUser member) =>
+      member.hasActiveAccess &&
+      (member.isHead ||
+          member.permissions.contains(PermissionKey.allowGlobalPricing));
 }

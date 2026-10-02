@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:paper_route/core/errors/app_exception.dart';
 import 'package:paper_route/core/presentation/async_state_cards.dart';
 import 'package:paper_route/features/areas/domain/delivery_area.dart';
 import 'package:paper_route/features/areas/presentation/area_providers.dart';
@@ -119,10 +120,29 @@ class _ReportsPageState extends ConsumerState<ReportsPage> {
         _hasMore = page.hasMore;
       });
     } on Object catch (error) {
-      if (mounted) setState(() => _error = error.toString());
+      if (mounted) setState(() => _error = _friendlyErrorMessage(error));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  String _friendlyErrorMessage(Object error) {
+    final str = error.toString();
+    if (str.contains('failed-precondition') ||
+        str.contains('FAILED_PRECONDITION') ||
+        str.contains('requires an index') ||
+        str.contains('console.firebase.google.com')) {
+      return 'Reports are temporarily unavailable. Please try again.';
+    }
+    if (error is AppException) {
+      if (error.code == 'failed-precondition' ||
+          error.message.contains('index') ||
+          error.message.contains('precondition')) {
+        return 'Reports are temporarily unavailable. Please try again.';
+      }
+      return error.message;
+    }
+    return str;
   }
 
   Future<void> _applyFilters() async {
@@ -159,7 +179,7 @@ class _ReportsPageState extends ConsumerState<ReportsPage> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(error.toString())));
+        ).showSnackBar(SnackBar(content: Text(_friendlyErrorMessage(error))));
       }
     }
   }
@@ -186,7 +206,7 @@ class _ReportsPageState extends ConsumerState<ReportsPage> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(error.toString())));
+        ).showSnackBar(SnackBar(content: Text(_friendlyErrorMessage(error))));
       }
     } finally {
       if (mounted) setState(() => _exporting = false);
@@ -330,13 +350,23 @@ class _ReportKindSelector extends StatelessWidget {
   @override
   Widget build(BuildContext context) => SingleChildScrollView(
     scrollDirection: Axis.horizontal,
-    child: SegmentedButton<ReportKind>(
-      segments: [
-        for (final kind in ReportKind.values)
-          ButtonSegment(value: kind, label: Text(kind.label)),
-      ],
-      selected: {value},
-      onSelectionChanged: (selection) => onChanged(selection.single),
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 2),
+      child: SegmentedButton<ReportKind>(
+        showSelectedIcon: false,
+        segments: [
+          for (final kind in ReportKind.values)
+            ButtonSegment(
+              value: kind,
+              label: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Text(kind.label),
+              ),
+            ),
+        ],
+        selected: {value},
+        onSelectionChanged: (selection) => onChanged(selection.single),
+      ),
     ),
   );
 }

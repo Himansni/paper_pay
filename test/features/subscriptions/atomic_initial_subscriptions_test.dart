@@ -2,7 +2,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:paper_route/core/domain/local_date.dart';
 import 'package:paper_route/core/errors/app_exception.dart';
 import 'package:paper_route/features/auth/domain/app_user.dart';
-import 'package:paper_route/features/newspapers/domain/newspaper.dart';
 import 'package:paper_route/features/subscriptions/domain/customer_subscription.dart';
 import 'package:paper_route/features/subscriptions/domain/subscription_repository.dart';
 

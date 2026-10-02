@@ -471,7 +471,10 @@ class _PrimaryMetrics extends StatelessWidget {
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
-      final columns = constraints.maxWidth >= 1000 ? 4 : 2;
+      final columns =
+          constraints.maxWidth >= 1000
+              ? 4
+              : (constraints.maxWidth < 340 ? 1 : 2);
       final width = (constraints.maxWidth - (columns - 1) * 12) / columns;
       return Wrap(
         spacing: 12,
@@ -525,7 +528,10 @@ class _QuickActions extends StatelessWidget {
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
-      final columns = constraints.maxWidth >= 900 ? 4 : 2;
+      final columns =
+          constraints.maxWidth >= 900
+              ? 4
+              : (constraints.maxWidth < 340 ? 1 : 2);
       final width = (constraints.maxWidth - (columns - 1) * 10) / columns;
       return Wrap(
         spacing: 10,
@@ -560,7 +566,7 @@ class _QuickActions extends StatelessWidget {
                         const SizedBox(height: 3),
                         Text(
                           action.description,
-                          maxLines: 2,
+                          maxLines: 3,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             color: Color(0xFF486581),
@@ -674,7 +680,14 @@ class _NamedMetricCard extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(vertical: 5),
                 child: Row(
                   children: [
-                    Expanded(child: Text(value.label)),
+                    Expanded(
+                      child: Text(
+                        value.label,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
                     Text(
                       BillingMoney.formatPaise(value.amountPaise),
                       style: const TextStyle(fontWeight: FontWeight.w700),

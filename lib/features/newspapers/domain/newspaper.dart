@@ -290,6 +290,19 @@ enum PriceRuleStatus {
       value == superseded.value ? superseded : active;
 }
 
+enum PricingBasis {
+  daily('daily', 'Daily'),
+  monthly('monthly', 'Monthly');
+
+  const PricingBasis(this.value, this.label);
+
+  final String value;
+  final String label;
+
+  static PricingBasis fromValue(Object? value) =>
+      value == monthly.value ? monthly : daily;
+}
+
 class NewspaperPriceRule {
   const NewspaperPriceRule({
     required this.id,
@@ -304,6 +317,7 @@ class NewspaperPriceRule {
     required this.supersededByRuleId,
     required this.revision,
     required this.reason,
+    this.pricingBasis = PricingBasis.daily,
     required this.createdBy,
     required this.updatedBy,
     required this.lastAuditId,
@@ -328,6 +342,7 @@ class NewspaperPriceRule {
         supersededByRuleId: data['supersededByRuleId'] as String? ?? '',
         revision: data['revision'] as int? ?? 1,
         reason: data['reason'] as String? ?? '',
+        pricingBasis: PricingBasis.fromValue(data['pricingBasis']),
         createdBy: data['createdBy'] as String? ?? '',
         updatedBy: data['updatedBy'] as String? ?? '',
         lastAuditId: data['lastAuditId'] as String? ?? '',
@@ -347,6 +362,7 @@ class NewspaperPriceRule {
   final String supersededByRuleId;
   final int revision;
   final String reason;
+  final PricingBasis pricingBasis;
   final String createdBy;
   final String updatedBy;
   final String lastAuditId;
@@ -366,6 +382,7 @@ class PriceRuleInput {
     required this.startDate,
     this.endDate,
     required this.pricePaise,
+    this.pricingBasis = PricingBasis.daily,
     this.reason = '',
   });
 
@@ -373,6 +390,7 @@ class PriceRuleInput {
   final LocalDate startDate;
   final LocalDate? endDate;
   final int pricePaise;
+  final PricingBasis pricingBasis;
   final String reason;
 
   PriceRuleInput normalized() => PriceRuleInput(
@@ -380,6 +398,7 @@ class PriceRuleInput {
     startDate: startDate,
     endDate: kind == PriceRuleKind.exactDate ? null : endDate,
     pricePaise: pricePaise,
+    pricingBasis: pricingBasis,
     reason: reason.trim(),
   );
 
@@ -401,6 +420,38 @@ class PriceRuleInput {
       );
     }
   }
+}
+
+class PricingImpactPreview {
+  const PricingImpactPreview({
+    required this.newspaperId,
+    required this.newspaperName,
+    required this.currentPricePaise,
+    required this.proposedPricePaise,
+    required this.pricingBasis,
+    required this.startDate,
+    required this.endDate,
+    required this.affectedSubscriptionsCount,
+    required this.unfinalizedBillsCount,
+    required this.finalizedBillsCount,
+    required this.customerOverridesCount,
+    required this.pausedSubscriptionsCount,
+    required this.projectedAdditionalBillingPaise,
+  });
+
+  final String newspaperId;
+  final String newspaperName;
+  final int currentPricePaise;
+  final int proposedPricePaise;
+  final PricingBasis pricingBasis;
+  final LocalDate startDate;
+  final LocalDate endDate;
+  final int affectedSubscriptionsCount;
+  final int unfinalizedBillsCount;
+  final int finalizedBillsCount;
+  final int customerOverridesCount;
+  final int pausedSubscriptionsCount;
+  final int projectedAdditionalBillingPaise;
 }
 
 class PriceRulePageCursor {
@@ -520,4 +571,26 @@ class NewspaperAuditEntry {
   final List<String> changedFields;
   final String priceRuleId;
   final String replacedPriceRuleId;
+}
+
+class DailyPriceUpdateItem {
+  const DailyPriceUpdateItem({
+    required this.newspaperId,
+    required this.pricePaise,
+    this.reason = '',
+  });
+
+  final String newspaperId;
+  final int pricePaise;
+  final String reason;
+}
+
+class BulkDailyPriceUpdateResult {
+  const BulkDailyPriceUpdateResult({
+    required this.updatedCount,
+    required this.updatedNewspaperIds,
+  });
+
+  final int updatedCount;
+  final List<String> updatedNewspaperIds;
 }

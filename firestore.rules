@@ -35,6 +35,18 @@ service cloud.firestore {
         && memberData(businessId).permissions.hasAny([name]);
     }
 
+    function canManageGlobalPricing(businessId) {
+      return subscriptionAllowsWrites(businessId)
+        && activeMember(businessId)
+        && (
+          head(businessId)
+          || (
+            memberData(businessId).role == 'employee'
+            && permission(businessId, 'allowGlobalPricing')
+          )
+        );
+    }
+
     function customerPath(businessId, customerId) {
       return /databases/$(database)/documents/businesses/$(businessId)/customers/$(customerId);
     }
@@ -637,6 +649,33 @@ service cloud.firestore {
             && customer.assignedEmployeeId == request.auth.uid
             && member.areaIds is list
             && member.areaIds.hasAny([customer.areaId])
+          )
+        );
+    }
+
+    function canCreateBillForCustomer(businessId, customerId) {
+      let cust = exists(customerPath(businessId, customerId))
+        ? get(customerPath(businessId, customerId)).data
+        : null;
+      let member = exists(memberPath(businessId, request.auth.uid))
+        ? get(memberPath(businessId, request.auth.uid)).data
+        : null;
+      return signedIn()
+        && member != null
+        && member.status == 'active'
+        && member.businessId == businessId
+        && cust != null
+        && cust.businessId == businessId
+        && cust.status == 'active'
+        && (
+          member.role == 'head'
+          || (
+            member.role == 'employee'
+            && member.permissions is list
+            && member.permissions.hasAny(['allowManualBilling'])
+            && cust.assignedEmployeeId == request.auth.uid
+            && member.areaIds is list
+            && member.areaIds.hasAny([cust.areaId])
           )
         );
     }
@@ -1503,8 +1542,7 @@ service cloud.firestore {
         customerId,
         state.lastMutationId
       )).data;
-      return head(businessId)
-        && state.lastMutationType == 'billFinalized'
+      return false; // Prevent client updates
         && !exists(billPath(businessId, customerId, state.lastMutationId))
         && bill.customerId == customerId
         && bill.billingMonth == state.lastMutationId
@@ -1543,10 +1581,7 @@ service cloud.firestore {
         && state.createdAt == resource.data.createdAt
         && state.revision == resource.data.revision + 1
         && (
-          (
-            state.lastMutationType == 'billFinalized'
-            && head(businessId)
-            && !exists(billPath(
+      return false; // Prevent client updates
               businessId,
               customerId,
               state.lastMutationId
@@ -1615,10 +1650,7 @@ service cloud.firestore {
     ) {
       let billPathValue = billPath(businessId, customerId, billingMonth);
       let bill = getAfter(billPathValue).data;
-      return head(businessId)
-        && !exists(billPathValue)
-        && bill.customerId == customerId
-        && bill.billingMonth == billingMonth
+      return false; // Prevent client creates
         && validBillBalanceAfter(
           businessId,
           customerId,
@@ -1975,11 +2007,12 @@ service cloud.firestore {
           'currentChargesPaise', 'adjustmentsPaise', 'totalDuePaise',
           'lineItemCount', 'newspaperSummaries', 'calculationVersion',
           'finalizedBy', 'createdBy', 'lastAuditId', 'finalizedAt',
-          'createdAt'
+          'createdAt', 'billingSource'
         ])
         && data.businessId == businessId
         && data.customerId == customerId
         && data.customerCode == customerId
+        && (!('billingSource' in data) || data.billingSource in ['generated', 'manual'])
         && data.customerName is string
         && data.customerName.size() >= 2
         && data.customerName.size() <= 100
@@ -2072,7 +2105,7 @@ service cloud.firestore {
         && data.quantity <= 50
         && data.totalPaise == data.unitPricePaise * data.quantity
         && data.priceSource in [
-          'customerSpecific', 'exactDate', 'effectivePeriod', 'defaultPrice'
+          'customerSpecific', 'exactDate', 'effectivePeriod', 'defaultPrice', 'manual'
         ]
         && data.priceSourceId is string
         && data.priceSourceId.size() > 0
@@ -2572,13 +2605,14 @@ service cloud.firestore {
       return data.keys().hasOnly([
           'businessId', 'newspaperId', 'priceRuleId', 'kind', 'startDate',
           'endDate', 'pricePaise', 'status', 'supersedesRuleId',
-          'supersededByRuleId', 'revision', 'reason', 'createdBy',
+          'supersededByRuleId', 'revision', 'reason', 'pricingBasis', 'createdBy',
           'updatedBy', 'lastAuditId', 'createdAt', 'updatedAt'
         ])
         && data.businessId == businessId
         && data.newspaperId == newspaperId
         && data.priceRuleId == ruleId
         && data.kind in ['exactDate', 'period']
+        && (!('pricingBasis' in data) || data.pricingBasis in ['daily', 'monthly'])
         && validDate(data.startDate)
         && (
           (data.kind == 'exactDate' && data.endDate == null)
@@ -3677,8 +3711,7 @@ service cloud.firestore {
 
         match /bills/{billId} {
           allow read: if canReadCustomer(businessId, customerId);
-          allow create: if subscriptionAllowsWrites(businessId)
-            && head(businessId)
+          allow create: if false;
             && get(customerPath(businessId, customerId)).data.status == 'active'
             && validBillShape(
               businessId,
@@ -3705,8 +3738,7 @@ service cloud.firestore {
 
           match /lineItems/{lineItemId} {
             allow read: if canReadCustomer(businessId, customerId);
-            allow create: if subscriptionAllowsWrites(businessId)
-              && head(businessId)
+            allow create: if false;
               && validBillLineShape(
                 businessId,
                 customerId,
@@ -3719,9 +3751,8 @@ service cloud.firestore {
         }
 
         match /billingControls/{billingMonth} {
-          allow read: if head(businessId);
-          allow create: if subscriptionAllowsWrites(businessId)
-            && head(businessId)
+          allow read: if head(businessId) || canCreateBillForCustomer(businessId, customerId);
+          allow create: if false;
             && validBillingControlShape(
               businessId,
               customerId,
@@ -3747,8 +3778,7 @@ service cloud.firestore {
                 )).data.action == 'billingAdjustmentCreated'
               )
             );
-          allow update: if subscriptionAllowsWrites(businessId)
-            && head(businessId)
+          allow update: if false;
             && validBillingControlShape(
               businessId,
               customerId,
@@ -3937,26 +3967,25 @@ service cloud.firestore {
             'newspaperCreated'
           );
         allow update: if subscriptionAllowsWrites(businessId)
-          && head(businessId)
           && validNewspaperShape(
             businessId,
             newspaperId,
             request.resource.data
           )
           && (
-            validNewspaperProfileUpdate(businessId, newspaperId)
-            || validNewspaperStatusUpdate(businessId, newspaperId)
-            || validNewspaperPriceLockUpdate(businessId, newspaperId)
+            (head(businessId) && (
+              validNewspaperProfileUpdate(businessId, newspaperId)
+              || validNewspaperStatusUpdate(businessId, newspaperId)
+            ))
+            || (canManageGlobalPricing(businessId) && validNewspaperPriceLockUpdate(businessId, newspaperId))
           );
         allow delete: if false;
 
         match /priceRules/{ruleId} {
           allow read: if activeMember(businessId);
-          allow create: if subscriptionAllowsWrites(businessId)
-            && head(businessId)
+          allow create: if canManageGlobalPricing(businessId)
             && validPriceRuleCreate(businessId, newspaperId, ruleId);
-          allow update: if subscriptionAllowsWrites(businessId)
-            && head(businessId)
+          allow update: if canManageGlobalPricing(businessId)
             && validPriceRuleShape(
               businessId,
               newspaperId,
@@ -4024,7 +4053,16 @@ service cloud.firestore {
                 )
                 || (
                   phase5AuditAction(request.resource.data.action)
-                  && head(businessId)
+                  && (
+                    head(businessId)
+                    || (
+                      request.resource.data.action == 'billFinalized'
+                      && canCreateBillForCustomer(
+                        businessId,
+                        request.resource.data.customerId
+                      )
+                    )
+                  )
                   && phase5AuditReferencedAfter(
                     businessId, auditId, request.resource.data
                   )

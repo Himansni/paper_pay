@@ -1,5 +1,6 @@
 import 'package:paper_route/core/domain/local_date.dart';
 import 'package:paper_route/core/errors/app_exception.dart';
+import 'package:paper_route/features/newspapers/domain/newspaper.dart';
 
 const phase5CalculationVersion = 'paper-route-monthly-v1';
 const maximumAtomicBillLineItems = 475;
@@ -43,11 +44,84 @@ LocalDate billingMonthFromKey(String value) {
   return LocalDate.parse('$value-01');
 }
 
+/// Safely decodes a billingMonth value from Firestore.
+///
+/// Canonical representation is "YYYY-MM" (e.g. "2026-09").
+/// Also supports known legacy integer representation (e.g. 202609) by
+/// converting to canonical "YYYY-MM".
+/// Malformed or ambiguous values produce a safe [AppException].
+String parseBillingMonthFromFirestore(Object? raw, {String fallbackId = ''}) {
+  if (raw == null) {
+    if (fallbackId.isNotEmpty &&
+        RegExp(r'^\d{4}-(0[1-9]|1[0-2])$').hasMatch(fallbackId.trim())) {
+      return fallbackId.trim();
+    }
+    if (fallbackId.isNotEmpty) {
+      throw AppException(
+        'Invalid fallback billingMonth: "$fallbackId"',
+        code: 'invalid-billing-month',
+      );
+    }
+    throw const AppException(
+      'Missing billingMonth in billing document.',
+      code: 'invalid-billing-month',
+    );
+  }
+  if (raw is String) {
+    final trimmed = raw.trim();
+    if (RegExp(r'^\d{4}-(0[1-9]|1[0-2])$').hasMatch(trimmed)) {
+      return trimmed;
+    }
+    // Handle known legacy representation formatted as 6-digit string: e.g. "202609"
+    if (RegExp(r'^\d{6}$').hasMatch(trimmed)) {
+      final y = trimmed.substring(0, 4);
+      final m = trimmed.substring(4, 6);
+      final monthNum = int.tryParse(m);
+      if (monthNum != null && monthNum >= 1 && monthNum <= 12) {
+        return '$y-$m';
+      }
+    }
+    throw AppException(
+      'Invalid billingMonth string format: "$raw"',
+      code: 'invalid-billing-month',
+    );
+  }
+  if (raw is int) {
+    // Known legacy representation: e.g. 202609
+    final str = raw.toString();
+    if (str.length == 6) {
+      final y = str.substring(0, 4);
+      final m = str.substring(4, 6);
+      final monthNum = int.tryParse(m);
+      if (monthNum != null && monthNum >= 1 && monthNum <= 12) {
+        return '$y-$m';
+      }
+    }
+    throw AppException(
+      'Unsupported integer billingMonth representation: $raw',
+      code: 'invalid-billing-month',
+    );
+  }
+  throw AppException(
+    'Unexpected type for billingMonth: ${raw.runtimeType}',
+    code: 'invalid-billing-month',
+  );
+}
+
+/// Safely decodes calculationVersion from Firestore, accepting both string and int representations.
+String parseCalculationVersionFromFirestore(Object? raw) {
+  if (raw == null) return '';
+  if (raw is String) return raw;
+  if (raw is num) return raw.toString();
+  return raw.toString();
+}
+
 enum BillPriceSource {
   customerSpecific('customerSpecific', 'Customer-specific'),
   exactDate('exactDate', 'Exact-date rule'),
   effectivePeriod('effectivePeriod', 'Effective-period rule'),
-  defaultPrice('defaultPrice', 'Newspaper default');
+  defaultPrice('defaultPrice', 'Newspaper default'),
+  manual('manual', 'Manual entry');
 
   const BillPriceSource(this.value, this.label);
 
@@ -126,6 +200,7 @@ class BillingPriceRuleSnapshot {
     required this.pricePaise,
     required this.isExactDate,
     required this.revision,
+    this.pricingBasis = PricingBasis.daily,
   });
 
   final String ruleId;
@@ -134,6 +209,7 @@ class BillingPriceRuleSnapshot {
   final int pricePaise;
   final bool isExactDate;
   final int revision;
+  final PricingBasis pricingBasis;
 
   bool includes(LocalDate date) =>
       !date.isBefore(startDate) && !date.isAfter(endDate);
@@ -167,10 +243,13 @@ class BillingAdjustment {
   factory BillingAdjustment.fromMap(String id, Map<String, Object?> data) =>
       BillingAdjustment(
         id: id,
-        billingMonth: data['billingMonth'] as String? ?? '',
-        amountPaise: data['amountPaise'] as int? ?? 0,
+        billingMonth: parseBillingMonthFromFirestore(data['billingMonth']),
+        amountPaise: (data['amountPaise'] as num?)?.toInt() ?? 0,
         reason: data['reason'] as String? ?? '',
-        referenceBillMonth: data['referenceBillMonth'] as String? ?? '',
+        referenceBillMonth: data['referenceBillMonth'] != null &&
+                data['referenceBillMonth'].toString().isNotEmpty
+            ? parseBillingMonthFromFirestore(data['referenceBillMonth'])
+            : '',
         createdBy: data['createdBy'] as String? ?? '',
         createdAt: data['createdAt'] as DateTime?,
       );
@@ -251,11 +330,11 @@ class MonthlyBillLineItem {
         versionId: data['versionId'] as String? ?? '',
         newspaperId: data['newspaperId'] as String? ?? '',
         newspaperName: data['newspaperName'] as String? ?? '',
-        unitPricePaise: data['unitPricePaise'] as int? ?? 0,
-        quantity: data['quantity'] as int? ?? 0,
+        unitPricePaise: (data['unitPricePaise'] as num?)?.toInt() ?? 0,
+        quantity: (data['quantity'] as num?)?.toInt() ?? 0,
         priceSource: BillPriceSource.fromValue(data['priceSource']),
         priceSourceId: data['priceSourceId'] as String? ?? '',
-        priceRuleRevision: data['priceRuleRevision'] as int? ?? 0,
+        priceRuleRevision: (data['priceRuleRevision'] as num?)?.toInt() ?? 0,
       );
 
   final String chargeKey;
@@ -285,8 +364,10 @@ class BillNewspaperSummary {
       BillNewspaperSummary(
         newspaperId: data['newspaperId'] as String? ?? '',
         newspaperName: data['newspaperName'] as String? ?? '',
-        deliveryCount: data['deliveryCount'] as int? ?? 0,
-        subtotalPaise: data['subtotalPaise'] as int? ?? 0,
+        deliveryCount: (data['deliveryCount'] as num?)?.toInt() ?? 0,
+        subtotalPaise: (data['subtotalPaise'] as num?)?.toInt() ??
+            (data['totalPaise'] as num?)?.toInt() ??
+            0,
       );
 
   final String newspaperId;
@@ -327,6 +408,7 @@ class MonthlyBillPreview {
     this.areaId = '',
     this.assignedEmployeeId = '',
     this.customerStatus = 'active',
+    this.billingSource = 'generated',
   });
 
   final String businessId;
@@ -345,6 +427,7 @@ class MonthlyBillPreview {
   final String areaId;
   final String assignedEmployeeId;
   final String customerStatus;
+  final String billingSource;
 
   bool get canFinalize => issues.isEmpty && alreadyFinalizedBill == null;
   int get currentChargesPaise =>
@@ -418,6 +501,7 @@ class FinalizedMonthlyBill {
     this.areaId = '',
     this.assignedEmployeeId = '',
     this.customerStatus = 'active',
+    this.billingSource = 'generated',
     this.finalizedAt,
   });
 
@@ -429,15 +513,21 @@ class FinalizedMonthlyBill {
         customerCode: data['customerCode'] as String? ?? '',
         customerName: data['customerName'] as String? ?? '',
         customerAddress: data['customerAddress'] as String? ?? '',
-        billingMonth: data['billingMonth'] as String? ?? id,
-        openingBalancePaise: data['openingBalancePaise'] as int? ?? 0,
-        previousBillId: data['previousBillId'] as String? ?? '',
-        previousOutstandingPaise: data['previousOutstandingPaise'] as int? ?? 0,
-        priorBalancePaise: data['priorBalancePaise'] as int? ?? 0,
-        currentChargesPaise: data['currentChargesPaise'] as int? ?? 0,
-        adjustmentsPaise: data['adjustmentsPaise'] as int? ?? 0,
-        totalDuePaise: data['totalDuePaise'] as int? ?? 0,
-        lineItemCount: data['lineItemCount'] as int? ?? 0,
+        billingMonth: parseBillingMonthFromFirestore(
+          data['billingMonth'],
+          fallbackId: id,
+        ),
+        openingBalancePaise:
+            (data['openingBalancePaise'] as num?)?.toInt() ?? 0,
+        previousBillId: data['previousBillId']?.toString() ?? '',
+        previousOutstandingPaise:
+            (data['previousOutstandingPaise'] as num?)?.toInt() ?? 0,
+        priorBalancePaise: (data['priorBalancePaise'] as num?)?.toInt() ?? 0,
+        currentChargesPaise:
+            (data['currentChargesPaise'] as num?)?.toInt() ?? 0,
+        adjustmentsPaise: (data['adjustmentsPaise'] as num?)?.toInt() ?? 0,
+        totalDuePaise: (data['totalDuePaise'] as num?)?.toInt() ?? 0,
+        lineItemCount: (data['lineItemCount'] as num?)?.toInt() ?? 0,
         newspaperSummaries:
             data['newspaperSummaries'] is List
                 ? (data['newspaperSummaries'] as List)
@@ -449,12 +539,15 @@ class FinalizedMonthlyBill {
                     )
                     .toList()
                 : const [],
-        calculationVersion: data['calculationVersion'] as String? ?? '',
+        calculationVersion: parseCalculationVersionFromFirestore(
+          data['calculationVersion'],
+        ),
         finalizedBy: data['finalizedBy'] as String? ?? '',
         lastAuditId: data['lastAuditId'] as String? ?? '',
         areaId: data['areaId'] as String? ?? '',
         assignedEmployeeId: data['assignedEmployeeId'] as String? ?? '',
         customerStatus: data['customerStatus'] as String? ?? 'active',
+        billingSource: data['billingSource'] as String? ?? 'generated',
         finalizedAt: data['finalizedAt'] as DateTime?,
       );
 
@@ -480,6 +573,7 @@ class FinalizedMonthlyBill {
   final String areaId;
   final String assignedEmployeeId;
   final String customerStatus;
+  final String billingSource;
   final DateTime? finalizedAt;
 }
 
@@ -581,6 +675,67 @@ class MonthlyBillPlanner {
           code: 'missing-price',
         );
       }
+      final monthlyRules = paper.rules
+          .where(
+            (rule) =>
+                !rule.isExactDate &&
+                rule.pricingBasis == PricingBasis.monthly &&
+                !rule.startDate.isAfter(
+                  LocalDate(month.year, month.month, month.daysInMonth),
+                ) &&
+                !rule.endDate.isBefore(LocalDate(month.year, month.month, 1)),
+          )
+          .toList();
+      if (monthlyRules.isNotEmpty) {
+        final monthlyRule = monthlyRules.single;
+        final activeDates = <LocalDate>[];
+        for (var day = 1; day <= month.daysInMonth; day++) {
+          final date = LocalDate(month.year, month.month, day);
+          if (!term.includes(date)) continue;
+          if (pauses.any(
+            (p) => p.subscriptionId == term.subscriptionId && p.includes(date),
+          )) {
+            continue;
+          }
+          if (noDelivery.contains('${term.subscriptionId}:$date')) continue;
+          activeDates.add(date);
+        }
+        if (activeDates.isNotEmpty) {
+          final key =
+              '$customerId:${term.subscriptionId}:${month.year}-${month.month.toString().padLeft(2, '0')}';
+          if (!seen.add(key)) {
+            throw AppException(
+              'Overlapping subscription versions would duplicate $month for ${paper.name}.',
+              code: 'ambiguous-subscription-terms',
+            );
+          }
+          final hasCustomerOverride = term.customPricePaise != null;
+          lines.add(
+            MonthlyBillLineItem(
+              chargeKey: key,
+              serviceDate: activeDates.first,
+              subscriptionId: term.subscriptionId,
+              versionId: term.versionId,
+              newspaperId: term.newspaperId,
+              newspaperName: paper.name,
+              unitPricePaise: hasCustomerOverride
+                  ? term.customPricePaise!
+                  : monthlyRule.pricePaise,
+              quantity: term.quantity,
+              priceSource: hasCustomerOverride
+                  ? BillPriceSource.customerSpecific
+                  : BillPriceSource.effectivePeriod,
+              priceSourceId: hasCustomerOverride
+                  ? term.subscriptionId
+                  : monthlyRule.ruleId,
+              priceRuleRevision:
+                  hasCustomerOverride ? 0 : monthlyRule.revision,
+            ),
+          );
+        }
+        continue;
+      }
+
       for (var day = 1; day <= month.daysInMonth; day++) {
         final date = LocalDate(month.year, month.month, day);
         if (!term.includes(date)) continue;
@@ -735,4 +890,47 @@ class MonthlyBillPlanner {
       );
     }
   }
+}
+
+enum ManualBillCalculationMode {
+  monthWise('Month wise'),
+  dayWise('Day wise'),
+  dateWise('Date wise');
+
+  const ManualBillCalculationMode(this.label);
+  final String label;
+}
+
+class ManualDailyEntry {
+  const ManualDailyEntry({
+    required this.date,
+    required this.unitPricePaise,
+    this.isPaused = false,
+  });
+
+  final LocalDate date;
+  final int unitPricePaise;
+  final bool isPaused;
+}
+
+class ManualBillInput {
+  const ManualBillInput({
+    required this.customerId,
+    required this.subscriptionId,
+    required this.month,
+    required this.mode,
+    this.monthWiseAmountPaise,
+    this.dailyEntries = const [],
+    this.deliveryChargePaise = 0,
+    this.discountPaise = 0,
+  });
+
+  final String customerId;
+  final String subscriptionId;
+  final LocalDate month;
+  final ManualBillCalculationMode mode;
+  final int? monthWiseAmountPaise;
+  final List<ManualDailyEntry> dailyEntries;
+  final int deliveryChargePaise;
+  final int discountPaise;
 }

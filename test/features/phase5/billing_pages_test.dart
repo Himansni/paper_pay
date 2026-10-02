@@ -302,6 +302,21 @@ class _FakeBillingRepository implements BillingRepository {
   }) async => preview;
 
   @override
+  Future<MonthlyBillPreview> previewManualBill({
+    required AppUser actor,
+    required ManualBillInput input,
+  }) async => preview;
+
+  @override
+  Future<FinalizedMonthlyBill> finalizeManualBill({
+    required AppUser actor,
+    required ManualBillInput input,
+  }) async {
+    finalizeCalls++;
+    return bill ?? _bill();
+  }
+
+  @override
   Stream<List<BillingAdjustment>> watchAdjustments({
     required String businessId,
     required String customerId,
@@ -314,4 +329,39 @@ class _FakeBillingRepository implements BillingRepository {
     required String customerId,
     required String billingMonth,
   }) => Stream.value(bill);
+
+  @override
+  Future<BulkMonthEndBillSummary> previewBulkMonthEndBills({
+    required AppUser actor,
+    required String publicationId,
+    required LocalDate month,
+  }) async =>
+      BulkMonthEndBillSummary(
+        publicationId: publicationId,
+        publicationName: 'Test Paper',
+        month: month,
+        eligibleSubscribersCount: 0,
+        alreadyFinalizedCount: 0,
+        readyToBillCount: 0,
+        missingPricingCount: 0,
+        pausedNoChargeCount: 0,
+        subscribers: [],
+      );
+
+  @override
+  Stream<BulkMonthEndProgress> generateBulkMonthEndBills({
+    required AppUser actor,
+    required String publicationId,
+    required LocalDate month,
+  }) =>
+      Stream.value(
+        const BulkMonthEndProgress(
+          totalCount: 0,
+          completedCount: 0,
+          alreadyFinalizedCount: 0,
+          failedCount: 0,
+          currentCustomerName: '',
+          isDone: true,
+        ),
+      );
 }

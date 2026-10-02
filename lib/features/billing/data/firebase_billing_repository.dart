@@ -1,12 +1,15 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:paper_route/core/domain/local_date.dart';
 import 'package:paper_route/core/errors/app_exception.dart';
+import 'package:paper_route/features/auth/domain/access_policy.dart';
 import 'package:paper_route/features/auth/domain/app_user.dart';
 import 'package:paper_route/features/billing/domain/billing_repository.dart';
 import 'package:paper_route/features/billing/domain/monthly_bill.dart';
 import 'package:paper_route/features/collections/domain/collection_balance_engine.dart';
 import 'package:paper_route/features/customers/data/firebase_customer_repository.dart';
 import 'package:paper_route/features/customers/domain/customer.dart';
+import 'package:paper_route/features/newspapers/domain/newspaper.dart';
 import 'package:uuid/uuid.dart';
 
 class FirebaseBillingRepository implements BillingRepository {
@@ -172,6 +175,30 @@ class FirebaseBillingRepository implements BillingRepository {
       customerId: customerId,
       month: month,
     );
+    return _commitBillTransaction(actor, prepared);
+  }
+
+  @override
+  Future<MonthlyBillPreview> previewManualBill({
+    required AppUser actor,
+    required ManualBillInput input,
+  }) async {
+    return (await _prepareManual(actor: actor, input: input)).preview;
+  }
+
+  @override
+  Future<FinalizedMonthlyBill> finalizeManualBill({
+    required AppUser actor,
+    required ManualBillInput input,
+  }) async {
+    final prepared = await _prepareManual(actor: actor, input: input);
+    return _commitBillTransaction(actor, prepared);
+  }
+
+  Future<FinalizedMonthlyBill> _commitBillTransaction(
+    AppUser actor,
+    _PreparedBillingPreview prepared,
+  ) async {
     final preview = prepared.preview;
     final existing = preview.alreadyFinalizedBill;
     if (existing != null) return existing;
@@ -182,235 +209,38 @@ class FirebaseBillingRepository implements BillingRepository {
       );
     }
 
-    final businessId = _headBusinessId(actor);
-    final monthKey = billingMonthKey(month);
+    final businessId = preview.businessId;
+    final customerId = preview.customerId;
+    final monthKey = preview.billingMonth;
     final billRef = _bill(businessId, customerId, monthKey);
-    final controlRef = _control(businessId, customerId, monthKey);
-    final collectionStateRef = _collectionState(businessId, customerId);
-    final billBalanceRef = _billBalance(businessId, customerId, monthKey);
-    final auditRef = _audits(businessId).doc();
 
     try {
-      return await _firestore.runTransaction((transaction) async {
-        final currentBill = await transaction.get(billRef);
-        if (currentBill.exists) return _billFromSnapshot(currentBill);
-
-        final currentControl = await transaction.get(controlRef);
-        final controlData = currentControl.data();
-        final currentRevision = controlData?['adjustmentRevision'] as int? ?? 0;
-        if (currentRevision != prepared.adjustmentRevision ||
-            (controlData?['status'] != null &&
-                controlData?['status'] != 'open')) {
-          throw const AppException(
-            'Billing adjustments changed. Review the refreshed preview before finalizing.',
-            code: 'billing-source-changed',
-          );
-        }
-        for (final lock in prepared.locks) {
-          final snapshot = await transaction.get(lock.reference);
-          if (!lock.matches(snapshot)) {
-            throw const AppException(
-              'Customer, subscription, or pricing data changed. Review a new preview.',
-              code: 'billing-source-changed',
-            );
-          }
-        }
-        final currentCollectionState = await transaction.get(
-          collectionStateRef,
-        );
-        if (currentCollectionState.exists != prepared.collectionStateExists ||
-            (currentCollectionState.data()?['revision'] as int? ?? 0) !=
-                prepared.collectionStateRevision) {
-          throw const AppException(
-            'The customer outstanding balance changed. Review a new preview.',
-            code: 'billing-source-changed',
-          );
-        }
-
-        final now = FieldValue.serverTimestamp();
-        transaction.set(billRef, {
-          'businessId': businessId,
-          'customerId': customerId,
-          'customerCode': preview.customerCode,
-          'customerName': preview.customerName,
-          'customerSearchName': CustomerSearchIndex.normalizeText(
-            preview.customerName,
-          ),
-          'customerAddress': preview.customerAddress,
-          'areaId': preview.areaId,
-          'assignedEmployeeId': preview.assignedEmployeeId,
-          'customerStatus': preview.customerStatus,
-          'billingMonth': monthKey,
-          'status': 'finalized',
-          'openingBalancePaise': preview.openingBalancePaise,
-          'previousBillId': preview.previousBillId,
-          'previousOutstandingPaise': preview.previousOutstandingPaise,
-          'priorBalancePaise': preview.priorBalancePaise,
-          'currentChargesPaise': preview.currentChargesPaise,
-          'adjustmentsPaise': preview.adjustmentsPaise,
-          'totalDuePaise': preview.totalDuePaise,
-          'lineItemCount': preview.lineItems.length,
-          'newspaperSummaries': [
-            for (final summary in preview.newspaperSummaries) summary.toMap(),
-          ],
-          'calculationVersion': phase5CalculationVersion,
-          'finalizedBy': actor.uid,
-          'createdBy': actor.uid,
-          'lastAuditId': auditRef.id,
-          'finalizedAt': now,
-          'createdAt': now,
-        });
-        for (final line in preview.lineItems) {
-          transaction.set(billRef.collection('lineItems').doc(line.chargeKey), {
-            'businessId': businessId,
-            'customerId': customerId,
-            'billId': monthKey,
-            'billingMonth': monthKey,
-            'chargeKey': line.chargeKey,
-            'serviceDate': line.serviceDate.toString(),
-            'subscriptionId': line.subscriptionId,
-            'versionId': line.versionId,
-            'newspaperId': line.newspaperId,
-            'newspaperName': line.newspaperName,
-            'unitPricePaise': line.unitPricePaise,
-            'quantity': line.quantity,
-            'totalPaise': line.totalPaise,
-            'priceSource': line.priceSource.value,
-            'priceSourceId': line.priceSourceId,
-            'priceRuleRevision': line.priceRuleRevision,
-            'lastAuditId': auditRef.id,
-            'createdAt': now,
-          });
-        }
-        final control = {
-          'businessId': businessId,
-          'customerId': customerId,
-          'billingMonth': monthKey,
-          'status': 'finalized',
-          'adjustmentRevision': currentRevision,
-          'finalizedBillId': monthKey,
-          'updatedBy': actor.uid,
-          'lastAuditId': auditRef.id,
-          'updatedAt': now,
-        };
-        if (currentControl.exists) {
-          transaction.update(controlRef, control);
-        } else {
-          transaction.set(controlRef, {...control, 'createdAt': now});
-        }
-        final componentAmountPaise =
-            prepared.collectionStateExists
-                ? preview.currentChargesPaise + preview.adjustmentsPaise
-                : preview.totalDuePaise;
-        final componentOutstandingPaise =
-            componentAmountPaise > 0 ? componentAmountPaise : 0;
-        transaction.set(billBalanceRef, {
-          'businessId': businessId,
-          'customerId': customerId,
-          'billId': monthKey,
-          'billingMonth': monthKey,
-          'sourceAmountPaise': componentAmountPaise,
-          'allocatedPaise': 0,
-          'reversedPaise': 0,
-          'outstandingPaise': componentOutstandingPaise,
-          'status':
-              componentAmountPaise > 0
-                  ? 'outstanding'
-                  : componentAmountPaise < 0
-                  ? 'credit'
-                  : 'settled',
-          'revision': 0,
-          'lastMutationType': 'billFinalized',
-          'lastMutationId': monthKey,
-          'createdAt': now,
-          'updatedAt': now,
-        });
-        final nextCollectionState = {
-          'businessId': businessId,
-          'customerId': customerId,
-          'stateId': 'current',
-          'customerCode': preview.customerCode,
-          'customerName': preview.customerName,
-          'areaId': preview.areaId,
-          'assignedEmployeeId': preview.assignedEmployeeId,
-          'customerStatus': preview.customerStatus,
-          'outstandingPaise': preview.totalDuePaise,
-          'confirmedPaise': prepared.collectionConfirmedPaise,
-          'reversedPaise': prepared.collectionReversedPaise,
-          'reportingStatus': collectionReportingStatus(
-            outstandingPaise: preview.totalDuePaise,
-            confirmedPaise: prepared.collectionConfirmedPaise,
-            reversedPaise: prepared.collectionReversedPaise,
-          ),
-          'oldestOutstandingMonth':
-              preview.totalDuePaise <= 0
-                  ? ''
-                  : prepared.collectionOutstandingPaise > 0
-                  ? prepared.collectionOldestOutstandingMonth
-                  : monthKey,
-          'revision': prepared.collectionStateRevision + 1,
-          'lastMutationType': 'billFinalized',
-          'lastMutationId': monthKey,
-          'updatedBy': actor.uid,
-          'updatedAt': now,
-        };
-        if (currentCollectionState.exists) {
-          transaction.update(collectionStateRef, nextCollectionState);
-        } else {
-          transaction.set(collectionStateRef, {
-            ...nextCollectionState,
-            'createdAt': now,
-          });
-        }
-        transaction.set(auditRef, {
-          'businessId': businessId,
-          'actorId': actor.uid,
-          'action': 'billFinalized',
-          'entityType': 'bill',
-          'entityId': '$customerId:$monthKey',
-          'customerId': customerId,
-          'billingMonth': monthKey,
-          'lineItemCount': preview.lineItems.length,
-          'currentChargesPaise': preview.currentChargesPaise,
-          'priorBalancePaise': preview.priorBalancePaise,
-          'adjustmentsPaise': preview.adjustmentsPaise,
-          'totalDuePaise': preview.totalDuePaise,
-          'controlRevision': currentRevision,
-          'createdAt': now,
-        });
-        return FinalizedMonthlyBill(
-          id: monthKey,
-          businessId: businessId,
-          customerId: customerId,
-          customerCode: preview.customerCode,
-          customerName: preview.customerName,
-          customerAddress: preview.customerAddress,
-          areaId: preview.areaId,
-          assignedEmployeeId: preview.assignedEmployeeId,
-          billingMonth: monthKey,
-          openingBalancePaise: preview.openingBalancePaise,
-          previousBillId: preview.previousBillId,
-          previousOutstandingPaise: preview.previousOutstandingPaise,
-          priorBalancePaise: preview.priorBalancePaise,
-          currentChargesPaise: preview.currentChargesPaise,
-          adjustmentsPaise: preview.adjustmentsPaise,
-          totalDuePaise: preview.totalDuePaise,
-          lineItemCount: preview.lineItems.length,
-          newspaperSummaries: preview.newspaperSummaries,
-          calculationVersion: phase5CalculationVersion,
-          finalizedBy: actor.uid,
-          lastAuditId: auditRef.id,
-        );
+      final callable = FirebaseFunctions.instance.httpsCallable('finalizeMonthlyBill');
+      await callable.call({
+        'businessId': businessId,
+        'customerId': customerId,
+        'billingMonth': monthKey,
+        'adjustmentRevision': prepared.adjustmentRevision,
+        'collectionStateRevision': prepared.collectionStateRevision,
+        'clientTotalDuePaise': preview.totalDuePaise,
+        'billingSource': preview.billingSource,
+        if (preview.billingSource == 'manual') 'manualPreview': preview.toMap(),
       });
-    } on AppException {
-      rethrow;
-    } on FirebaseException catch (error) {
+      final snapshot = await billRef.get();
+      if (!snapshot.exists) throw AppException('Bill not found after finalization.');
+      return _billFromSnapshot(snapshot);
+    } on FirebaseFunctionsException catch (error) {
       if (error.code == 'permission-denied') {
         final committed = await billRef.get();
         if (committed.exists) return _billFromSnapshot(committed);
       }
       throw _translate(error, 'Could not finalize this bill.');
+    } catch (error) {
+      throw AppException('Failed to finalize bill: $error');
     }
+  }
+
+
   }
 
   @override
@@ -829,6 +659,7 @@ class FirebaseBillingRepository implements BillingRepository {
               pricePaise: rule['pricePaise'] as int? ?? -1,
               isExactDate: exact,
               revision: rule['revision'] as int? ?? 0,
+              pricingBasis: PricingBasis.fromValue(rule['pricingBasis']),
             ),
           );
         }
@@ -1073,6 +904,337 @@ class FirebaseBillingRepository implements BillingRepository {
     }
   }
 
+  Future<_PreparedBillingPreview> _prepareManual({
+    required AppUser actor,
+    required ManualBillInput input,
+  }) async {
+    final businessId = _activeBusinessId(actor);
+    final monthKey = billingMonthKey(input.month);
+    final customerRef = _customer(businessId, input.customerId);
+
+    try {
+      final customerSnapshot = await customerRef.get();
+      final rawCustomer = customerSnapshot.data();
+      if (rawCustomer == null || rawCustomer['businessId'] != businessId) {
+        throw const AppException('The customer no longer exists.');
+      }
+      final customer = Customer.fromMap(
+        customerSnapshot.id,
+        _withDartDates(rawCustomer),
+      );
+
+      if (!const AccessPolicy().canCreateManualBill(
+        member: actor,
+        customerBusinessId: customer.businessId,
+        assignedEmployeeId: customer.assignedEmployeeId,
+        customerAreaId: customer.areaId,
+        isCustomerArchived: customer.isArchived,
+      )) {
+        throw const AppException(
+          'You do not have permission to create manual bills for this customer.',
+          code: 'manual-billing-permission-denied',
+        );
+      }
+
+      final currentBill =
+          await _bill(businessId, input.customerId, monthKey).get();
+      if (currentBill.exists) {
+        return _PreparedBillingPreview(
+          preview: MonthlyBillPreview(
+            businessId: businessId,
+            customerId: input.customerId,
+            customerCode: customer.customerCode,
+            customerName: customer.name,
+            customerAddress: customer.addressSummary,
+            areaId: customer.areaId,
+            assignedEmployeeId: customer.assignedEmployeeId,
+            customerStatus: customer.status.value,
+            billingMonth: monthKey,
+            lineItems: const [],
+            openingBalancePaise: customer.openingBalancePaise,
+            previousBillId: '',
+            previousOutstandingPaise: 0,
+            adjustments: const [],
+            issues: const [],
+            alreadyFinalizedBill: _billFromSnapshot(currentBill),
+            billingSource: 'manual',
+          ),
+          locks: const [],
+          adjustmentRevision: 0,
+          collectionStateExists: false,
+          collectionStateRevision: 0,
+          collectionConfirmedPaise: 0,
+          collectionReversedPaise: 0,
+          collectionOutstandingPaise: 0,
+          collectionOldestOutstandingMonth: '',
+        );
+      }
+
+      if (input.deliveryChargePaise < 0 || input.discountPaise < 0) {
+        throw const AppException(
+          'Delivery charge and discount cannot be negative.',
+          code: 'invalid-amount',
+        );
+      }
+
+      final subRef = customerRef
+          .collection('subscriptions')
+          .doc(input.subscriptionId);
+      final subSnapshot = await subRef.get();
+      final subData = subSnapshot.data();
+      if (!subSnapshot.exists || subData == null) {
+        throw const AppException(
+          'The selected subscription no longer exists.',
+          code: 'missing-subscription',
+        );
+      }
+
+      final versionsSnapshot = await subRef.collection('versions').get();
+      final monthStart = input.month;
+      final monthEnd = LocalDate(
+        input.month.year,
+        input.month.month,
+        input.month.daysInMonth,
+      );
+      Map<String, dynamic>? activeVersion;
+      for (final doc in versionsSnapshot.docs) {
+        final vData = doc.data();
+        final from = LocalDate.parse(vData['effectiveFrom'] as String);
+        final to =
+            vData['effectiveTo'] != null
+                ? LocalDate.parse(vData['effectiveTo'] as String)
+                : null;
+        if (!from.isAfter(monthEnd) &&
+            (to == null || !to.isBefore(monthStart))) {
+          activeVersion = vData;
+          break;
+        }
+      }
+      if (activeVersion == null && versionsSnapshot.docs.isNotEmpty) {
+        activeVersion = versionsSnapshot.docs.first.data();
+      }
+      if (activeVersion == null) {
+        throw const AppException(
+          'The subscription has no active version for this month.',
+          code: 'missing-version',
+        );
+      }
+
+      final versionId =
+          activeVersion['versionId'] as String? ?? subSnapshot.id;
+      final newspaperId = activeVersion['newspaperId'] as String? ?? '';
+      final newspaperName = activeVersion['newspaperName'] as String? ?? '';
+      final quantity = (activeVersion['quantity'] as num?)?.toInt() ?? 1;
+
+      final pausesSnapshot = await subRef.collection('pauses').get();
+      final pauses = [
+        for (final doc in pausesSnapshot.docs)
+          BillingPauseSnapshot(
+            subscriptionId: input.subscriptionId,
+            pauseId: doc.id,
+            startDate: LocalDate.parse(doc.data()['startDate'] as String),
+            endDate:
+                doc.data()['endDate'] != null
+                    ? LocalDate.parse(doc.data()['endDate'] as String)
+                    : null,
+          ),
+      ];
+
+      final lineItems = <MonthlyBillLineItem>[];
+      if (input.mode == ManualBillCalculationMode.monthWise) {
+        final amount = input.monthWiseAmountPaise ?? 0;
+        if (amount < 0) {
+          throw const AppException(
+            'Monthly amount cannot be negative.',
+            code: 'invalid-amount',
+          );
+        }
+        final unitPrice = quantity > 0 ? amount ~/ quantity : amount;
+        if (unitPrice * quantity != amount) {
+          throw AppException(
+            'Month-wise amount (₹${(amount / 100).toStringAsFixed(2)}) must be evenly divisible by quantity ($quantity).',
+            code: 'invalid-amount',
+          );
+        }
+        final allDaysPaused = List.generate(
+          input.month.daysInMonth,
+          (i) => LocalDate(input.month.year, input.month.month, i + 1),
+        ).every((d) => pauses.any((p) => p.includes(d)));
+        if (allDaysPaused && amount > 0) {
+          throw const AppException(
+            'The subscription is paused for the entire month.',
+            code: 'billing-paused-month',
+          );
+        }
+        if (amount > 0) {
+          lineItems.add(
+            MonthlyBillLineItem(
+              chargeKey: '${monthKey}_month_wise',
+              serviceDate: input.month,
+              subscriptionId: input.subscriptionId,
+              versionId: versionId,
+              newspaperId: newspaperId,
+              newspaperName: newspaperName,
+              unitPricePaise: unitPrice,
+              quantity: quantity,
+              priceSource: BillPriceSource.manual,
+              priceSourceId: 'manual-month-wise',
+              priceRuleRevision: 1,
+            ),
+          );
+        }
+      } else {
+        for (final entry in input.dailyEntries) {
+          if (entry.unitPricePaise < 0) {
+            throw const AppException(
+              'Daily amounts cannot be negative.',
+              code: 'invalid-amount',
+            );
+          }
+          if (entry.date.year != input.month.year ||
+              entry.date.month != input.month.month) {
+            throw const AppException(
+              'Invalid date for the selected billing month.',
+              code: 'invalid-date',
+            );
+          }
+          final isPaused = pauses.any((p) => p.includes(entry.date));
+          if (isPaused && entry.unitPricePaise > 0) {
+            throw AppException(
+              'Cannot bill paused date ${entry.date}.',
+              code: 'billing-paused-date',
+            );
+          }
+          if (entry.unitPricePaise > 0) {
+            lineItems.add(
+              MonthlyBillLineItem(
+                chargeKey: '${entry.date}_${input.subscriptionId}',
+                serviceDate: entry.date,
+                subscriptionId: input.subscriptionId,
+                versionId: versionId,
+                newspaperId: newspaperId,
+                newspaperName: newspaperName,
+                unitPricePaise: entry.unitPricePaise,
+                quantity: quantity,
+                priceSource: BillPriceSource.manual,
+                priceSourceId: 'manual-${input.mode.name}',
+                priceRuleRevision: 1,
+              ),
+            );
+          }
+        }
+      }
+
+      final existingAdjustments =
+          await customerRef
+              .collection('adjustments')
+              .where('billingMonth', isEqualTo: monthKey)
+              .get();
+      final adjustments = <BillingAdjustment>[
+        for (final doc in existingAdjustments.docs)
+          BillingAdjustment.fromMap(doc.id, _withDartDates(doc.data())),
+      ];
+      if (input.deliveryChargePaise > 0) {
+        adjustments.add(
+          BillingAdjustment(
+            id: 'manual-delivery-charge',
+            billingMonth: monthKey,
+            amountPaise: input.deliveryChargePaise,
+            reason: 'Delivery charge',
+            referenceBillMonth: '',
+            createdBy: actor.uid,
+          ),
+        );
+      }
+      if (input.discountPaise > 0) {
+        adjustments.add(
+          BillingAdjustment(
+            id: 'manual-discount',
+            billingMonth: monthKey,
+            amountPaise: -input.discountPaise,
+            reason: 'Discount',
+            referenceBillMonth: '',
+            createdBy: actor.uid,
+          ),
+        );
+      }
+
+      final previousSnapshot =
+          await customerRef
+              .collection('bills')
+              .where('billingMonth', isLessThan: monthKey)
+              .orderBy('billingMonth', descending: true)
+              .limit(1)
+              .get();
+      var previousBillId = '';
+      var previousOutstandingPaise = 0;
+      if (previousSnapshot.docs.isEmpty) {
+        previousBillId = '';
+        previousOutstandingPaise = customer.openingBalancePaise;
+      } else {
+        previousBillId = previousSnapshot.docs.first.id;
+        final previousBalanceDoc =
+            await _billBalance(
+              businessId,
+              input.customerId,
+              previousBillId,
+            ).get();
+        previousOutstandingPaise =
+            (previousBalanceDoc.data()?['outstandingPaise'] as num?)?.toInt() ??
+            0;
+      }
+
+      final collectionStateSnapshot =
+          await _collectionState(businessId, input.customerId).get();
+      final colData = collectionStateSnapshot.data();
+
+      final preview = MonthlyBillPreview(
+        businessId: businessId,
+        customerId: input.customerId,
+        customerCode: customer.customerCode,
+        customerName: customer.name,
+        customerAddress: customer.addressSummary,
+        areaId: customer.areaId,
+        assignedEmployeeId: customer.assignedEmployeeId,
+        customerStatus: customer.status.value,
+        billingMonth: monthKey,
+        lineItems: lineItems,
+        openingBalancePaise: customer.openingBalancePaise,
+        previousBillId: previousBillId,
+        previousOutstandingPaise: previousOutstandingPaise,
+        adjustments: adjustments,
+        issues: const [],
+        alreadyFinalizedBill: null,
+        billingSource: 'manual',
+      );
+
+      final controlSnapshot =
+          await _control(businessId, input.customerId, monthKey).get();
+      final controlRevision =
+          (controlSnapshot.data()?['adjustmentRevision'] as int?) ?? 0;
+
+      return _PreparedBillingPreview(
+        preview: preview,
+        locks: [
+          _SourceLock(customerRef, 'lastAuditId', rawCustomer['lastAuditId']),
+          _SourceLock(subRef, 'lastAuditId', subData['lastAuditId']),
+        ],
+        adjustmentRevision: controlRevision,
+        collectionStateExists: collectionStateSnapshot.exists,
+        collectionStateRevision: (colData?['revision'] as int?) ?? 0,
+        collectionConfirmedPaise: (colData?['confirmedPaise'] as int?) ?? 0,
+        collectionReversedPaise: (colData?['reversedPaise'] as int?) ?? 0,
+        collectionOutstandingPaise: (colData?['outstandingPaise'] as int?) ?? 0,
+        collectionOldestOutstandingMonth:
+            (colData?['oldestOutstandingMonth'] as String?) ?? '',
+      );
+    } on AppException {
+      rethrow;
+    } on FirebaseException catch (error) {
+      throw _translate(error, 'Could not prepare the manual bill.');
+    }
+  }
+
   FinalizedMonthlyBill _billFromSnapshot(
     DocumentSnapshot<Map<String, dynamic>> snapshot,
   ) => FinalizedMonthlyBill.fromMap(
@@ -1129,6 +1291,254 @@ class FirebaseBillingRepository implements BillingRepository {
       _ => fallback,
     };
     return AppException(message, code: error.code);
+  }
+
+  @override
+  Future<BulkMonthEndBillSummary> previewBulkMonthEndBills({
+    required AppUser actor,
+    required String publicationId,
+    required LocalDate month,
+  }) async {
+    final businessId = actor.businessId;
+    if (!actor.hasActiveAccess || businessId == null || businessId.isEmpty) {
+      throw const AppException('Your business access is no longer active.');
+    }
+    const policy = AccessPolicy();
+    if (!policy.canManageGlobalPricing(actor) && !actor.isHead) {
+      throw const AppException(
+        'You do not have permission to generate monthly bills.',
+      );
+    }
+
+    final paperDoc = await _firestore
+        .collection('businesses')
+        .doc(businessId)
+        .collection('newspapers')
+        .doc(publicationId)
+        .get();
+    final paperData = paperDoc.data();
+    final publicationName = paperData?['name'] as String? ?? 'Publication';
+
+    final monthKey = billingMonthKey(month);
+    final monthStart = LocalDate(month.year, month.month, 1);
+    final monthEnd = LocalDate(month.year, month.month, month.daysInMonth);
+
+    final customersSnap = await _firestore
+        .collection('businesses')
+        .doc(businessId)
+        .collection('customers')
+        .where('businessId', isEqualTo: businessId)
+        .where('status', isEqualTo: 'active')
+        .get();
+
+    final subscriberItems = <BulkMonthEndSubscriberItem>[];
+    var alreadyFinalizedCount = 0;
+    var readyToBillCount = 0;
+    var missingPricingCount = 0;
+    var pausedNoChargeCount = 0;
+
+    for (final custDoc in customersSnap.docs) {
+      final custData = custDoc.data();
+      final customerId = custDoc.id;
+      final customerName = custData['name'] as String? ?? 'Customer';
+      final customerCode = custData['customerCode'] as String? ?? customerId;
+
+      final subsSnap = await custDoc.reference
+          .collection('subscriptions')
+          .where('businessId', isEqualTo: businessId)
+          .where('newspaperId', isEqualTo: publicationId)
+          .where('status', isEqualTo: 'active')
+          .get();
+
+      if (subsSnap.docs.isEmpty) continue;
+
+      final hasActiveSub = subsSnap.docs.any((s) {
+        final data = s.data();
+        final sStart = LocalDate.parse(
+          data['startDate'] as String? ?? '2000-01-01',
+        );
+        final sEnd =
+            data['endDate'] is String
+                ? LocalDate.parse(data['endDate']! as String)
+                : null;
+        return !sStart.isAfter(monthEnd) &&
+            (sEnd == null || !sEnd.isBefore(monthStart));
+      });
+      if (!hasActiveSub) continue;
+
+      final billDoc =
+          await custDoc.reference.collection('bills').doc(monthKey).get();
+      if (billDoc.exists && billDoc.data()?['status'] == 'finalized') {
+        alreadyFinalizedCount++;
+        final totalDue = billDoc.data()?['totalDuePaise'] as int? ?? 0;
+        subscriberItems.add(
+          BulkMonthEndSubscriberItem(
+            customerId: customerId,
+            customerName: customerName,
+            customerCode: customerCode,
+            status: BulkMonthEndSubscriberStatus.alreadyFinalized,
+            totalDuePaise: totalDue,
+            statusMessage: 'Already finalized',
+          ),
+        );
+        continue;
+      }
+
+      try {
+        final prepared = await _prepare(
+          actor: actor,
+          customerId: customerId,
+          month: month,
+        );
+        final preview = prepared.preview;
+        if (preview.issues.isNotEmpty) {
+          missingPricingCount++;
+          subscriberItems.add(
+            BulkMonthEndSubscriberItem(
+              customerId: customerId,
+              customerName: customerName,
+              customerCode: customerCode,
+              status: BulkMonthEndSubscriberStatus.missingPricing,
+              totalDuePaise: 0,
+              statusMessage: preview.issues.first.message,
+            ),
+          );
+        } else if (preview.currentChargesPaise == 0 &&
+            preview.lineItems.isEmpty) {
+          pausedNoChargeCount++;
+          subscriberItems.add(
+            BulkMonthEndSubscriberItem(
+              customerId: customerId,
+              customerName: customerName,
+              customerCode: customerCode,
+              status: BulkMonthEndSubscriberStatus.pausedNoCharge,
+              totalDuePaise: preview.totalDuePaise,
+              statusMessage: 'Paused / No charges',
+            ),
+          );
+        } else {
+          readyToBillCount++;
+          subscriberItems.add(
+            BulkMonthEndSubscriberItem(
+              customerId: customerId,
+              customerName: customerName,
+              customerCode: customerCode,
+              status: BulkMonthEndSubscriberStatus.readyToBill,
+              totalDuePaise: preview.totalDuePaise,
+              statusMessage: 'Ready to bill',
+            ),
+          );
+        }
+      } catch (e) {
+        missingPricingCount++;
+        subscriberItems.add(
+          BulkMonthEndSubscriberItem(
+            customerId: customerId,
+            customerName: customerName,
+            customerCode: customerCode,
+            status: BulkMonthEndSubscriberStatus.missingPricing,
+            totalDuePaise: 0,
+            statusMessage: e is AppException ? e.message : 'Calculation error',
+          ),
+        );
+      }
+    }
+
+    return BulkMonthEndBillSummary(
+      publicationId: publicationId,
+      publicationName: publicationName,
+      month: month,
+      eligibleSubscribersCount: subscriberItems.length,
+      alreadyFinalizedCount: alreadyFinalizedCount,
+      readyToBillCount: readyToBillCount,
+      missingPricingCount: missingPricingCount,
+      pausedNoChargeCount: pausedNoChargeCount,
+      subscribers: subscriberItems,
+    );
+  }
+
+  @override
+  Stream<BulkMonthEndProgress> generateBulkMonthEndBills({
+    required AppUser actor,
+    required String publicationId,
+    required LocalDate month,
+  }) async* {
+    final previewSummary = await previewBulkMonthEndBills(
+      actor: actor,
+      publicationId: publicationId,
+      month: month,
+    );
+
+    final total = previewSummary.subscribers.length;
+    var completed = 0;
+    var alreadyFinalized = previewSummary.alreadyFinalizedCount;
+    var failed = 0;
+
+    yield BulkMonthEndProgress(
+      totalCount: total,
+      completedCount: completed,
+      alreadyFinalizedCount: alreadyFinalized,
+      failedCount: failed,
+      currentCustomerName: 'Starting batch...',
+      isDone: false,
+    );
+
+    for (final subscriber in previewSummary.subscribers) {
+      if (subscriber.status == BulkMonthEndSubscriberStatus.alreadyFinalized) {
+        continue;
+      }
+      if (subscriber.status == BulkMonthEndSubscriberStatus.missingPricing) {
+        failed++;
+        yield BulkMonthEndProgress(
+          totalCount: total,
+          completedCount: completed,
+          alreadyFinalizedCount: alreadyFinalized,
+          failedCount: failed,
+          currentCustomerName: subscriber.customerName,
+          isDone: false,
+          errorMessage: subscriber.statusMessage,
+        );
+        continue;
+      }
+
+      yield BulkMonthEndProgress(
+        totalCount: total,
+        completedCount: completed,
+        alreadyFinalizedCount: alreadyFinalized,
+        failedCount: failed,
+        currentCustomerName: subscriber.customerName,
+        isDone: false,
+      );
+
+      try {
+        await finalizeBill(
+          actor: actor,
+          customerId: subscriber.customerId,
+          month: month,
+        );
+        completed++;
+      } catch (e) {
+        failed++;
+      }
+
+      yield BulkMonthEndProgress(
+        totalCount: total,
+        completedCount: completed,
+        alreadyFinalizedCount: alreadyFinalized,
+        failedCount: failed,
+        currentCustomerName: subscriber.customerName,
+        isDone: false,
+      );
+    }
+
+    yield BulkMonthEndProgress(
+      totalCount: total,
+      completedCount: completed,
+      alreadyFinalizedCount: alreadyFinalized,
+      failedCount: failed,
+      currentCustomerName: 'Completed',
+      isDone: true,
+    );
   }
 }
 

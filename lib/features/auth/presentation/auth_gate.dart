@@ -11,6 +11,7 @@ import 'package:paper_route/features/areas/presentation/areas_page.dart';
 import 'package:paper_route/features/billing/presentation/bill_detail_page.dart';
 import 'package:paper_route/features/billing/presentation/bill_preview_page.dart';
 import 'package:paper_route/features/billing/presentation/billing_workspace_page.dart';
+import 'package:paper_route/features/billing/presentation/manual_bill_page.dart';
 import 'package:paper_route/features/business/presentation/business_settings_page.dart';
 import 'package:paper_route/features/collections/presentation/adjust_outstanding_page.dart';
 import 'package:paper_route/features/collections/presentation/collect_payment_page.dart';
@@ -51,6 +52,7 @@ enum AuthenticatedDestination {
   collections,
   collectPayment,
   adjustOutstanding,
+  manualBill,
   paymentReceipt,
   upiSettings,
   customerCreate,
@@ -167,6 +169,10 @@ class AuthGate extends ConsumerWidget {
             customerId: resourceId ?? '',
           ),
           AuthenticatedDestination.adjustOutstanding => AdjustOutstandingPage(
+            user: user,
+            customerId: resourceId ?? '',
+          ),
+          AuthenticatedDestination.manualBill => ManualBillPage(
             user: user,
             customerId: resourceId ?? '',
           ),

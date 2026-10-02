@@ -13,6 +13,9 @@ import {
 import {requestAccountDeletionHandler} from "./account_deletion";
 import {razorpayWebhookHandler} from "./saas_webhook_handler";
 import {createSaasCheckoutSessionHandler} from "./saas_checkout_service";
+import {finalizeMonthlyBill} from "./billing/finalize_bill";
+
+export { finalizeMonthlyBill };
 
 initializeApp();
 setGlobalOptions(ownerProvisioningRuntime);

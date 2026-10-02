@@ -213,6 +213,17 @@ class _PaperRouteAppState extends ConsumerState<PaperRouteApp> {
                     : SetupRequiredPage(message: widget.startup.message),
       ),
       GoRoute(
+        path: '/customers/:customerId/manual-bill',
+        builder:
+            (context, state) =>
+                widget.startup.isReady
+                    ? AuthGate(
+                      destination: AuthenticatedDestination.manualBill,
+                      resourceId: state.pathParameters['customerId'],
+                    )
+                    : SetupRequiredPage(message: widget.startup.message),
+      ),
+      GoRoute(
         path: '/customers/:customerId/collect',
         builder:
             (context, state) =>

@@ -1,7 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:paper_route/core/domain/local_date.dart';
 import 'package:paper_route/core/errors/app_exception.dart';
+import 'package:paper_route/features/auth/domain/access_policy.dart';
 import 'package:paper_route/features/auth/domain/app_user.dart';
+import 'package:paper_route/features/billing/domain/monthly_bill.dart';
 import 'package:paper_route/features/newspapers/domain/newspaper.dart';
 import 'package:paper_route/features/newspapers/domain/newspaper_repository.dart';
 import 'package:uuid/uuid.dart';
@@ -375,7 +377,7 @@ class FirebaseNewspaperRepository implements NewspaperRepository {
     required PriceRuleInput input,
     required String? replacedRuleId,
   }) async {
-    final businessId = _headBusinessId(actor);
+    final businessId = _pricingBusinessId(actor);
     final value = input.normalized();
     value.validate();
     final newspaperRef = _newspapers(businessId).doc(newspaperId);
@@ -464,6 +466,7 @@ class FirebaseNewspaperRepository implements NewspaperRepository {
           'newspaperId': newspaperId,
           'priceRuleId': replacementId,
           'kind': value.kind.value,
+          'pricingBasis': value.pricingBasis.value,
           'startDate': value.startDate.toString(),
           'endDate': value.endDate?.toString(),
           'pricePaise': value.pricePaise,
@@ -486,18 +489,24 @@ class FirebaseNewspaperRepository implements NewspaperRepository {
         transaction.set(auditRef, {
           'businessId': businessId,
           'actorId': actor.uid,
+          'actorRole': actor.role?.name ?? 'employee',
           'action':
               replacedRuleId == null
                   ? 'newspaperPriceRuleCreated'
                   : 'newspaperPriceRuleCorrected',
           'entityType': 'newspaper',
           'entityId': newspaperId,
+          'publicationId': newspaperId,
+          'publicationName': initialData['name'] ?? '',
           'priceRuleId': replacementId,
           'replacedPriceRuleId': replacedRuleId ?? '',
           'kind': value.kind.value,
+          'pricingBasis': value.pricingBasis.value,
           'startDate': value.startDate.toString(),
           'endDate': value.endDate?.toString(),
           'pricePaise': value.pricePaise,
+          'newPrice': value.pricePaise,
+          'oldApplicablePrice': initialData['defaultPricePaise'] ?? 0,
           'reason': value.reason,
           'createdAt': now,
         });
@@ -600,6 +609,20 @@ class FirebaseNewspaperRepository implements NewspaperRepository {
     return businessId;
   }
 
+  String _pricingBusinessId(AppUser actor) {
+    final businessId = actor.businessId;
+    if (!actor.hasActiveAccess || businessId == null || businessId.isEmpty) {
+      throw const AppException('Your business access is no longer active.');
+    }
+    const policy = AccessPolicy();
+    if (!policy.canManageGlobalPricing(actor)) {
+      throw const AppException(
+        'You do not have permission to manage global publication pricing.',
+      );
+    }
+    return businessId;
+  }
+
   void _validateNewspaper(Map<String, dynamic>? data, String businessId) {
     if (data == null) {
       throw const AppException('The newspaper no longer exists.');
@@ -643,5 +666,183 @@ class FirebaseNewspaperRepository implements NewspaperRepository {
       _ => fallback,
     };
     return AppException(message, code: error.code);
+  }
+
+  @override
+  Future<BulkDailyPriceUpdateResult> updateDailyPrices({
+    required AppUser actor,
+    required LocalDate date,
+    required List<DailyPriceUpdateItem> updates,
+  }) async {
+    final businessId = _pricingBusinessId(actor);
+    final updated = <String>[];
+
+    for (final item in updates) {
+      NewspaperMoney.validatePrice(item.pricePaise);
+      final current = await resolvePriceOn(
+        businessId: businessId,
+        newspaperId: item.newspaperId,
+        date: date,
+      );
+      if (current.pricePaise == item.pricePaise) {
+        continue;
+      }
+      final input = PriceRuleInput(
+        kind: PriceRuleKind.exactDate,
+        startDate: date,
+        endDate: null,
+        pricePaise: item.pricePaise,
+        reason: item.reason,
+      );
+      if (current.source == ResolvedPriceSource.exactDate &&
+          current.ruleId != null) {
+        await correctPriceRule(
+          actor: actor,
+          newspaperId: item.newspaperId,
+          replacedRuleId: current.ruleId!,
+          replacement: input,
+        );
+      } else {
+        await createPriceRule(
+          actor: actor,
+          newspaperId: item.newspaperId,
+          input: input,
+        );
+      }
+      updated.add(item.newspaperId);
+    }
+
+    return BulkDailyPriceUpdateResult(
+      updatedCount: updated.length,
+      updatedNewspaperIds: List.unmodifiable(updated),
+    );
+  }
+
+  @override
+  Future<PricingImpactPreview> calculatePricingImpact({
+    required AppUser actor,
+    required String newspaperId,
+    required PriceRuleInput input,
+  }) async {
+    final businessId = _pricingBusinessId(actor);
+    final value = input.normalized();
+    value.validate();
+
+    final paperDoc = await _newspapers(businessId).doc(newspaperId).get();
+    final paperData = paperDoc.data();
+    _validateNewspaper(paperData, businessId);
+    final newspaperName = paperData!['name'] as String? ?? 'Publication';
+
+    final currentResolved = await resolvePriceOn(
+      businessId: businessId,
+      newspaperId: newspaperId,
+      date: value.startDate,
+    );
+    final currentPricePaise = currentResolved.pricePaise;
+
+    final customersSnap = await _firestore
+        .collection('businesses')
+        .doc(businessId)
+        .collection('customers')
+        .where('businessId', isEqualTo: businessId)
+        .where('status', isEqualTo: 'active')
+        .get();
+
+    var affectedSubscriptionsCount = 0;
+    var unfinalizedBillsCount = 0;
+    var finalizedBillsCount = 0;
+    var customerOverridesCount = 0;
+    var pausedSubscriptionsCount = 0;
+
+    final effectiveEnd = value.effectiveEnd;
+    final startMonth = LocalDate(value.startDate.year, value.startDate.month, 1);
+    final endMonth = LocalDate(effectiveEnd.year, effectiveEnd.month, 1);
+
+    final affectedMonths = <String>{};
+    var currMonth = startMonth;
+    while (!currMonth.isAfter(endMonth)) {
+      affectedMonths.add(billingMonthKey(currMonth));
+      currMonth = currMonth.month == 12
+          ? LocalDate(currMonth.year + 1, 1, 1)
+          : LocalDate(currMonth.year, currMonth.month + 1, 1);
+    }
+
+    for (final customerDoc in customersSnap.docs) {
+      final custRef = customerDoc.reference;
+      final subsSnap = await custRef
+          .collection('subscriptions')
+          .where('businessId', isEqualTo: businessId)
+          .where('newspaperId', isEqualTo: newspaperId)
+          .where('status', isEqualTo: 'active')
+          .get();
+
+      if (subsSnap.docs.isEmpty) continue;
+
+      for (final subDoc in subsSnap.docs) {
+        final subData = subDoc.data();
+        final subStart = LocalDate.parse(subData['startDate'] as String? ?? '2000-01-01');
+        final subEnd = subData['endDate'] is String
+            ? LocalDate.parse(subData['endDate']! as String)
+            : null;
+
+        if (subStart.isAfter(effectiveEnd) || (subEnd != null && subEnd.isBefore(value.startDate))) {
+          continue;
+        }
+
+        affectedSubscriptionsCount++;
+
+        if (subData['customPricePaise'] != null) {
+          customerOverridesCount++;
+        }
+
+        final pausesSnap = await subDoc.reference.collection('pauses').get();
+        final hasPause = pausesSnap.docs.any((p) {
+          final pData = p.data();
+          final pStart = LocalDate.parse(pData['startDate'] as String? ?? '2000-01-01');
+          final pEnd = pData['endDate'] is String
+              ? LocalDate.parse(pData['endDate']! as String)
+              : pStart;
+          return !pStart.isAfter(effectiveEnd) && !pEnd.isBefore(value.startDate);
+        });
+        if (hasPause) {
+          pausedSubscriptionsCount++;
+        }
+
+        for (final mKey in affectedMonths) {
+          final billDoc = await custRef.collection('bills').doc(mKey).get();
+          if (billDoc.exists) {
+            final billData = billDoc.data();
+            if (billData?['status'] == 'finalized') {
+              finalizedBillsCount++;
+            } else {
+              unfinalizedBillsCount++;
+            }
+          } else {
+            unfinalizedBillsCount++;
+          }
+        }
+      }
+    }
+
+    final priceDiffPaise = value.pricePaise - currentPricePaise;
+    final projectedAdditionalPaise = (priceDiffPaise > 0)
+        ? (unfinalizedBillsCount > 0 ? unfinalizedBillsCount : affectedSubscriptionsCount) * priceDiffPaise
+        : 0;
+
+    return PricingImpactPreview(
+      newspaperId: newspaperId,
+      newspaperName: newspaperName,
+      currentPricePaise: currentPricePaise,
+      proposedPricePaise: value.pricePaise,
+      pricingBasis: value.pricingBasis,
+      startDate: value.startDate,
+      endDate: effectiveEnd,
+      affectedSubscriptionsCount: affectedSubscriptionsCount,
+      unfinalizedBillsCount: unfinalizedBillsCount,
+      finalizedBillsCount: finalizedBillsCount,
+      customerOverridesCount: customerOverridesCount,
+      pausedSubscriptionsCount: pausedSubscriptionsCount,
+      projectedAdditionalBillingPaise: projectedAdditionalPaise,
+    );
   }
 }

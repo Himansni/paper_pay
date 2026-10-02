@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:paper_route/core/errors/app_exception.dart';
 import 'package:paper_route/core/presentation/async_state_cards.dart';
 import 'package:paper_route/features/auth/domain/access_policy.dart';
 import 'package:paper_route/features/auth/domain/app_user.dart';
@@ -128,18 +129,37 @@ class _ArrangeRoutePageState extends ConsumerState<ArrangeRoutePage> {
     final customerRepo = ref.read(customerRepositoryProvider);
     final deliveryRepo = ref.read(deliveryRepositoryProvider);
 
-    final customerPage = await customerRepo.fetchCustomers(
-      CustomerListRequest(
-        businessId: businessId,
-        requesterId: widget.user.uid,
-        isHead: widget.user.isHead,
-        status: CustomerStatus.active,
-        areaId: widget.areaId,
-        pageSize: 250,
-      ),
-    );
+    final customers = <Customer>[];
+    CustomerPageCursor? cursor;
+    do {
+      final customerPage = await customerRepo.fetchCustomers(
+        CustomerListRequest(
+          businessId: businessId,
+          requesterId: widget.user.uid,
+          isHead: widget.user.isHead,
+          status: CustomerStatus.active,
+          areaId: widget.areaId,
+          pageSize: 50,
+          cursor: cursor,
+        ),
+      );
+      customers.addAll(customerPage.customers);
 
-    final activeCustomers = customerPage.customers;
+      if (!customerPage.hasMore || customerPage.nextCursor == null) {
+        break;
+      }
+      final nextCursor = customerPage.nextCursor!;
+      if (cursor != null &&
+          nextCursor.customerId == cursor.customerId &&
+          nextCursor.searchName == cursor.searchName) {
+        throw const AppException(
+          'Customer route pagination did not advance. Please refresh and retry.',
+        );
+      }
+      cursor = nextCursor;
+    } while (true);
+
+    final activeCustomers = customers;
     final routeOrder = await deliveryRepo.getRouteOrder(
       businessId: businessId,
       areaId: widget.areaId,

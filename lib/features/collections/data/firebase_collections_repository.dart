@@ -1178,15 +1178,21 @@ class FirebaseCollectionsRepository implements CollectionsRepository {
                 .limit(1)
                 .get();
         if (latest.docs.isEmpty) {
+          final customerDoc = await _customer(businessId, customerId).get();
+          final customerData = customerDoc.data();
+          final openingPaise =
+              (customerData?['openingBalancePaise'] as num?)?.toInt() ?? 0;
           return CustomerOutstandingSummary(
             businessId: businessId,
             customerId: customerId,
-            outstandingPaise: 0,
+            outstandingPaise: openingPaise,
             confirmedPaise: 0,
             reversedPaise: 0,
             bills: const [],
             revision: 0,
-            serverConfirmed: !state.metadata.hasPendingWrites,
+            serverConfirmed:
+                !state.metadata.hasPendingWrites &&
+                !customerDoc.metadata.hasPendingWrites,
             requiresProjectionSetup: false,
           );
         }

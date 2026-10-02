@@ -275,6 +275,28 @@ class _FakeNewspaperRepository implements NewspaperRepository {
         updatedCount: updates.length,
         updatedNewspaperIds: updates.map((u) => u.newspaperId).toList(),
       );
+
+  @override
+  Future<PricingImpactPreview> calculatePricingImpact({
+    required AppUser actor,
+    required String newspaperId,
+    required PriceRuleInput input,
+  }) async =>
+      PricingImpactPreview(
+        newspaperId: newspaperId,
+        newspaperName: 'Test Paper',
+        currentPricePaise: 500,
+        proposedPricePaise: input.pricePaise,
+        pricingBasis: input.pricingBasis,
+        startDate: input.startDate,
+        endDate: input.endDate ?? input.startDate,
+        affectedSubscriptionsCount: 0,
+        unfinalizedBillsCount: 0,
+        finalizedBillsCount: 0,
+        customerOverridesCount: 0,
+        pausedSubscriptionsCount: 0,
+        projectedAdditionalBillingPaise: 0,
+      );
 }
 
 class _FakeCustomerRepository implements CustomerRepository {

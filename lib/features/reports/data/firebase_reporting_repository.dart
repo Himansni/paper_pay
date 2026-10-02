@@ -48,7 +48,7 @@ class FirebaseReportingRepository implements ReportingRepository {
           );
     } on AppException {
       rethrow;
-    } on FirebaseException catch (error) {
+    } catch (error) {
       throw _translate(error, 'Could not load dashboard metrics.');
     }
   }
@@ -310,7 +310,7 @@ class FirebaseReportingRepository implements ReportingRepository {
       };
     } on AppException {
       rethrow;
-    } on FirebaseException catch (error) {
+    } catch (error) {
       throw _translate(error, 'Could not load this report.');
     }
   }
@@ -1258,15 +1258,32 @@ class FirebaseReportingRepository implements ReportingRepository {
     _ => 'Customer updated',
   };
 
-  AppException _translate(FirebaseException error, String fallback) {
-    final message = switch (error.code) {
-      'permission-denied' =>
-        'Your current membership does not permit this report.',
-      'failed-precondition' =>
-        'This report needs a reviewed Firestore index before deployment.',
-      'unavailable' => 'Reports require a server connection. Try again.',
-      _ => fallback,
-    };
-    return AppException(message, code: error.code);
+  AppException translateError(Object error, [String fallback = 'Failed']) =>
+      _translate(error, fallback);
+
+  AppException _translate(Object error, String fallback) {
+    if (error is FirebaseException) {
+      final message = switch (error.code) {
+        'permission-denied' =>
+          'Your current membership does not permit this report.',
+        'failed-precondition' =>
+          'Reports are temporarily unavailable. Please try again.',
+        'unavailable' => 'Reports require a server connection. Try again.',
+        _ => fallback,
+      };
+      return AppException(message, code: error.code);
+    }
+    final str = error.toString();
+    if (str.contains('failed-precondition') ||
+        str.contains('FAILED_PRECONDITION') ||
+        str.contains('requires an index') ||
+        str.contains('console.firebase.google.com')) {
+      return const AppException(
+        'Reports are temporarily unavailable. Please try again.',
+        code: 'failed-precondition',
+      );
+    }
+    if (error is AppException) return error;
+    return AppException(fallback);
   }
 }

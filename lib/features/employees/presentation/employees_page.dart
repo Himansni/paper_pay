@@ -26,6 +26,8 @@ class EmployeesPage extends ConsumerWidget {
     PermissionKey.allowDecreaseOutstanding: 'Allow Decrease Outstanding',
     PermissionKey.recordDeliveryExceptions: 'Record delivery exceptions',
     PermissionKey.arrangeDeliveryRoutes: 'Arrange delivery routes',
+    PermissionKey.allowManualBilling: 'Allow manual billing',
+    PermissionKey.allowGlobalPricing: 'Allow global publication pricing',
   };
 
   @override

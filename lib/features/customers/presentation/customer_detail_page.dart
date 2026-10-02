@@ -280,9 +280,9 @@ class _CustomerDetailViewState extends ConsumerState<_CustomerDetailView> {
                       : null,
             ),
             const SizedBox(height: 14),
-            CustomerSubscriptionsSection(user: user, customer: customer),
-            const SizedBox(height: 14),
             CustomerCollectionSummary(user: user, customer: customer),
+            const SizedBox(height: 14),
+            CustomerSubscriptionsSection(user: user, customer: customer),
             if (customer.locationConsent && customer.coordinates != null) ...[
               const SizedBox(height: 14),
               _DetailCard(
@@ -308,7 +308,9 @@ class _CustomerDetailViewState extends ConsumerState<_CustomerDetailView> {
                 rows: [_DetailRow('', customer.notes)],
               ),
             ],
-            if (user.isHead) ...[
+            if (user.isHead ||
+                (customer.assignedEmployeeId == user.uid &&
+                    customer.openingBalancePaise > 0)) ...[
               const SizedBox(height: 14),
               _DetailCard(
                 title: l10n?.financialOpening ?? 'Financial opening',
@@ -327,6 +329,8 @@ class _CustomerDetailViewState extends ConsumerState<_CustomerDetailView> {
                   ),
                 ],
               ),
+            ],
+            if (user.isHead) ...[
               const SizedBox(height: 14),
               _CustomerHistory(businessId: businessId, customerId: customer.id),
             ],

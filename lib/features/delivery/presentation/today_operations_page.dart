@@ -25,18 +25,9 @@ class TodayOperationsPage extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         leading: BackButton(onPressed: () => context.go('/')),
-        title: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.dashboard_customize_outlined, color: AppTheme.brand),
-            const SizedBox(width: 8),
-            Flexible(
-              child: Text(
-                l10n?.headTodayTitle ?? "Today's Operations",
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
+        title: Text(
+          l10n?.headTodayTitle ?? "Today's Operations",
+          overflow: TextOverflow.ellipsis,
         ),
         actions: [
           IconButton(
@@ -129,13 +120,14 @@ class _HeaderOverviewCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(
                         l10n?.headTodaySubtitle ?? 'Live Depot Circulation & Delivery Monitoring',
                         style: const TextStyle(
                           fontSize: 13,
@@ -143,35 +135,36 @@ class _HeaderOverviewCard extends StatelessWidget {
                           color: Color(0xFF486581),
                         ),
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '${date.toString()} • ${isSunday ? "Sunday" : "Weekday"}',
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.w800,
-                              color: AppTheme.ink,
-                            ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEBF8FF),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFFBEE3F8)),
                       ),
-                    ],
-                  ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.route_outlined, size: 15, color: Color(0xFF2B6CB0)),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${summary.completedRoutes} / ${summary.totalRoutes} Lines Done',
+                            style: const TextStyle(fontWeight: FontWeight.w800, color: Color(0xFF2B6CB0), fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFEBF8FF),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: const Color(0xFFBEE3F8)),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.route_outlined, size: 16, color: Color(0xFF2B6CB0)),
-                      const SizedBox(width: 6),
-                      Text(
-                        '${summary.completedRoutes} / ${summary.totalRoutes} Lines Done',
-                        style: const TextStyle(fontWeight: FontWeight.w800, color: Color(0xFF2B6CB0), fontSize: 13),
+                const SizedBox(height: 8),
+                Text(
+                  '${date.toString()} • ${isSunday ? "Sunday" : "Weekday"}',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: AppTheme.ink,
                       ),
-                    ],
-                  ),
                 ),
               ],
             ),
@@ -201,16 +194,21 @@ class _DepotCirculationCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                const Icon(Icons.inventory_2_outlined, color: Color(0xFFDD6B20)),
+                const Icon(Icons.inventory_2_outlined, color: Color(0xFFDD6B20), size: 20),
                 const SizedBox(width: 8),
-                Text(
-                  l10n?.depotPickupTally ?? 'Depot Pickup Circulation',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+                Expanded(
+                  child: Text(
+                    l10n?.depotPickupTally ?? 'Depot Pickup Circulation',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+                  ),
                 ),
-                const Spacer(),
                 TextButton(
+                  style: TextButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                  ),
                   onPressed: () => context.push('/subscriptions'),
-                  child: const Text('All Subscriptions →'),
+                  child: const Text('View all →'),
                 ),
               ],
             ),
@@ -218,32 +216,37 @@ class _DepotCirculationCard extends StatelessWidget {
 
             // Top Stats Summary Pill Row
             Container(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
               decoration: BoxDecoration(
                 color: const Color(0xFFF7FAFC),
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(color: const Color(0xFFE2E8F0)),
               ),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  _TallyMetric(
-                    label: 'Ordered',
-                    count: summary.totalOrderedCopies,
-                    color: const Color(0xFF2B6CB0),
+                  Expanded(
+                    child: _TallyMetric(
+                      label: 'Ordered',
+                      count: summary.totalOrderedCopies,
+                      color: const Color(0xFF2B6CB0),
+                    ),
                   ),
                   Container(width: 1, height: 30, color: const Color(0xFFCBD5E0)),
-                  _TallyMetric(
-                    label: 'Paused',
-                    count: summary.totalPausedCopies,
-                    color: const Color(0xFFC53030),
+                  Expanded(
+                    child: _TallyMetric(
+                      label: 'Paused',
+                      count: summary.totalPausedCopies,
+                      color: const Color(0xFFC53030),
+                    ),
                   ),
                   Container(width: 1, height: 30, color: const Color(0xFFCBD5E0)),
-                  _TallyMetric(
-                    label: 'To Pick Up',
-                    count: summary.totalToDistributeCopies,
-                    color: const Color(0xFF127C71),
-                    isEmphasized: true,
+                  Expanded(
+                    child: _TallyMetric(
+                      label: 'To Pick Up',
+                      count: summary.totalToDistributeCopies,
+                      color: const Color(0xFF127C71),
+                      isEmphasized: true,
+                    ),
                   ),
                 ],
               ),
@@ -268,37 +271,48 @@ class _DepotCirculationCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: const Color(0xFFEDF2F7)),
                   ),
-                  child: Row(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: Text(
-                          tally.newspaperName,
-                          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
-                        ),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              tally.newspaperName,
+                              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE6FFFA),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: const Color(0xFFB2F5EA)),
+                            ),
+                            child: Text(
+                              '${tally.toDistributeCopies} copies',
+                              style: const TextStyle(fontWeight: FontWeight.w800, color: Color(0xFF234E52), fontSize: 13),
+                            ),
+                          ),
+                        ],
                       ),
-                      Text(
-                        '${tally.orderedCopies} ordered',
-                        style: const TextStyle(fontSize: 12, color: Color(0xFF718096)),
-                      ),
-                      if (tally.pausedCopies > 0) ...[
-                        const SizedBox(width: 8),
-                        Text(
-                          '(-${tally.pausedCopies})',
-                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFFC53030)),
-                        ),
-                      ],
-                      const SizedBox(width: 12),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFE6FFFA),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: const Color(0xFFB2F5EA)),
-                        ),
-                        child: Text(
-                          '${tally.toDistributeCopies} copies',
-                          style: const TextStyle(fontWeight: FontWeight.w800, color: Color(0xFF234E52), fontSize: 13),
-                        ),
+                      const SizedBox(height: 4),
+                      Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 8,
+                        children: [
+                          Text(
+                            '${tally.orderedCopies} ordered',
+                            style: const TextStyle(fontSize: 12, color: Color(0xFF718096)),
+                          ),
+                          if (tally.pausedCopies > 0)
+                            Text(
+                              '(-${tally.pausedCopies} paused)',
+                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFFC53030)),
+                            ),
+                        ],
                       ),
                     ],
                   ),
@@ -470,16 +484,28 @@ class _TodayCollectionsCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
+            Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 8,
+              runSpacing: 4,
               children: [
-                const Icon(Icons.payments_outlined, color: Color(0xFF127C71)),
-                const SizedBox(width: 8),
-                Text(
-                  l10n?.todayCollectionsTitle ?? "Today's Collections",
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.payments_outlined, color: Color(0xFF127C71), size: 20),
+                    const SizedBox(width: 8),
+                    Text(
+                      l10n?.todayCollectionsTitle ?? "Today's Collections",
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+                    ),
+                  ],
                 ),
-                const Spacer(),
                 TextButton(
+                  style: TextButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                  ),
                   onPressed: () => context.push('/reports?tab=collections'),
                   child: const Text('Collections Report →'),
                 ),
@@ -596,9 +622,11 @@ class _OperationalAlertsCard extends StatelessWidget {
               children: [
                 const Icon(Icons.warning_amber_outlined, color: Colors.amber),
                 const SizedBox(width: 8),
-                Text(
-                  l10n?.operationalAlertsTitle ?? 'Operational Exceptions Reported Today',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+                Expanded(
+                  child: Text(
+                    l10n?.operationalAlertsTitle ?? 'Operational Exceptions Reported Today',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+                  ),
                 ),
               ],
             ),

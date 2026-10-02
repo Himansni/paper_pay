@@ -105,7 +105,7 @@ void main() {
         activeNewspapersListProvider((
           businessId: 'biz-1',
           requesterId: 'head-1',
-        )).future,
+        ),).future,
       );
 
       // Total active is 64 (index 0 to 63), index 64 is archived
@@ -134,7 +134,7 @@ void main() {
         activeNewspapersListProvider((
           businessId: 'biz-1',
           requesterId: 'head-1',
-        )).future,
+        ),).future,
       );
 
       // NP-064 is archived
@@ -174,7 +174,7 @@ void main() {
         activeNewspapersListProvider((
           businessId: 'biz-1',
           requesterId: 'head-1',
-        )).future,
+        ),).future,
       );
 
       final idSet = <String>{};
@@ -217,7 +217,7 @@ void main() {
           activeNewspapersListProvider((
             businessId: 'biz-1',
             requesterId: 'head-1',
-          )).future,
+          ),).future,
         );
 
         expect(result.length, equals(1));
@@ -253,7 +253,7 @@ void main() {
           activeNewspapersListProvider((
             businessId: 'biz-1',
             requesterId: 'head-1',
-          )).future,
+          ),).future,
         );
 
         expect(result.length, equals(1));
@@ -289,7 +289,7 @@ void main() {
           activeNewspapersListProvider((
             businessId: 'biz-1',
             requesterId: 'head-1',
-          )).future,
+          ),).future,
         );
 
         expect(result.length, equals(2));
@@ -325,7 +325,7 @@ void main() {
           activeNewspapersListProvider((
             businessId: 'biz-1',
             requesterId: 'head-1',
-          )).future,
+          ),).future,
         );
 
         expect(result.length, equals(2));

@@ -114,14 +114,14 @@ class _BillingWorkspacePageState extends ConsumerState<BillingWorkspacePage> {
 
   List<BillingWorkspaceRow> _getFilteredRows() {
     return _rows.where((row) {
-      if (_selectedEmployeeId != null && _selectedEmployeeId!.isNotEmpty) {
-        if (row.assignedEmployeeId != _selectedEmployeeId) return false;
-      }
       if (_selectedPublicationId != null &&
           _selectedPublicationId!.isNotEmpty) {
         if (!row.publicationIds.contains(_selectedPublicationId)) {
           return false;
         }
+      }
+      if (_selectedEmployeeId != null && _selectedEmployeeId!.isNotEmpty) {
+        if (row.assignedEmployeeId != _selectedEmployeeId) return false;
       }
       if (_selectedCustomerId != null && _selectedCustomerId!.isNotEmpty) {
         if (row.customerId != _selectedCustomerId) {
@@ -135,6 +135,12 @@ class _BillingWorkspacePageState extends ConsumerState<BillingWorkspacePage> {
   List<String> _getDistinctEmployeeIds() {
     final ids = <String>{};
     for (final row in _rows) {
+      if (_selectedPublicationId != null &&
+          _selectedPublicationId!.isNotEmpty) {
+        if (!row.publicationIds.contains(_selectedPublicationId)) {
+          continue;
+        }
+      }
       if (row.assignedEmployeeId.isNotEmpty) {
         ids.add(row.assignedEmployeeId);
       }
@@ -147,6 +153,17 @@ class _BillingWorkspacePageState extends ConsumerState<BillingWorkspacePage> {
     final seen = <String>{};
     final list = <({String id, String name, String code})>[];
     for (final row in _rows) {
+      if (_selectedPublicationId != null &&
+          _selectedPublicationId!.isNotEmpty) {
+        if (!row.publicationIds.contains(_selectedPublicationId)) {
+          continue;
+        }
+      }
+      if (_selectedEmployeeId != null && _selectedEmployeeId!.isNotEmpty) {
+        if (row.assignedEmployeeId != _selectedEmployeeId) {
+          continue;
+        }
+      }
       if (seen.add(row.customerId)) {
         list.add((
           id: row.customerId,
@@ -157,6 +174,54 @@ class _BillingWorkspacePageState extends ConsumerState<BillingWorkspacePage> {
     }
     list.sort((a, b) => a.name.compareTo(b.name));
     return list;
+  }
+
+  void _onPublicationChanged(String? val) {
+    setState(() {
+      _selectedPublicationId = val;
+      final availableEmployees = _getDistinctEmployeeIds();
+      if (_selectedEmployeeId != null &&
+          !availableEmployees.contains(_selectedEmployeeId)) {
+        _selectedEmployeeId = null;
+      }
+      final availableCustomers = _getDistinctCustomers();
+      if (_selectedCustomerId != null &&
+          !availableCustomers.any((c) => c.id == _selectedCustomerId)) {
+        _selectedCustomerId = null;
+      }
+      final validCustomerIds =
+          _getFilteredRows().map((r) => r.customerId).toSet();
+      _selectedCustomerIds.removeWhere(
+        (id) => !validCustomerIds.contains(id),
+      );
+    });
+  }
+
+  void _onEmployeeChanged(String? val) {
+    setState(() {
+      _selectedEmployeeId = val;
+      final availableCustomers = _getDistinctCustomers();
+      if (_selectedCustomerId != null &&
+          !availableCustomers.any((c) => c.id == _selectedCustomerId)) {
+        _selectedCustomerId = null;
+      }
+      final validCustomerIds =
+          _getFilteredRows().map((r) => r.customerId).toSet();
+      _selectedCustomerIds.removeWhere(
+        (id) => !validCustomerIds.contains(id),
+      );
+    });
+  }
+
+  void _onCustomerChanged(String? val) {
+    setState(() {
+      _selectedCustomerId = val;
+      final validCustomerIds =
+          _getFilteredRows().map((r) => r.customerId).toSet();
+      _selectedCustomerIds.removeWhere(
+        (id) => !validCustomerIds.contains(id),
+      );
+    });
   }
 
   _BillingPriceSetting? _getActivePriceSetting(
@@ -528,9 +593,20 @@ class _BillingWorkspacePageState extends ConsumerState<BillingWorkspacePage> {
 
     final publications = newspapersAsync.value ?? const [];
     final monthlyPrices = monthlyPricesAsync.value ?? const [];
-    final filteredRows = _getFilteredRows();
     final employees = _getDistinctEmployeeIds();
+    final effectiveEmployeeId =
+        _selectedEmployeeId != null && employees.contains(_selectedEmployeeId)
+            ? _selectedEmployeeId
+            : null;
+
     final customers = _getDistinctCustomers();
+    final effectiveCustomerId =
+        _selectedCustomerId != null &&
+                customers.any((c) => c.id == _selectedCustomerId)
+            ? _selectedCustomerId
+            : null;
+
+    final filteredRows = _getFilteredRows();
 
     final totalEligible = filteredRows.length;
     final finalizedCount =
@@ -623,16 +699,14 @@ class _BillingWorkspacePageState extends ConsumerState<BillingWorkspacePage> {
                           ),
                         ),
                     ],
-                    onChanged: (val) {
-                      setState(() => _selectedPublicationId = val);
-                    },
+                    onChanged: _onPublicationChanged,
                   ),
                   if (employees.isNotEmpty) ...[
                     const SizedBox(height: 10),
                     DropdownButtonFormField<String?>(
                       key: const ValueKey('employee-filter'),
                       isExpanded: true,
-                      value: _selectedEmployeeId,
+                      value: effectiveEmployeeId,
                       decoration: const InputDecoration(
                         labelText: 'Assigned Employee',
                         isDense: true,
@@ -656,9 +730,7 @@ class _BillingWorkspacePageState extends ConsumerState<BillingWorkspacePage> {
                             ),
                           ),
                       ],
-                      onChanged: (val) {
-                        setState(() => _selectedEmployeeId = val);
-                      },
+                      onChanged: _onEmployeeChanged,
                     ),
                   ],
                   if (customers.isNotEmpty) ...[
@@ -666,7 +738,7 @@ class _BillingWorkspacePageState extends ConsumerState<BillingWorkspacePage> {
                     DropdownButtonFormField<String?>(
                       key: const ValueKey('customer-filter'),
                       isExpanded: true,
-                      value: _selectedCustomerId,
+                      value: effectiveCustomerId,
                       decoration: const InputDecoration(
                         labelText: 'Customer',
                         isDense: true,
@@ -690,9 +762,7 @@ class _BillingWorkspacePageState extends ConsumerState<BillingWorkspacePage> {
                             ),
                           ),
                       ],
-                      onChanged: (val) {
-                        setState(() => _selectedCustomerId = val);
-                      },
+                      onChanged: _onCustomerChanged,
                     ),
                   ],
                 ],
@@ -739,9 +809,7 @@ class _BillingWorkspacePageState extends ConsumerState<BillingWorkspacePage> {
                             ),
                           ),
                       ],
-                      onChanged: (val) {
-                        setState(() => _selectedPublicationId = val);
-                      },
+                      onChanged: _onPublicationChanged,
                     ),
                   ),
 
@@ -751,7 +819,7 @@ class _BillingWorkspacePageState extends ConsumerState<BillingWorkspacePage> {
                       child: DropdownButtonFormField<String?>(
                         key: const ValueKey('employee-filter'),
                         isExpanded: true,
-                        value: _selectedEmployeeId,
+                        value: effectiveEmployeeId,
                         decoration: const InputDecoration(
                           labelText: 'Assigned Employee',
                           isDense: true,
@@ -775,9 +843,7 @@ class _BillingWorkspacePageState extends ConsumerState<BillingWorkspacePage> {
                               ),
                             ),
                         ],
-                        onChanged: (val) {
-                          setState(() => _selectedEmployeeId = val);
-                        },
+                        onChanged: _onEmployeeChanged,
                       ),
                     ),
 
@@ -787,7 +853,7 @@ class _BillingWorkspacePageState extends ConsumerState<BillingWorkspacePage> {
                       child: DropdownButtonFormField<String?>(
                         key: const ValueKey('customer-filter'),
                         isExpanded: true,
-                        value: _selectedCustomerId,
+                        value: effectiveCustomerId,
                         decoration: const InputDecoration(
                           labelText: 'Customer',
                           isDense: true,
@@ -811,9 +877,7 @@ class _BillingWorkspacePageState extends ConsumerState<BillingWorkspacePage> {
                               ),
                             ),
                         ],
-                        onChanged: (val) {
-                          setState(() => _selectedCustomerId = val);
-                        },
+                        onChanged: _onCustomerChanged,
                       ),
                     ),
                 ],
@@ -1179,31 +1243,47 @@ class _BillingWorkspacePageState extends ConsumerState<BillingWorkspacePage> {
                           runSpacing: 8,
                           crossAxisAlignment: WrapCrossAlignment.center,
                           children: [
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Checkbox(
-                                  value:
-                                      readyToBillCount > 0 &&
-                                      selectedCount == readyToBillCount,
-                                  onChanged: (val) {
-                                    setState(() {
-                                      if (val == true) {
-                                        _selectedCustomerIds.addAll(
-                                          filteredRows
-                                              .where(
-                                                (r) => r.finalizedBill == null,
-                                              )
-                                              .map((r) => r.customerId),
-                                        );
-                                      } else {
-                                        _selectedCustomerIds.clear();
-                                      }
-                                    });
-                                  },
-                                ),
-                                const Text('Select All Ready'),
-                              ],
+                            InkWell(
+                              onTap: () {
+                                setState(() {
+                                  if (readyToBillCount > 0 &&
+                                      selectedCount == readyToBillCount) {
+                                    _selectedCustomerIds.clear();
+                                  } else {
+                                    _selectedCustomerIds.addAll(
+                                      filteredRows
+                                          .where((r) => r.finalizedBill == null)
+                                          .map((r) => r.customerId),
+                                    );
+                                  }
+                                });
+                              },
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Checkbox(
+                                    value:
+                                        readyToBillCount > 0 &&
+                                        selectedCount == readyToBillCount,
+                                    onChanged: (val) {
+                                      setState(() {
+                                        if (val == true) {
+                                          _selectedCustomerIds.addAll(
+                                            filteredRows
+                                                .where(
+                                                  (r) => r.finalizedBill == null,
+                                                )
+                                                .map((r) => r.customerId),
+                                          );
+                                        } else {
+                                          _selectedCustomerIds.clear();
+                                        }
+                                      });
+                                    },
+                                  ),
+                                  const Text('Select All Ready'),
+                                ],
+                              ),
                             ),
 
                             // Create Selected Bills Button

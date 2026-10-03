@@ -72,9 +72,36 @@ class MockBillingRepository implements BillingRepository {
         lastAuditId: 'audit-001',
       ),
     ),
+    const BillingWorkspaceRow(
+      customerId: 'cust-4',
+      customerCode: 'C-004',
+      customerName: 'Divya Kumar',
+      areaId: 'area-south',
+      assignedEmployeeId: 'emp-102',
+      publicationId: 'pub-ht',
+      publicationName: 'Hindustan Times',
+      publicationIds: {'pub-ht'},
+      hasPricing: true,
+      estimatedTotalPaise: 22000,
+      finalizedBill: null,
+    ),
+    const BillingWorkspaceRow(
+      customerId: 'cust-5',
+      customerCode: 'C-005',
+      customerName: 'Ekta Jain',
+      areaId: 'area-central',
+      assignedEmployeeId: 'emp-103',
+      publicationId: '',
+      publicationName: '',
+      publicationIds: {},
+      hasPricing: false,
+      estimatedTotalPaise: 0,
+      finalizedBill: null,
+    ),
   ];
 
   int finalizeCallCount = 0;
+  List<BillingWorkspaceRow> lastBatchFinalizeRows = [];
   int saveBillingMonthlyPriceCallCount = 0;
   int recordFailureCallCount = 0;
   bool shouldFinalizeFail = false;
@@ -297,6 +324,20 @@ class MockNewspaperRepository implements NewspaperRepository {
           updatedBy: 'admin',
           lastAuditId: 'audit-2',
         ),
+        Newspaper(
+          id: 'pub-ht',
+          businessId: 'biz-test',
+          newspaperCode: 'HT',
+          name: 'Hindustan Times',
+          searchName: 'hindustan times',
+          edition: 'Delhi',
+          language: 'English',
+          defaultPricePaise: 22000,
+          status: NewspaperStatus.active,
+          createdBy: 'admin',
+          updatedBy: 'admin',
+          lastAuditId: 'audit-3',
+        ),
       ],
       nextCursor: null,
       hasMore: false,
@@ -477,7 +518,8 @@ void main() {
       expect(find.text('Chagganlal Seth'), findsOneWidget);
     });
 
-    testWidgets('Customer filter narrows rows and clearing restores rows',
+    testWidgets(
+        'Test 1: All Publications + All Customers -> all eligible publication subscribers are available',
         (tester) async {
       tester.view.physicalSize = const Size(1080, 1920);
       tester.view.devicePixelRatio = 1.0;
@@ -486,30 +528,50 @@ void main() {
       await tester.pumpWidget(createWidgetUnderTest());
       await tester.pumpAndSettle();
 
-      // Select Aarav Sharma in customer filter
-      await tester.tap(find.byKey(const ValueKey('customer-filter')));
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.text('Aarav Sharma (C-001)').last);
-      await tester.pumpAndSettle();
-
-      expect(find.text('Aarav Sharma'), findsOneWidget);
-      expect(find.text('Bhavna Patel'), findsNothing);
-      expect(find.text('Chagganlal Seth'), findsNothing);
-
-      // Clear customer filter by selecting All Customers
-      await tester.tap(find.byKey(const ValueKey('customer-filter')));
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.text('All Customers').last);
-      await tester.pumpAndSettle();
-
       expect(find.text('Aarav Sharma'), findsOneWidget);
       expect(find.text('Bhavna Patel'), findsOneWidget);
       expect(find.text('Chagganlal Seth'), findsOneWidget);
+      expect(find.text('Divya Kumar'), findsOneWidget);
+      expect(find.text('Ekta Jain'), findsOneWidget);
     });
 
-    testWidgets('Publication filter excludes non-subscribers and handles multi-publication customers',
+    testWidgets(
+        'Test 2: Publication A + All Customers -> only customers subscribed to A are available',
+        (tester) async {
+      tester.view.physicalSize = const Size(1080, 1920);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      await tester.pumpWidget(createWidgetUnderTest());
+      await tester.pumpAndSettle();
+
+      // Filter by Times of India (pub-toi)
+      await tester.tap(find.byKey(const ValueKey('publication-filter')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Times of India').last);
+      await tester.pumpAndSettle();
+
+      // Subscribed to TOI: Aarav (cust-1), Chagganlal (cust-3)
+      expect(find.text('Aarav Sharma'), findsOneWidget);
+      expect(find.text('Chagganlal Seth'), findsOneWidget);
+
+      // Not subscribed to TOI: Bhavna (DJ only), Divya (HT only), Ekta (none)
+      expect(find.text('Bhavna Patel'), findsNothing);
+      expect(find.text('Divya Kumar'), findsNothing);
+      expect(find.text('Ekta Jain'), findsNothing);
+
+      // Open customer dropdown to verify customer options are scoped to TOI
+      await tester.tap(find.byKey(const ValueKey('customer-filter')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Aarav Sharma (C-001)'), findsOneWidget);
+      expect(find.text('Chagganlal Seth (C-003)'), findsOneWidget);
+      expect(find.text('Bhavna Patel (C-002)'), findsNothing);
+      expect(find.text('Divya Kumar (C-004)'), findsNothing);
+    });
+
+    testWidgets(
+        'Test 3: Publication B + All Customers -> only customers subscribed to B are available',
         (tester) async {
       tester.view.physicalSize = const Size(1080, 1920);
       tester.view.devicePixelRatio = 1.0;
@@ -521,18 +583,68 @@ void main() {
       // Filter by Dainik Jagran (pub-dj)
       await tester.tap(find.byKey(const ValueKey('publication-filter')));
       await tester.pumpAndSettle();
-
       await tester.tap(find.text('Dainik Jagran').last);
       await tester.pumpAndSettle();
 
-      // Aarav (only TOI) should be excluded
-      expect(find.text('Aarav Sharma'), findsNothing);
-      // Bhavna (DJ) and Chagganlal (TOI + DJ) should be present
+      // Subscribed to DJ: Bhavna (cust-2), Chagganlal (cust-3)
       expect(find.text('Bhavna Patel'), findsOneWidget);
       expect(find.text('Chagganlal Seth'), findsOneWidget);
+
+      // Not subscribed to DJ
+      expect(find.text('Aarav Sharma'), findsNothing);
+      expect(find.text('Divya Kumar'), findsNothing);
+      expect(find.text('Ekta Jain'), findsNothing);
+
+      // Verify customer dropdown options
+      await tester.tap(find.byKey(const ValueKey('customer-filter')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Bhavna Patel (C-002)'), findsOneWidget);
+      expect(find.text('Chagganlal Seth (C-003)'), findsOneWidget);
+      expect(find.text('Aarav Sharma (C-001)'), findsNothing);
     });
 
-    testWidgets('Publication + Customer filters compose correctly',
+    testWidgets(
+        'Test 4 & 5: Multi-publication customer appears under both A and B, single-pub customer only under their pub',
+        (tester) async {
+      tester.view.physicalSize = const Size(1080, 1920);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      await tester.pumpWidget(createWidgetUnderTest());
+      await tester.pumpAndSettle();
+
+      // Check under TOI
+      await tester.tap(find.byKey(const ValueKey('publication-filter')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Times of India').last);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Chagganlal Seth'), findsOneWidget); // A + B -> present in A
+      expect(find.text('Aarav Sharma'), findsOneWidget); // A only -> present in A
+
+      // Check under DJ
+      await tester.tap(find.byKey(const ValueKey('publication-filter')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Dainik Jagran').last);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Chagganlal Seth'), findsOneWidget); // A + B -> present in B
+      expect(find.text('Aarav Sharma'), findsNothing); // A only -> NOT in B
+
+      // Check under HT
+      await tester.tap(find.byKey(const ValueKey('publication-filter')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Hindustan Times').last);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Divya Kumar'), findsOneWidget);
+      expect(find.text('Chagganlal Seth'), findsNothing);
+      expect(find.text('Aarav Sharma'), findsNothing);
+    });
+
+    testWidgets(
+        'Test 6: Publication A + Employee X -> customer options respect BOTH publication and employee filtering',
         (tester) async {
       tester.view.physicalSize = const Size(1080, 1920);
       tester.view.devicePixelRatio = 1.0;
@@ -547,15 +659,132 @@ void main() {
       await tester.tap(find.text('Dainik Jagran').last);
       await tester.pumpAndSettle();
 
-      // Filter by Bhavna Patel
-      await tester.tap(find.byKey(const ValueKey('customer-filter')));
+      // Filter by Employee emp-101 (Chagganlal Seth is emp-101, Bhavna Patel is emp-102)
+      await tester.tap(find.byKey(const ValueKey('employee-filter')));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Bhavna Patel (C-002)').last);
+      await tester.tap(find.text('Employee: emp-101').last);
       await tester.pumpAndSettle();
 
-      expect(find.text('Bhavna Patel'), findsOneWidget);
-      expect(find.text('Chagganlal Seth'), findsNothing);
+      expect(find.text('Chagganlal Seth'), findsOneWidget);
+      expect(find.text('Bhavna Patel'), findsNothing);
+
+      // Verify customer dropdown only contains Chagganlal Seth
+      await tester.tap(find.byKey(const ValueKey('customer-filter')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Chagganlal Seth (C-003)'), findsOneWidget);
+      expect(find.text('Bhavna Patel (C-002)'), findsNothing);
+    });
+
+    testWidgets(
+        'Test 7: Publication A + Customer 3 -> only Customer 3 is selected/displayed',
+        (tester) async {
+      tester.view.physicalSize = const Size(1080, 1920);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      await tester.pumpWidget(createWidgetUnderTest());
+      await tester.pumpAndSettle();
+
+      // Filter by Times of India
+      await tester.tap(find.byKey(const ValueKey('publication-filter')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Times of India').last);
+      await tester.pumpAndSettle();
+
+      // Filter by Customer Chagganlal Seth (C-003)
+      await tester.tap(find.byKey(const ValueKey('customer-filter')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Chagganlal Seth (C-003)').last);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Chagganlal Seth'), findsOneWidget);
       expect(find.text('Aarav Sharma'), findsNothing);
+    });
+
+    testWidgets(
+        'Test 8: Changing Publication A -> Publication B reconciles customer filter and selected customer state',
+        (tester) async {
+      tester.view.physicalSize = const Size(1080, 1920);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      await tester.pumpWidget(createWidgetUnderTest());
+      await tester.pumpAndSettle();
+
+      // Filter by Times of India
+      await tester.tap(find.byKey(const ValueKey('publication-filter')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Times of India').last);
+      await tester.pumpAndSettle();
+
+      // Select Aarav Sharma (who only subscribes to TOI)
+      await tester.tap(find.byKey(const ValueKey('customer-filter')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Aarav Sharma (C-001)').last);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Aarav Sharma'), findsOneWidget);
+
+      // Now switch publication to Dainik Jagran (Aarav is NOT subscribed to DJ)
+      await tester.tap(find.byKey(const ValueKey('publication-filter')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Dainik Jagran').last);
+      await tester.pumpAndSettle();
+
+      // Customer selection should reconcile cleanly without errors, showing DJ subscribers
+      expect(find.text('Bhavna Patel'), findsOneWidget);
+      expect(find.text('Chagganlal Seth'), findsOneWidget);
+      expect(find.text('Aarav Sharma'), findsNothing);
+    });
+
+    testWidgets(
+        'Test 9: Select All Ready after publication filtering selects only Ready customers in current filtered dataset',
+        (tester) async {
+      tester.view.physicalSize = const Size(1080, 1920);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      await tester.pumpWidget(createWidgetUnderTest());
+      await tester.pumpAndSettle();
+
+      // Filter by Times of India
+      // Under TOI: Aarav Sharma (ready/unfinalized), Chagganlal Seth (already finalized)
+      await tester.tap(find.byKey(const ValueKey('publication-filter')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Times of India').last);
+      await tester.pumpAndSettle();
+
+      // Tap Select All Ready
+      await tester.tap(find.text('Select All Ready'));
+      await tester.pumpAndSettle();
+
+      // "Create Selected (1)" should show count 1 (only Aarav Sharma)
+      expect(find.text('Create Selected (1)'), findsOneWidget);
+    });
+
+    testWidgets(
+        'Test 10: Create All after publication filtering operates only on current filtered customer dataset',
+        (tester) async {
+      tester.view.physicalSize = const Size(1080, 1920);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      await tester.pumpWidget(createWidgetUnderTest());
+      await tester.pumpAndSettle();
+
+      // Filter by Dainik Jagran (Bhavna Patel is ready to bill)
+      await tester.tap(find.byKey(const ValueKey('publication-filter')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Dainik Jagran').last);
+      await tester.pumpAndSettle();
+
+      // Tap Create All
+      await tester.tap(find.byKey(const ValueKey('create-all-bills-btn')));
+      await tester.pumpAndSettle();
+
+      // Finalize should be invoked for the ready customer under DJ (Bhavna Patel)
+      expect(mockBillingRepo.finalizeCallCount, equals(1));
     });
 
     testWidgets('Use for this billing only persists server-authoritatively',
@@ -620,7 +849,7 @@ void main() {
     });
 
     testWidgets(
-        'Mobile viewport layout renders cleanly without horizontal overflow and truncates long customer IDs',
+        'Mobile viewport layout renders cleanly without horizontal overflow at 360x640 and truncates long customer IDs',
         (tester) async {
       mockBillingRepo.mockRows = [
         const BillingWorkspaceRow(

@@ -707,21 +707,20 @@ class FirebaseBillingRepository implements BillingRepository {
         final exactDocuments = await exactFuture;
         final periodDocuments = await periodFuture;
         final monthlyPriceSnapshot = await monthlyPriceFuture;
-        final priceRules = <BillingPriceRuleSnapshot>[];
+        BillingPriceRuleSnapshot? monthlyOverridePrice;
         if (monthlyPriceSnapshot.exists) {
           final mpData = monthlyPriceSnapshot.data()!;
-          priceRules.add(
-            BillingPriceRuleSnapshot(
-              ruleId: 'monthly_snapshot_${monthlyPriceSnapshot.id}',
-              startDate: LocalDate(month.year, month.month, 1),
-              endDate: LocalDate(month.year, month.month, month.daysInMonth),
-              pricePaise: (mpData['pricePaise'] as num?)?.toInt() ?? -1,
-              isExactDate: false,
-              revision: 999999,
-              pricingBasis: PricingBasis.fromValue(mpData['pricingBasis']),
-            ),
+          monthlyOverridePrice = BillingPriceRuleSnapshot(
+            ruleId: 'monthly_snapshot_${monthlyPriceSnapshot.id}',
+            startDate: LocalDate(month.year, month.month, 1),
+            endDate: LocalDate(month.year, month.month, month.daysInMonth),
+            pricePaise: (mpData['pricePaise'] as num?)?.toInt() ?? -1,
+            isExactDate: false,
+            revision: 999999,
+            pricingBasis: PricingBasis.fromValue(mpData['pricingBasis']),
           );
         }
+        final priceRules = <BillingPriceRuleSnapshot>[];
         for (final document in [
           ...exactDocuments.docs,
           ...periodDocuments.docs,
@@ -752,6 +751,7 @@ class FirebaseBillingRepository implements BillingRepository {
                   .newspaperName,
           defaultPricePaise: defaultPrice is int ? defaultPrice : -1,
           rules: priceRules,
+          monthlyOverridePrice: monthlyOverridePrice,
         );
       }
 

@@ -221,12 +221,14 @@ class BillingNewspaperSnapshot {
     required this.name,
     required this.defaultPricePaise,
     required this.rules,
+    this.monthlyOverridePrice,
   });
 
   final String newspaperId;
   final String name;
   final int defaultPricePaise;
   final List<BillingPriceRuleSnapshot> rules;
+  final BillingPriceRuleSnapshot? monthlyOverridePrice;
 }
 
 class BillingAdjustment {
@@ -763,22 +765,37 @@ class MonthlyBillPlanner {
           code: 'missing-price',
         );
       }
-      final monthlyRules =
-          paper.rules
-              .where(
-                (rule) =>
-                    !rule.isExactDate &&
-                    rule.pricingBasis == PricingBasis.monthly &&
-                    !rule.startDate.isAfter(
-                      LocalDate(month.year, month.month, month.daysInMonth),
-                    ) &&
-                    !rule.endDate.isBefore(
-                      LocalDate(month.year, month.month, 1),
-                    ),
-              )
-              .toList();
-      if (monthlyRules.isNotEmpty) {
-        final monthlyRule = monthlyRules.single;
+      BillingPriceRuleSnapshot? effectiveMonthlyRule;
+      if (paper.monthlyOverridePrice != null) {
+        effectiveMonthlyRule = paper.monthlyOverridePrice;
+      } else {
+        final globalMonthlyRules =
+            paper.rules
+                .where(
+                  (rule) =>
+                      !rule.isExactDate &&
+                      rule.pricingBasis == PricingBasis.monthly &&
+                      !rule.startDate.isAfter(
+                        LocalDate(month.year, month.month, month.daysInMonth),
+                      ) &&
+                      !rule.endDate.isBefore(
+                        LocalDate(month.year, month.month, 1),
+                      ),
+                )
+                .toList();
+        if (globalMonthlyRules.length > 1) {
+          final monthStr =
+              '${month.year}-${month.month.toString().padLeft(2, '0')}';
+          throw AppException(
+            'Ambiguous active pricing for ${paper.name} in $monthStr. Review the publication\'s pricing rules.',
+            code: 'ambiguous-price',
+          );
+        } else if (globalMonthlyRules.length == 1) {
+          effectiveMonthlyRule = globalMonthlyRules.first;
+        }
+      }
+
+      if (effectiveMonthlyRule != null) {
         final activeDates = <LocalDate>[];
         for (var day = 1; day <= month.daysInMonth; day++) {
           final date = LocalDate(month.year, month.month, day);
@@ -812,7 +829,7 @@ class MonthlyBillPlanner {
               unitPricePaise:
                   hasCustomerOverride
                       ? term.customPricePaise!
-                      : monthlyRule.pricePaise,
+                      : effectiveMonthlyRule.pricePaise,
               quantity: term.quantity,
               priceSource:
                   hasCustomerOverride
@@ -821,8 +838,9 @@ class MonthlyBillPlanner {
               priceSourceId:
                   hasCustomerOverride
                       ? term.subscriptionId
-                      : monthlyRule.ruleId,
-              priceRuleRevision: hasCustomerOverride ? 0 : monthlyRule.revision,
+                      : effectiveMonthlyRule.ruleId,
+              priceRuleRevision:
+                  hasCustomerOverride ? 0 : effectiveMonthlyRule.revision,
             ),
           );
         }
@@ -940,12 +958,12 @@ class MonthlyBillPlanner {
     final periods = matching.where((rule) => !rule.isExactDate).toList();
     if (exact.length > 1 || periods.length > 1) {
       throw AppException(
-        'Ambiguous active pricing for ${paper.name} on $date.',
+        'Ambiguous active pricing for ${paper.name} on $date. Review the publication\'s pricing rules.',
         code: 'ambiguous-price',
       );
     }
     if (exact.isNotEmpty) {
-      final rule = exact.single;
+      final rule = exact.first;
       _validateResolvedRule(rule, paper.name);
       return (
         rule.pricePaise,
@@ -955,7 +973,7 @@ class MonthlyBillPlanner {
       );
     }
     if (periods.isNotEmpty) {
-      final rule = periods.single;
+      final rule = periods.first;
       _validateResolvedRule(rule, paper.name);
       return (
         rule.pricePaise,

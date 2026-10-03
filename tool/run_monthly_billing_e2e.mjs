@@ -24,7 +24,7 @@ const { getFirestore, Timestamp } = requireFromFunctions(
   'firebase-admin/firestore',
 );
 
-const projectId = 'demo-paper-route';
+const projectId = process.env.GCLOUD_PROJECT || 'paperroutedev';
 const clientApp = initializeClientApp({
   projectId,
   apiKey: 'demo-key',

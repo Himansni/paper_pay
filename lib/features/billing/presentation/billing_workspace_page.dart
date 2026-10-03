@@ -546,6 +546,9 @@ class _BillingWorkspacePageState extends ConsumerState<BillingWorkspacePage> {
       monthlyPrices,
     );
 
+    final mediaWidth = MediaQuery.of(context).size.width;
+    final isMobile = mediaWidth < 600;
+
     return Scaffold(
       appBar: AppBar(
         leading: BackButton(onPressed: () => context.go('/')),
@@ -555,7 +558,12 @@ class _BillingWorkspacePageState extends ConsumerState<BillingWorkspacePage> {
         onRefresh: () => _load(reset: true),
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+          padding: EdgeInsets.fromLTRB(
+            isMobile ? 16 : 20,
+            12,
+            isMobile ? 16 : 20,
+            32,
+          ),
           children: [
             Text(
               widget.user.isHead
@@ -577,22 +585,18 @@ class _BillingWorkspacePageState extends ConsumerState<BillingWorkspacePage> {
             const SizedBox(height: 16),
 
             // Top Control Bar: Month Picker & Dropdowns
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                OutlinedButton.icon(
-                  key: const ValueKey('billing-month-selector'),
-                  onPressed: _selectMonth,
-                  icon: const Icon(Icons.calendar_month_outlined),
-                  label: Text(monthLabel),
-                ),
-
-                // Publication Dropdown
-                SizedBox(
-                  width: 220,
-                  child: DropdownButtonFormField<String?>(
+            if (isMobile)
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  OutlinedButton.icon(
+                    key: const ValueKey('billing-month-selector'),
+                    onPressed: _selectMonth,
+                    icon: const Icon(Icons.calendar_month_outlined),
+                    label: Text(monthLabel),
+                  ),
+                  const SizedBox(height: 10),
+                  DropdownButtonFormField<String?>(
                     key: const ValueKey('publication-filter'),
                     isExpanded: true,
                     value: _selectedPublicationId,
@@ -600,8 +604,8 @@ class _BillingWorkspacePageState extends ConsumerState<BillingWorkspacePage> {
                       labelText: 'Publication',
                       isDense: true,
                       contentPadding: EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 8,
+                        horizontal: 12,
+                        vertical: 10,
                       ),
                       border: OutlineInputBorder(),
                     ),
@@ -623,13 +627,9 @@ class _BillingWorkspacePageState extends ConsumerState<BillingWorkspacePage> {
                       setState(() => _selectedPublicationId = val);
                     },
                   ),
-                ),
-
-                // Employee Filter Dropdown
-                if (employees.isNotEmpty)
-                  SizedBox(
-                    width: 200,
-                    child: DropdownButtonFormField<String?>(
+                  if (employees.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    DropdownButtonFormField<String?>(
                       key: const ValueKey('employee-filter'),
                       isExpanded: true,
                       value: _selectedEmployeeId,
@@ -637,8 +637,8 @@ class _BillingWorkspacePageState extends ConsumerState<BillingWorkspacePage> {
                         labelText: 'Assigned Employee',
                         isDense: true,
                         contentPadding: EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 8,
+                          horizontal: 12,
+                          vertical: 10,
                         ),
                         border: OutlineInputBorder(),
                       ),
@@ -660,13 +660,10 @@ class _BillingWorkspacePageState extends ConsumerState<BillingWorkspacePage> {
                         setState(() => _selectedEmployeeId = val);
                       },
                     ),
-                  ),
-
-                // Customer Filter Dropdown
-                if (customers.isNotEmpty)
-                  SizedBox(
-                    width: 220,
-                    child: DropdownButtonFormField<String?>(
+                  ],
+                  if (customers.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    DropdownButtonFormField<String?>(
                       key: const ValueKey('customer-filter'),
                       isExpanded: true,
                       value: _selectedCustomerId,
@@ -674,8 +671,8 @@ class _BillingWorkspacePageState extends ConsumerState<BillingWorkspacePage> {
                         labelText: 'Customer',
                         isDense: true,
                         contentPadding: EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 8,
+                          horizontal: 12,
+                          vertical: 10,
                         ),
                         border: OutlineInputBorder(),
                       ),
@@ -697,9 +694,130 @@ class _BillingWorkspacePageState extends ConsumerState<BillingWorkspacePage> {
                         setState(() => _selectedCustomerId = val);
                       },
                     ),
+                  ],
+                ],
+              )
+            else
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  OutlinedButton.icon(
+                    key: const ValueKey('billing-month-selector'),
+                    onPressed: _selectMonth,
+                    icon: const Icon(Icons.calendar_month_outlined),
+                    label: Text(monthLabel),
                   ),
-              ],
-            ),
+
+                  SizedBox(
+                    width: 220,
+                    child: DropdownButtonFormField<String?>(
+                      key: const ValueKey('publication-filter'),
+                      isExpanded: true,
+                      value: _selectedPublicationId,
+                      decoration: const InputDecoration(
+                        labelText: 'Publication',
+                        isDense: true,
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 8,
+                        ),
+                        border: OutlineInputBorder(),
+                      ),
+                      items: [
+                        const DropdownMenuItem<String?>(
+                          value: null,
+                          child: Text('All Publications'),
+                        ),
+                        for (final pub in publications)
+                          DropdownMenuItem<String?>(
+                            value: pub.id,
+                            child: Text(
+                              pub.name,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                      ],
+                      onChanged: (val) {
+                        setState(() => _selectedPublicationId = val);
+                      },
+                    ),
+                  ),
+
+                  if (employees.isNotEmpty)
+                    SizedBox(
+                      width: 200,
+                      child: DropdownButtonFormField<String?>(
+                        key: const ValueKey('employee-filter'),
+                        isExpanded: true,
+                        value: _selectedEmployeeId,
+                        decoration: const InputDecoration(
+                          labelText: 'Assigned Employee',
+                          isDense: true,
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 8,
+                          ),
+                          border: OutlineInputBorder(),
+                        ),
+                        items: [
+                          const DropdownMenuItem<String?>(
+                            value: null,
+                            child: Text('All Employees'),
+                          ),
+                          for (final empId in employees)
+                            DropdownMenuItem<String?>(
+                              value: empId,
+                              child: Text(
+                                'Employee: $empId',
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                        ],
+                        onChanged: (val) {
+                          setState(() => _selectedEmployeeId = val);
+                        },
+                      ),
+                    ),
+
+                  if (customers.isNotEmpty)
+                    SizedBox(
+                      width: 220,
+                      child: DropdownButtonFormField<String?>(
+                        key: const ValueKey('customer-filter'),
+                        isExpanded: true,
+                        value: _selectedCustomerId,
+                        decoration: const InputDecoration(
+                          labelText: 'Customer',
+                          isDense: true,
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 8,
+                          ),
+                          border: OutlineInputBorder(),
+                        ),
+                        items: [
+                          const DropdownMenuItem<String?>(
+                            value: null,
+                            child: Text('All Customers'),
+                          ),
+                          for (final cust in customers)
+                            DropdownMenuItem<String?>(
+                              value: cust.id,
+                              child: Text(
+                                '${cust.name} (${cust.code})',
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                        ],
+                        onChanged: (val) {
+                          setState(() => _selectedCustomerId = val);
+                        },
+                      ),
+                    ),
+                ],
+              ),
             const SizedBox(height: 16),
 
             // Price Resolution Banner
@@ -720,64 +838,135 @@ class _BillingWorkspacePageState extends ConsumerState<BillingWorkspacePage> {
                 ),
                 child: Padding(
                   padding: const EdgeInsets.all(12),
-                  child: Row(
-                    children: [
-                      Icon(
-                        activePriceSetting != null
-                            ? Icons.sell_outlined
-                            : Icons.warning_amber_rounded,
-                        color:
-                            activePriceSetting != null
-                                ? const Color(0xFF2B6CB0)
-                                : const Color(0xFFC53030),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              activePriceSetting != null
-                                  ? 'Billing Price ${_money(activePriceSetting.pricePaise)}/${activePriceSetting.basis == PricingBasis.monthly ? 'month' : 'day'} — ${activePriceSetting.isBillingOnly ? 'Use for this billing only' : 'Global Price'}'
-                                  : 'No billing price set',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
+                  child:
+                      isMobile
+                          ? Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Icon(
+                                    activePriceSetting != null
+                                        ? Icons.sell_outlined
+                                        : Icons.warning_amber_rounded,
+                                    color:
+                                        activePriceSetting != null
+                                            ? const Color(0xFF2B6CB0)
+                                            : const Color(0xFFC53030),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          activePriceSetting != null
+                                              ? 'Billing Price ${_money(activePriceSetting.pricePaise)}/${activePriceSetting.basis == PricingBasis.monthly ? 'month' : 'day'}'
+                                              : 'No billing price set',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 15,
+                                            color:
+                                                activePriceSetting != null
+                                                    ? const Color(0xFF2B6CB0)
+                                                    : const Color(0xFFC53030),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          activePriceSetting != null
+                                              ? (activePriceSetting
+                                                      .isBillingOnly
+                                                  ? 'Use for this billing only'
+                                                  : 'Global Price')
+                                              : 'Configure billing price before batch finalization.',
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            color: Color(0xFF4A5568),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                              ElevatedButton.icon(
+                                key: const ValueKey('set-billing-price-btn'),
+                                onPressed:
+                                    () => _showSetBillingPriceModal(
+                                      publications,
+                                      monthlyPrices,
+                                    ),
+                                icon: const Icon(Icons.edit_note, size: 18),
+                                label: Text(
+                                  activePriceSetting != null
+                                      ? 'Change Price'
+                                      : 'Set Billing Price',
+                                ),
+                              ),
+                            ],
+                          )
+                          : Row(
+                            children: [
+                              Icon(
+                                activePriceSetting != null
+                                    ? Icons.sell_outlined
+                                    : Icons.warning_amber_rounded,
                                 color:
                                     activePriceSetting != null
                                         ? const Color(0xFF2B6CB0)
                                         : const Color(0xFFC53030),
                               ),
-                            ),
-                            Text(
-                              activePriceSetting != null
-                                  ? (activePriceSetting.isBillingOnly
-                                      ? 'Billing-specific price snapshot active for this month.'
-                                      : 'Canonical reusable global price rule active.')
-                                  : 'Configure billing price before batch finalization.',
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: Color(0xFF4A5568),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      activePriceSetting != null
+                                          ? 'Billing Price ${_money(activePriceSetting.pricePaise)}/${activePriceSetting.basis == PricingBasis.monthly ? 'month' : 'day'} — ${activePriceSetting.isBillingOnly ? 'Use for this billing only' : 'Global Price'}'
+                                          : 'No billing price set',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color:
+                                            activePriceSetting != null
+                                                ? const Color(0xFF2B6CB0)
+                                                : const Color(0xFFC53030),
+                                      ),
+                                    ),
+                                    Text(
+                                      activePriceSetting != null
+                                          ? (activePriceSetting.isBillingOnly
+                                              ? 'Billing-specific price snapshot active for this month.'
+                                              : 'Canonical reusable global price rule active.')
+                                          : 'Configure billing price before batch finalization.',
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        color: Color(0xFF4A5568),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      ElevatedButton.icon(
-                        key: const ValueKey('set-billing-price-btn'),
-                        onPressed:
-                            () => _showSetBillingPriceModal(
-                              publications,
-                              monthlyPrices,
-                            ),
-                        icon: const Icon(Icons.edit_note, size: 18),
-                        label: Text(
-                          activePriceSetting != null
-                              ? 'Change Price'
-                              : 'Set Billing Price',
-                        ),
-                      ),
-                    ],
-                  ),
+                              ElevatedButton.icon(
+                                key: const ValueKey('set-billing-price-btn'),
+                                onPressed:
+                                    () => _showSetBillingPriceModal(
+                                      publications,
+                                      monthlyPrices,
+                                    ),
+                                icon: const Icon(Icons.edit_note, size: 18),
+                                label: Text(
+                                  activePriceSetting != null
+                                      ? 'Change Price'
+                                      : 'Set Billing Price',
+                                ),
+                              ),
+                            ],
+                          ),
                 ),
               ),
             const SizedBox(height: 12),
@@ -790,118 +979,265 @@ class _BillingWorkspacePageState extends ConsumerState<BillingWorkspacePage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'Eligibility Summary',
-                            style: Theme.of(context).textTheme.titleMedium
-                                ?.copyWith(fontWeight: FontWeight.bold),
-                          ),
-                          Text(
-                            '$selectedCount selected of $readyToBillCount ready',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF2B6CB0),
+                      if (isMobile)
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Eligibility Summary',
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.bold),
                             ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 16,
-                        runSpacing: 8,
-                        children: [
-                          _summaryChip(
-                            'Eligible',
-                            '$totalEligible',
-                            Colors.blue,
-                          ),
-                          _summaryChip(
-                            'Ready',
-                            '$readyToBillCount',
-                            Colors.green,
-                          ),
-                          if (failedCount > 0)
+                            const SizedBox(height: 2),
+                            Text(
+                              '$selectedCount selected of $readyToBillCount ready',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 12.5,
+                                color: Color(0xFF2B6CB0),
+                              ),
+                            ),
+                          ],
+                        )
+                      else
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Eligibility Summary',
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.bold),
+                            ),
+                            Text(
+                              '$selectedCount selected of $readyToBillCount ready',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF2B6CB0),
+                              ),
+                            ),
+                          ],
+                        ),
+                      const SizedBox(height: 10),
+
+                      // Eligibility summary badges in responsive layout
+                      if (isMobile)
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
                             _summaryChip(
-                              'Failed',
-                              '$failedCount',
-                              Colors.red,
+                              'Eligible',
+                              '$totalEligible',
+                              Colors.blue,
                             ),
-                          _summaryChip(
-                            'Finalized',
-                            '$finalizedCount',
-                            Colors.grey,
-                          ),
-                        ],
-                      ),
-                      const Divider(height: 20),
+                            _summaryChip(
+                              'Ready',
+                              '$readyToBillCount',
+                              Colors.green,
+                            ),
+                            if (failedCount > 0)
+                              _summaryChip(
+                                'Failed',
+                                '$failedCount',
+                                Colors.red,
+                              ),
+                            _summaryChip(
+                              'Finalized',
+                              '$finalizedCount',
+                              Colors.grey,
+                            ),
+                          ],
+                        )
+                      else
+                        Wrap(
+                          spacing: 16,
+                          runSpacing: 8,
+                          children: [
+                            _summaryChip(
+                              'Eligible',
+                              '$totalEligible',
+                              Colors.blue,
+                            ),
+                            _summaryChip(
+                              'Ready',
+                              '$readyToBillCount',
+                              Colors.green,
+                            ),
+                            if (failedCount > 0)
+                              _summaryChip(
+                                'Failed',
+                                '$failedCount',
+                                Colors.red,
+                              ),
+                            _summaryChip(
+                              'Finalized',
+                              '$finalizedCount',
+                              Colors.grey,
+                            ),
+                          ],
+                        ),
+                      const Divider(height: 24),
 
                       // Select All / Batch Actions
-                      Wrap(
-                        spacing: 12,
-                        runSpacing: 8,
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        children: [
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Checkbox(
-                                value:
-                                    readyToBillCount > 0 &&
-                                    selectedCount == readyToBillCount,
-                                onChanged: (val) {
-                                  setState(() {
-                                    if (val == true) {
-                                      _selectedCustomerIds.addAll(
-                                        filteredRows
-                                            .where(
-                                              (r) => r.finalizedBill == null,
-                                            )
-                                            .map((r) => r.customerId),
-                                      );
-                                    } else {
-                                      _selectedCustomerIds.clear();
-                                    }
-                                  });
-                                },
+                      if (isMobile)
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            InkWell(
+                              onTap: () {
+                                setState(() {
+                                  if (readyToBillCount > 0 &&
+                                      selectedCount == readyToBillCount) {
+                                    _selectedCustomerIds.clear();
+                                  } else {
+                                    _selectedCustomerIds.addAll(
+                                      filteredRows
+                                          .where((r) => r.finalizedBill == null)
+                                          .map((r) => r.customerId),
+                                    );
+                                  }
+                                });
+                              },
+                              child: Row(
+                                children: [
+                                  Checkbox(
+                                    value:
+                                        readyToBillCount > 0 &&
+                                        selectedCount == readyToBillCount,
+                                    onChanged: (val) {
+                                      setState(() {
+                                        if (val == true) {
+                                          _selectedCustomerIds.addAll(
+                                            filteredRows
+                                                .where(
+                                                  (r) => r.finalizedBill == null,
+                                                )
+                                                .map((r) => r.customerId),
+                                          );
+                                        } else {
+                                          _selectedCustomerIds.clear();
+                                        }
+                                      });
+                                    },
+                                  ),
+                                  const Text(
+                                    'Select All Ready',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
                               ),
-                              const Text('Select All Ready'),
-                            ],
-                          ),
-
-                          // Create Selected Bills Button
-                          OutlinedButton.icon(
-                            key: const ValueKey('create-selected-bills-btn'),
-                            onPressed:
-                                selectedCount == 0 || _isBatchRunning
-                                    ? null
-                                    : () {
-                                      final targets =
+                            ),
+                            const SizedBox(height: 8),
+                            ElevatedButton.icon(
+                              key: const ValueKey('create-all-bills-btn'),
+                              style: ElevatedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 12,
+                                ),
+                              ),
+                              onPressed:
+                                  readyToBillCount == 0 || _isBatchRunning
+                                      ? null
+                                      : () => _runBatchBilling(filteredRows),
+                              icon: const Icon(Icons.flash_on_outlined),
+                              label: const Text(
+                                'Create All',
+                                style: TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            OutlinedButton.icon(
+                              key: const ValueKey('create-selected-bills-btn'),
+                              style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 12,
+                                ),
+                              ),
+                              onPressed:
+                                  selectedCount == 0 || _isBatchRunning
+                                      ? null
+                                      : () {
+                                        final targets =
+                                            filteredRows
+                                                .where(
+                                                  (r) => _selectedCustomerIds
+                                                      .contains(r.customerId),
+                                                )
+                                                .toList();
+                                        _runBatchBilling(targets);
+                                      },
+                              icon: const Icon(Icons.checklist_rtl_outlined),
+                              label: Text('Create Selected ($selectedCount)'),
+                            ),
+                          ],
+                        )
+                      else
+                        Wrap(
+                          spacing: 12,
+                          runSpacing: 8,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Checkbox(
+                                  value:
+                                      readyToBillCount > 0 &&
+                                      selectedCount == readyToBillCount,
+                                  onChanged: (val) {
+                                    setState(() {
+                                      if (val == true) {
+                                        _selectedCustomerIds.addAll(
                                           filteredRows
                                               .where(
-                                                (r) => _selectedCustomerIds
-                                                    .contains(r.customerId),
+                                                (r) => r.finalizedBill == null,
                                               )
-                                              .toList();
-                                      _runBatchBilling(targets);
-                                    },
-                            icon: const Icon(Icons.checklist_rtl_outlined),
-                            label: Text('Create Selected ($selectedCount)'),
-                          ),
+                                              .map((r) => r.customerId),
+                                        );
+                                      } else {
+                                        _selectedCustomerIds.clear();
+                                      }
+                                    });
+                                  },
+                                ),
+                                const Text('Select All Ready'),
+                              ],
+                            ),
 
-                          // Create All Button
-                          ElevatedButton.icon(
-                            key: const ValueKey('create-all-bills-btn'),
-                            onPressed:
-                                readyToBillCount == 0 || _isBatchRunning
-                                    ? null
-                                    : () => _runBatchBilling(filteredRows),
-                            icon: const Icon(Icons.flash_on_outlined),
-                            label: const Text('Create All'),
-                          ),
-                        ],
-                      ),
+                            // Create Selected Bills Button
+                            OutlinedButton.icon(
+                              key: const ValueKey('create-selected-bills-btn'),
+                              onPressed:
+                                  selectedCount == 0 || _isBatchRunning
+                                      ? null
+                                      : () {
+                                        final targets =
+                                            filteredRows
+                                                .where(
+                                                  (r) => _selectedCustomerIds
+                                                      .contains(r.customerId),
+                                                )
+                                                .toList();
+                                        _runBatchBilling(targets);
+                                      },
+                              icon: const Icon(Icons.checklist_rtl_outlined),
+                              label: Text('Create Selected ($selectedCount)'),
+                            ),
+
+                            // Create All Button
+                            ElevatedButton.icon(
+                              key: const ValueKey('create-all-bills-btn'),
+                              onPressed:
+                                  readyToBillCount == 0 || _isBatchRunning
+                                      ? null
+                                      : () => _runBatchBilling(filteredRows),
+                              icon: const Icon(Icons.flash_on_outlined),
+                              label: const Text('Create All'),
+                            ),
+                          ],
+                        ),
 
                       // Batch progress status
                       if (_isBatchRunning) ...[
@@ -951,79 +1287,7 @@ class _BillingWorkspacePageState extends ConsumerState<BillingWorkspacePage> {
               for (final row in filteredRows)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 10),
-                  child: Card(
-                    color: row.hasFailed && row.finalizedBill == null
-                        ? const Color(0xFFFFF5F5)
-                        : null,
-                    shape: row.hasFailed && row.finalizedBill == null
-                        ? RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            side: const BorderSide(
-                              color: Color(0xFFFEB2B2),
-                              width: 1.5,
-                            ),
-                          )
-                        : null,
-                    child: ListTile(
-                      onTap: () => _open(row),
-                      leading: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (widget.user.isHead && row.finalizedBill == null)
-                            Checkbox(
-                              value: _selectedCustomerIds.contains(
-                                row.customerId,
-                              ),
-                              onChanged: (val) {
-                                setState(() {
-                                  if (val == true) {
-                                    _selectedCustomerIds.add(row.customerId);
-                                  } else {
-                                    _selectedCustomerIds.remove(row.customerId);
-                                  }
-                                });
-                              },
-                            ),
-                          Icon(
-                            row.finalizedBill != null
-                                ? Icons.verified_outlined
-                                : (row.hasFailed
-                                    ? Icons.error_outline
-                                    : Icons.pending_actions_outlined),
-                            color:
-                                row.finalizedBill != null
-                                    ? Colors.green
-                                    : (row.hasFailed
-                                        ? Colors.red
-                                        : Colors.orange),
-                          ),
-                        ],
-                      ),
-                      title: Text(row.customerName),
-                      subtitle: Text(
-                        '${row.customerCode} • Area ${row.areaId}${row.assignedEmployeeId.isNotEmpty ? ' • Emp: ${row.assignedEmployeeId}' : ''}\n'
-                        '${row.finalizedBill != null ? 'Finalized • ${_money(row.finalizedBill!.totalDuePaise)}' : (row.hasFailed ? 'Failed: ${row.lastFailureReason ?? 'Finalization error'} • Tap Retry' : 'Not finalized')}',
-                      ),
-                      isThreeLine: true,
-                      trailing: row.hasFailed && row.finalizedBill == null
-                          ? OutlinedButton.icon(
-                              key: ValueKey('retry-bill-${row.customerId}'),
-                              onPressed:
-                                  _isBatchRunning || _loading
-                                      ? null
-                                      : () => _retryRow(row),
-                              icon: const Icon(Icons.refresh, size: 16),
-                              label: const Text('Retry'),
-                            )
-                          : (row.finalizedBill == null && !widget.user.isHead
-                              ? const Tooltip(
-                                  message:
-                                      'Only the Head can preview or finalize',
-                                  child: Icon(Icons.lock_outline),
-                                )
-                              : const Icon(Icons.chevron_right)),
-                    ),
-                  ),
+                  child: _buildCustomerCard(context, row),
                 ),
               if (_hasMore)
                 OutlinedButton(
@@ -1040,6 +1304,220 @@ class _BillingWorkspacePageState extends ConsumerState<BillingWorkspacePage> {
                 ),
             ],
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCustomerCard(BuildContext context, BillingWorkspaceRow row) {
+    final isFailed = row.hasFailed && row.finalizedBill == null;
+    final isFinalized = row.finalizedBill != null;
+
+    return Card(
+      elevation: 0,
+      color: isFailed ? const Color(0xFFFFF5F5) : null,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: isFailed ? const Color(0xFFFEB2B2) : const Color(0xFFCBD5E1),
+          width: isFailed ? 1.5 : 1.0,
+        ),
+      ),
+      child: InkWell(
+        onTap: () => _open(row),
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(12.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header Row: Selection Checkbox + Customer Name + Status Icon
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  if (widget.user.isHead && !isFinalized)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8.0),
+                      child: SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: Checkbox(
+                          value: _selectedCustomerIds.contains(row.customerId),
+                          onChanged: (val) {
+                            setState(() {
+                              if (val == true) {
+                                _selectedCustomerIds.add(row.customerId);
+                              } else {
+                                _selectedCustomerIds.remove(row.customerId);
+                              }
+                            });
+                          },
+                        ),
+                      ),
+                    ),
+                  Expanded(
+                    child: Text(
+                      row.customerName,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        color: Color(0xFF102A43),
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  if (isFinalized)
+                    const Icon(
+                      Icons.verified_outlined,
+                      color: Colors.green,
+                      size: 22,
+                    )
+                  else if (isFailed)
+                    const Icon(
+                      Icons.error_outline,
+                      color: Colors.red,
+                      size: 22,
+                    )
+                  else
+                    const Icon(
+                      Icons.pending_actions_outlined,
+                      color: Colors.orange,
+                      size: 22,
+                    ),
+                ],
+              ),
+              const SizedBox(height: 6),
+
+              // Code, Area & Employee info
+              Text(
+                '${row.customerCode} • Area ${row.areaId}${row.assignedEmployeeId.isNotEmpty ? ' • Emp: ${row.assignedEmployeeId}' : ''}',
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: Color(0xFF486581),
+                  height: 1.3,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 10),
+
+              // Status / Failure reason & Action button
+              if (isFinalized)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.green.shade50,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    'Finalized • ${_money(row.finalizedBill!.totalDuePaise)}',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.green.shade800,
+                    ),
+                  ),
+                )
+              else if (isFailed)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.red.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.red.shade200),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            Icons.warning_amber_rounded,
+                            size: 18,
+                            color: Colors.red.shade700,
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              'Failed: ${row.lastFailureReason ?? 'Finalization error'}',
+                              style: TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.red.shade900,
+                              ),
+                              maxLines: 3,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: OutlinedButton.icon(
+                          key: ValueKey('retry-bill-${row.customerId}'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.red.shade800,
+                            side: BorderSide(color: Colors.red.shade300),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          onPressed:
+                              _isBatchRunning || _loading
+                                  ? null
+                                  : () => _retryRow(row),
+                          icon: const Icon(Icons.refresh, size: 16),
+                          label: const Text(
+                            'Retry',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                Row(
+                  children: [
+                    Text(
+                      'Not finalized',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.orange.shade800,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const Spacer(),
+                    if (!widget.user.isHead)
+                      const Tooltip(
+                        message: 'Only the Head can preview or finalize',
+                        child: Icon(
+                          Icons.lock_outline,
+                          size: 16,
+                          color: Colors.grey,
+                        ),
+                      )
+                    else
+                      const Icon(
+                        Icons.chevron_right,
+                        size: 18,
+                        color: Colors.grey,
+                      ),
+                  ],
+                ),
+            ],
+          ),
         ),
       ),
     );

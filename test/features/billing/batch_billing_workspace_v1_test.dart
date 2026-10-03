@@ -618,5 +618,63 @@ void main() {
       // Verify finalizeBill was invoked
       expect(mockBillingRepo.finalizeCallCount, equals(1));
     });
+
+    testWidgets(
+        'Mobile viewport layout renders cleanly without horizontal overflow and truncates long customer IDs',
+        (tester) async {
+      mockBillingRepo.mockRows = [
+        const BillingWorkspaceRow(
+          customerId: 'cust-long-id',
+          customerCode:
+              'C-56D91E6CABAF4E219971304DCB6E6825-VERY-LONG-CUSTOMER-CODE',
+          customerName:
+              'Emiway Bantai Long Name Testing Mobile Responsiveness',
+          areaId: 'area-fd9g8ZN5YDk04I9yWIDy',
+          assignedEmployeeId: 'upNLkwhR95hLS70Xo8reqdjmTBl2',
+          publicationId: 'pub-toi',
+          publicationName: 'Times of India',
+          publicationIds: {'pub-toi'},
+          hasPricing: true,
+          estimatedTotalPaise: 25000,
+          finalizedBill: null,
+          hasFailed: true,
+          lastFailureReason:
+              'A collection balance exists without an earlier finalized bill',
+        ),
+      ];
+
+      // Set narrow phone viewport (360 x 640 dp)
+      tester.view.physicalSize = const Size(360, 640);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      await tester.pumpWidget(createWidgetUnderTest());
+      await tester.pumpAndSettle();
+
+      // Verify no RenderFlex overflow error occurred
+      expect(tester.takeException(), isNull);
+
+      // Verify filters visible & usable
+      expect(find.byKey(const ValueKey('publication-filter')), findsOneWidget);
+
+      // Verify price card accessible
+      expect(find.byKey(const ValueKey('set-billing-price-btn')), findsOneWidget);
+
+      // Verify batch action buttons accessible
+      final createAllFinder = find.byKey(const ValueKey('create-all-bills-btn'));
+      await tester.scrollUntilVisible(createAllFinder, 200.0);
+      await tester.pumpAndSettle();
+      expect(createAllFinder, findsOneWidget);
+
+      // Verify long customer name and code rendered safely
+      expect(find.textContaining('Emiway Bantai'), findsOneWidget);
+      expect(find.textContaining('C-56D91E6CABAF4E219971304DCB6E6825'), findsOneWidget);
+
+      // Verify failed state and retry button visible
+      final retryFinder = find.byKey(const ValueKey('retry-bill-cust-long-id'));
+      await tester.scrollUntilVisible(retryFinder, 200.0);
+      await tester.pumpAndSettle();
+      expect(retryFinder, findsOneWidget);
+    });
   });
 }

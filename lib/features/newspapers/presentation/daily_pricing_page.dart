@@ -14,6 +14,8 @@ import 'package:paper_route/features/billing/presentation/billing_providers.dart
 import 'package:paper_route/features/business/domain/business_profile.dart';
 import 'package:paper_route/features/business/presentation/business_providers.dart';
 import 'package:paper_route/features/newspapers/domain/newspaper.dart';
+import 'package:paper_route/features/newspapers/domain/newspaper_master_catalog.dart';
+import 'package:paper_route/features/newspapers/presentation/master_catalog_picker_sheet.dart';
 import 'package:paper_route/features/newspapers/presentation/newspaper_providers.dart';
 
 class DailyPricingPage extends ConsumerStatefulWidget {
@@ -136,6 +138,10 @@ class _DailyPricingPageState extends ConsumerState<DailyPricingPage>
       if (!mounted) return;
       setState(() {
         _newspapers = deduplicated;
+        if (_selectedPaper != null) {
+          _selectedPaper =
+              deduplicated.where((p) => p.id == _selectedPaper!.id).firstOrNull;
+        }
         if (_selectedPaper == null && deduplicated.isNotEmpty) {
           _selectedPaper = deduplicated.first;
           _globalPriceController.text = NewspaperMoney.formatPaiseForInput(
@@ -143,6 +149,11 @@ class _DailyPricingPageState extends ConsumerState<DailyPricingPage>
                 ? deduplicated.first.defaultPricePaise * 30
                 : deduplicated.first.defaultPricePaise,
           );
+        }
+        if (_bulkSelectedPaper != null) {
+          _bulkSelectedPaper = deduplicated
+              .where((p) => p.id == _bulkSelectedPaper!.id)
+              .firstOrNull;
         }
         if (_bulkSelectedPaper == null && deduplicated.isNotEmpty) {
           _bulkSelectedPaper = deduplicated.first;
@@ -351,6 +362,65 @@ class _DailyPricingPageState extends ConsumerState<DailyPricingPage>
     } finally {
       if (mounted) setState(() => _savingGlobalRule = false);
     }
+  }
+
+  Future<void> _onSelectFromMasterCatalog(MasterNewspaperEntry selected) async {
+    final existing = _newspapers.where((p) {
+      final nameMatches =
+          p.name.trim().toLowerCase() == selected.name.trim().toLowerCase();
+      final editionMatches =
+          p.edition.trim().toLowerCase() == selected.edition.trim().toLowerCase();
+      return nameMatches && (selected.edition.isEmpty || editionMatches);
+    }).firstOrNull;
+
+    Newspaper targetPaper;
+    if (existing != null) {
+      targetPaper = existing;
+    } else {
+      try {
+        final repo = ref.read(newspaperRepositoryProvider);
+        final input = NewspaperInput(
+          name: selected.name,
+          edition: selected.edition,
+          language: selected.language,
+          defaultPricePaise: selected.defaultPricePaise,
+        );
+        final newId = await repo.createNewspaper(
+          actor: widget.user,
+          input: input,
+        );
+        await _load();
+        final newlyCreated =
+            _newspapers.where((p) => p.id == newId).firstOrNull;
+        if (newlyCreated == null) return;
+        targetPaper = newlyCreated;
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Could not add publication: $e')),
+          );
+        }
+        return;
+      }
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _selectedPaper = targetPaper;
+      _globalPriceController.text = NewspaperMoney.formatPaiseForInput(
+        _pricingBasis == PricingBasis.monthly
+            ? selected.defaultPricePaise * 30
+            : selected.defaultPricePaise,
+      );
+    });
+    _fetchImpactPreview();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Selected "${targetPaper.name}" from catalogue. Review and apply rate.',
+        ),
+      ),
+    );
   }
 
   Future<void> _loadBulkPreview() async {
@@ -583,12 +653,30 @@ class _DailyPricingPageState extends ConsumerState<DailyPricingPage>
       return const Center(child: CircularProgressIndicator());
     }
     if (_newspapers.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.all(20),
-        child: EmptyStateCard(
-          icon: Icons.newspaper_outlined,
-          title: 'No active newspapers',
-          message: 'Add a custom newspaper before setting global publication prices.',
+      return Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const EmptyStateCard(
+              icon: Icons.newspaper_outlined,
+              title: 'No active newspapers',
+              message:
+                  'Add a custom newspaper or browse the Indian Master Catalogue before setting global publication prices.',
+            ),
+            const SizedBox(height: 16),
+            OutlinedButton.icon(
+              key: const ValueKey('browse-catalog-pricing-empty-button'),
+              onPressed: () async {
+                final selected = await MasterCatalogPickerSheet.show(context);
+                if (selected != null && mounted) {
+                  await _onSelectFromMasterCatalog(selected);
+                }
+              },
+              icon: const Icon(Icons.menu_book_outlined),
+              label: const Text('Browse Indian Master Catalogue'),
+            ),
+          ],
         ),
       );
     }
@@ -636,7 +724,10 @@ class _DailyPricingPageState extends ConsumerState<DailyPricingPage>
                 ),
                 const SizedBox(height: 10),
                 DropdownButtonFormField<Newspaper>(
-                  value: _selectedPaper,
+                  value: _newspapers
+                      .where((p) => p.id == _selectedPaper?.id)
+                      .firstOrNull,
+                  isExpanded: true,
                   decoration: const InputDecoration(
                     border: OutlineInputBorder(),
                     contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -645,7 +736,10 @@ class _DailyPricingPageState extends ConsumerState<DailyPricingPage>
                     final sub = [p.edition, p.language].where((s) => s.isNotEmpty).join(' • ');
                     return DropdownMenuItem(
                       value: p,
-                      child: Text(sub.isNotEmpty ? '${p.name} ($sub)' : p.name),
+                      child: Text(
+                        sub.isNotEmpty ? '${p.name} ($sub)' : p.name,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     );
                   }).toList(),
                   onChanged: (p) {
@@ -661,6 +755,19 @@ class _DailyPricingPageState extends ConsumerState<DailyPricingPage>
                       _fetchImpactPreview();
                     }
                   },
+                ),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  key: const ValueKey('browse-catalog-pricing-button'),
+                  onPressed: () async {
+                    final selected =
+                        await MasterCatalogPickerSheet.show(context);
+                    if (selected != null && mounted) {
+                      await _onSelectFromMasterCatalog(selected);
+                    }
+                  },
+                  icon: const Icon(Icons.menu_book_outlined),
+                  label: const Text('Browse Indian Master Catalogue'),
                 ),
               ],
             ),
@@ -943,7 +1050,10 @@ class _DailyPricingPageState extends ConsumerState<DailyPricingPage>
                 ),
                 const SizedBox(height: 14),
                 DropdownButtonFormField<Newspaper>(
-                  value: _bulkSelectedPaper,
+                  value: _newspapers
+                      .where((p) => p.id == _bulkSelectedPaper?.id)
+                      .firstOrNull,
+                  isExpanded: true,
                   decoration: const InputDecoration(
                     labelText: 'Publication',
                     border: OutlineInputBorder(),

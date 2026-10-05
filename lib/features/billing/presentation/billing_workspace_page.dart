@@ -7,6 +7,8 @@ import 'package:paper_route/core/presentation/async_state_cards.dart';
 import 'package:paper_route/features/auth/domain/app_user.dart';
 import 'package:paper_route/features/billing/domain/monthly_bill.dart';
 import 'package:paper_route/features/billing/presentation/billing_providers.dart';
+import 'package:paper_route/features/employees/domain/employee_member.dart';
+import 'package:paper_route/features/employees/presentation/employee_providers.dart';
 import 'package:paper_route/features/newspapers/domain/newspaper.dart';
 import 'package:paper_route/features/newspapers/presentation/newspaper_providers.dart';
 import 'package:paper_route/l10n/app_localizations.dart';
@@ -593,6 +595,13 @@ class _BillingWorkspacePageState extends ConsumerState<BillingWorkspacePage> {
 
     final publications = newspapersAsync.value ?? const [];
     final monthlyPrices = monthlyPricesAsync.value ?? const [];
+    final employeeMembersAsync = businessId.isNotEmpty
+        ? ref.watch(employeeMembersProvider(businessId))
+        : const AsyncValue<List<EmployeeMember>>.data([]);
+    final employeeMembers =
+        employeeMembersAsync.value ?? const <EmployeeMember>[];
+    final employeeMap = {for (final m in employeeMembers) m.uid: m};
+
     final employees = _getDistinctEmployeeIds();
     final effectiveEmployeeId =
         _selectedEmployeeId != null && employees.contains(_selectedEmployeeId)
@@ -725,7 +734,7 @@ class _BillingWorkspacePageState extends ConsumerState<BillingWorkspacePage> {
                           DropdownMenuItem<String?>(
                             value: empId,
                             child: Text(
-                              'Employee: $empId',
+                              _formatEmployeeLabel(empId, employeeMap),
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
@@ -838,7 +847,7 @@ class _BillingWorkspacePageState extends ConsumerState<BillingWorkspacePage> {
                             DropdownMenuItem<String?>(
                               value: empId,
                               child: Text(
-                                'Employee: $empId',
+                                _formatEmployeeLabel(empId, employeeMap),
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
@@ -1367,7 +1376,7 @@ class _BillingWorkspacePageState extends ConsumerState<BillingWorkspacePage> {
               for (final row in filteredRows)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 10),
-                  child: _buildCustomerCard(context, row),
+                  child: _buildCustomerCard(context, row, employeeMap),
                 ),
               if (_hasMore)
                 OutlinedButton(
@@ -1389,7 +1398,33 @@ class _BillingWorkspacePageState extends ConsumerState<BillingWorkspacePage> {
     );
   }
 
-  Widget _buildCustomerCard(BuildContext context, BillingWorkspaceRow row) {
+  String _formatEmployeeLabel(
+    String empId,
+    Map<String, EmployeeMember> memberMap,
+  ) {
+    final member = memberMap[empId];
+    if (member != null && member.displayName.trim().isNotEmpty) {
+      return member.displayName.trim();
+    }
+    return 'Employee: $empId';
+  }
+
+  String _formatEmployeeName(
+    String empId,
+    Map<String, EmployeeMember> memberMap,
+  ) {
+    final member = memberMap[empId];
+    if (member != null && member.displayName.trim().isNotEmpty) {
+      return member.displayName.trim();
+    }
+    return empId;
+  }
+
+  Widget _buildCustomerCard(
+    BuildContext context,
+    BillingWorkspaceRow row,
+    Map<String, EmployeeMember> employeeMap,
+  ) {
     final isFailed = row.hasFailed && row.finalizedBill == null;
     final isFinalized = row.finalizedBill != null;
 
@@ -1472,7 +1507,7 @@ class _BillingWorkspacePageState extends ConsumerState<BillingWorkspacePage> {
 
               // Code, Area & Employee info
               Text(
-                '${row.customerCode} • Area ${row.areaId}${row.assignedEmployeeId.isNotEmpty ? ' • Emp: ${row.assignedEmployeeId}' : ''}',
+                '${row.customerCode} • Area ${row.areaId}${row.assignedEmployeeId.isNotEmpty ? ' • Emp: ${_formatEmployeeName(row.assignedEmployeeId, employeeMap)}' : ''}',
                 style: const TextStyle(
                   fontSize: 13,
                   color: Color(0xFF486581),

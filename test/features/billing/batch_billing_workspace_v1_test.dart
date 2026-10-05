@@ -7,6 +7,8 @@ import 'package:paper_route/features/billing/domain/billing_repository.dart';
 import 'package:paper_route/features/billing/domain/monthly_bill.dart';
 import 'package:paper_route/features/billing/presentation/billing_providers.dart';
 import 'package:paper_route/features/billing/presentation/billing_workspace_page.dart';
+import 'package:paper_route/features/employees/domain/employee_member.dart';
+import 'package:paper_route/features/employees/presentation/employee_providers.dart';
 import 'package:paper_route/features/newspapers/domain/newspaper.dart';
 import 'package:paper_route/features/newspapers/domain/newspaper_repository.dart';
 import 'package:paper_route/features/newspapers/presentation/newspaper_providers.dart';
@@ -454,11 +456,14 @@ void main() {
     mockNewspaperRepo = MockNewspaperRepository();
   });
 
-  Widget createWidgetUnderTest() {
+  Widget createWidgetUnderTest({List<EmployeeMember>? members}) {
     return ProviderScope(
       overrides: [
         billingRepositoryProvider.overrideWithValue(mockBillingRepo),
         newspaperRepositoryProvider.overrideWithValue(mockNewspaperRepo),
+        if (members != null)
+          employeeMembersProvider('biz-test')
+              .overrideWith((ref) => Stream.value(members)),
       ],
       child: const MaterialApp(
         home: BillingWorkspacePage(user: testHeadUser),
@@ -904,6 +909,167 @@ void main() {
       await tester.scrollUntilVisible(retryFinder, 200.0);
       await tester.pumpAndSettle();
       expect(retryFinder, findsOneWidget);
+    });
+
+    testWidgets(
+        'Regression Test 1: Employee with profile name displays name in dropdown and customer cards',
+        (tester) async {
+      tester.view.physicalSize = const Size(1080, 1920);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      const members = [
+        EmployeeMember(
+          uid: 'emp-101',
+          email: 'rahul@test.com',
+          displayName: 'Rahul Sharma',
+          phone: '9876543210',
+          role: UserRole.employee,
+          status: AccountStatus.active,
+          permissions: {},
+          areaIds: {'area-north'},
+          notes: '',
+        ),
+        EmployeeMember(
+          uid: 'emp-102',
+          email: 'priya@test.com',
+          displayName: 'Priya Verma',
+          phone: '9876543211',
+          role: UserRole.employee,
+          status: AccountStatus.active,
+          permissions: {},
+          areaIds: {'area-south'},
+          notes: '',
+        ),
+      ];
+
+      await tester.pumpWidget(createWidgetUnderTest(members: members));
+      await tester.pumpAndSettle();
+
+      // Open employee filter dropdown
+      final empDropdown = find.byKey(const ValueKey('employee-filter'));
+      expect(empDropdown, findsOneWidget);
+      await tester.tap(empDropdown);
+      await tester.pumpAndSettle();
+
+      // Verify human-readable names are displayed, NOT raw UIDs as primary labels
+      expect(find.text('Rahul Sharma'), findsWidgets);
+      expect(find.text('Priya Verma'), findsWidgets);
+      expect(find.text('Employee: emp-101'), findsNothing);
+      expect(find.text('Employee: emp-102'), findsNothing);
+
+      // Close dropdown by tapping outside or selecting Rahul Sharma
+      await tester.tap(find.text('Rahul Sharma').last);
+      await tester.pumpAndSettle();
+
+      // Verify card subtitle shows human-readable employee name
+      expect(find.textContaining('Emp: Rahul Sharma'), findsWidgets);
+    });
+
+    testWidgets(
+        'Regression Test 2: Selecting employee filters by UID internally',
+        (tester) async {
+      tester.view.physicalSize = const Size(1080, 1920);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      const members = [
+        EmployeeMember(
+          uid: 'emp-101',
+          email: 'rahul@test.com',
+          displayName: 'Rahul Sharma',
+          phone: '9876543210',
+          role: UserRole.employee,
+          status: AccountStatus.active,
+          permissions: {},
+          areaIds: {'area-north'},
+          notes: '',
+        ),
+        EmployeeMember(
+          uid: 'emp-102',
+          email: 'priya@test.com',
+          displayName: 'Priya Verma',
+          phone: '9876543211',
+          role: UserRole.employee,
+          status: AccountStatus.active,
+          permissions: {},
+          areaIds: {'area-south'},
+          notes: '',
+        ),
+      ];
+
+      await tester.pumpWidget(createWidgetUnderTest(members: members));
+      await tester.pumpAndSettle();
+
+      // Select Rahul Sharma (emp-101)
+      await tester.tap(find.byKey(const ValueKey('employee-filter')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Rahul Sharma').last);
+      await tester.pumpAndSettle();
+
+      // Only emp-101 customers (Aarav Sharma cust-1, Chagganlal Seth cust-3) should be displayed
+      expect(find.text('Aarav Sharma'), findsOneWidget);
+      expect(find.text('Chagganlal Seth'), findsOneWidget);
+      // emp-102 customers should NOT be displayed
+      expect(find.text('Bhavna Patel'), findsNothing);
+      expect(find.text('Divya Kumar'), findsNothing);
+    });
+
+    testWidgets(
+        'Regression Test 3: Employee from another business never appears in dropdown',
+        (tester) async {
+      tester.view.physicalSize = const Size(1080, 1920);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      // Members scoped only to current business biz-test
+      const currentBusinessMembers = [
+        EmployeeMember(
+          uid: 'emp-101',
+          email: 'rahul@test.com',
+          displayName: 'Rahul Sharma',
+          phone: '9876543210',
+          role: UserRole.employee,
+          status: AccountStatus.active,
+          permissions: {},
+          areaIds: {'area-north'},
+          notes: '',
+        ),
+      ];
+
+      await tester.pumpWidget(createWidgetUnderTest(members: currentBusinessMembers));
+      await tester.pumpAndSettle();
+
+      // Open employee filter dropdown
+      await tester.tap(find.byKey(const ValueKey('employee-filter')));
+      await tester.pumpAndSettle();
+
+      // Foreign employee "Vikram Malhotra" from business-b should NOT exist anywhere
+      expect(find.text('Vikram Malhotra'), findsNothing);
+      expect(find.text('Employee: emp-foreign'), findsNothing);
+    });
+
+    testWidgets(
+        'Regression Test 4: Missing employee profile does not crash and falls back safely',
+        (tester) async {
+      tester.view.physicalSize = const Size(1080, 1920);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      // No profile provided for emp-101 or emp-102 (empty members list)
+      await tester.pumpWidget(createWidgetUnderTest(members: const []));
+      await tester.pumpAndSettle();
+
+      // Verify no exception was thrown
+      expect(tester.takeException(), isNull);
+
+      // Open employee filter dropdown
+      await tester.tap(find.byKey(const ValueKey('employee-filter')));
+      await tester.pumpAndSettle();
+
+      // Safe fallback to 'Employee: <uid>' is displayed without error
+      expect(find.text('Employee: emp-101'), findsWidgets);
+      expect(find.text('Employee: emp-102'), findsWidgets);
     });
   });
 }

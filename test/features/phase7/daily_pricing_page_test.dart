@@ -116,6 +116,52 @@ void main() {
       );
     },
   );
+
+  testWidgets(
+    'Global Pricing tab allows browsing Indian Master Catalogue to populate publication and default price',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(1000, 1800);
+      addTearDown(tester.view.reset);
+      final newspapers = _FakeNewspapers(catalog: [_paper]);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            businessRepositoryProvider.overrideWithValue(_FakeBusiness()),
+            newspaperRepositoryProvider.overrideWithValue(newspapers),
+          ],
+          child: const MaterialApp(home: DailyPricingPage(user: _head)),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // We are on Global Pricing tab (default tab)
+      expect(find.text('Publication Price Rule'), findsOneWidget);
+
+      // Verify Browse Indian Master Catalogue button is visible
+      final browseBtn =
+          find.byKey(const ValueKey('browse-catalog-pricing-button'));
+      expect(browseBtn, findsOneWidget);
+
+      // Tap Browse button
+      await tester.tap(browseBtn);
+      await tester.pumpAndSettle();
+
+      // Master catalog picker sheet is displayed
+      expect(find.text('Indian Publication Catalogue'), findsOneWidget);
+
+      // Tap The Times of India
+      await tester.tap(find.text('The Times of India').first);
+      await tester.pumpAndSettle();
+
+      // Newly added from catalog or selected
+      expect(newspapers.createdInputs, hasLength(1));
+      expect(newspapers.createdInputs.single.name, 'The Times of India');
+
+      // Price rule was NOT created yet (user must explicitly submit)
+      expect(newspapers.created, isEmpty);
+    },
+  );
 }
 
 const _head = AppUser(
@@ -242,11 +288,33 @@ class _FakeNewspapers implements NewspaperRepository {
     );
   }
 
+  final createdInputs = <NewspaperInput>[];
+
   @override
   Future<String> createNewspaper({
     required AppUser actor,
     required NewspaperInput input,
-  }) => throw UnimplementedError();
+  }) async {
+    createdInputs.add(input);
+    final id = 'paper-${catalog.length + 1}';
+    final paper = Newspaper(
+      id: id,
+      businessId: actor.businessId!,
+      newspaperCode: id.toUpperCase(),
+      name: input.name,
+      searchName: input.name.toLowerCase(),
+      edition: input.edition,
+      language: input.language,
+      defaultPricePaise: input.defaultPricePaise,
+      status: NewspaperStatus.active,
+      createdBy: actor.uid,
+      updatedBy: actor.uid,
+      createdAt: DateTime.now(),
+      lastAuditId: 'audit-$id',
+    );
+    catalog.add(paper);
+    return id;
+  }
 
   @override
   Future<PriceRulePage> fetchPriceRules(PriceRuleListRequest request) =>

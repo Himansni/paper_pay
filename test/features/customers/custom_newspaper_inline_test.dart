@@ -165,6 +165,75 @@ void main() {
       );
     },
   );
+
+  testWidgets(
+    'Head browses Indian Master Catalogue inside Add Custom Newspaper dialog and pre-fills form fields',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(900, 1600);
+      addTearDown(tester.view.reset);
+
+      final fakeCustomerRepo = _FakeCustomerRepository();
+      final fakeNewspaperRepo = _FakeNewspaperRepository();
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            customerRepositoryProvider.overrideWithValue(fakeCustomerRepo),
+            newspaperRepositoryProvider.overrideWithValue(fakeNewspaperRepo),
+            deliveryAreasProvider('biz-1').overrideWith(
+              (ref) => Stream.value(testAreas),
+            ),
+            employeeMembersProvider('biz-1').overrideWith(
+              (ref) => Stream.value(const <EmployeeMember>[]),
+            ),
+          ],
+          child: const MaterialApp(
+            home: CustomerFormPage(user: headUser),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Open Add Custom Newspaper dialog
+      final addBtn = find.byKey(const ValueKey('add-custom-newspaper-btn'));
+      await tester.ensureVisible(addBtn);
+      await tester.tap(addBtn);
+      await tester.pumpAndSettle();
+
+      // Verify Browse Indian Master Catalogue button is present
+      final browseBtn =
+          find.byKey(const ValueKey('custom-newspaper-browse-catalog'));
+      expect(browseBtn, findsOneWidget);
+
+      // Tap Browse button
+      await tester.tap(browseBtn);
+      await tester.pumpAndSettle();
+
+      // Master catalog picker sheet appears
+      expect(find.text('Indian Publication Catalogue'), findsOneWidget);
+
+      // Tap first catalog entry (The Times of India)
+      await tester.tap(find.text('The Times of India').first);
+      await tester.pumpAndSettle();
+
+      // Verify fields in custom newspaper dialog are prefilled
+      final nameField = tester.widget<TextFormField>(
+        find.byKey(const ValueKey('custom-newspaper-name')),
+      );
+      expect(nameField.controller?.text, 'The Times of India');
+
+      final editionField = tester.widget<TextFormField>(
+        find.byKey(const ValueKey('custom-newspaper-edition')),
+      );
+      expect(editionField.controller?.text, 'Delhi');
+
+      final priceField = tester.widget<TextFormField>(
+        find.byKey(const ValueKey('custom-newspaper-price')),
+      );
+      expect(priceField.controller?.text, '5.00');
+    },
+  );
 }
 
 class _FakeNewspaperRepository implements NewspaperRepository {

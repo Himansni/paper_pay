@@ -15,6 +15,7 @@ import 'package:paper_route/features/delivery/presentation/delivery_providers.da
 import 'package:paper_route/features/employees/domain/employee_member.dart';
 import 'package:paper_route/features/employees/presentation/employee_providers.dart';
 import 'package:paper_route/features/newspapers/domain/newspaper.dart';
+import 'package:paper_route/features/newspapers/presentation/master_catalog_picker_sheet.dart';
 import 'package:paper_route/features/newspapers/presentation/newspaper_providers.dart';
 import 'package:paper_route/features/subscriptions/domain/customer_subscription.dart';
 import 'package:paper_route/features/subscriptions/presentation/subscription_providers.dart';
@@ -1313,6 +1314,32 @@ class _CustomerFormPageState extends ConsumerState<CustomerFormPage> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  OutlinedButton.icon(
+                    key: const ValueKey('custom-newspaper-browse-catalog'),
+                    onPressed: submitting
+                        ? null
+                        : () async {
+                            final selected =
+                                await MasterCatalogPickerSheet.show(context);
+                            if (selected != null) {
+                              setDialogState(() {
+                                nameController.text = selected.name;
+                                editionController.text = selected.edition;
+                                languageController.text = selected.language;
+                                priceController.text =
+                                    NewspaperMoney.formatPaiseForInput(
+                                  selected.defaultPricePaise,
+                                );
+                              });
+                            }
+                          },
+                    icon: const Icon(Icons.menu_book_outlined),
+                    label: const Text('Browse Indian Master Catalogue'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
                   TextFormField(
                     key: const ValueKey('custom-newspaper-name'),
                     controller: nameController,

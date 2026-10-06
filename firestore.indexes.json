@@ -887,6 +887,54 @@
         { "fieldPath": "stateId", "order": "ASCENDING" },
         { "fieldPath": "outstandingPaise", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "paymentReversals",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "collectorUid", "order": "ASCENDING" },
+        { "fieldPath": "reversedAt", "order": "ASCENDING" },
+        { "fieldPath": "amountPaise", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "bills",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "billingMonth", "order": "ASCENDING" },
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "currentChargesPaise", "order": "ASCENDING" },
+        { "fieldPath": "totalDuePaise", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "collectionState",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "oldestOutstandingMonth", "order": "ASCENDING" },
+        { "fieldPath": "stateId", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "newspapers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "searchName", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "lineItems",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "billingMonth", "order": "ASCENDING" },
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "newspaperId", "order": "ASCENDING" },
+        { "fieldPath": "totalPaise", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": [
@@ -900,6 +948,13 @@
     {
       "collectionGroup": "invitations",
       "fieldPath": "email",
+      "indexes": [
+        { "order": "ASCENDING", "queryScope": "COLLECTION_GROUP" }
+      ]
+    },
+    {
+      "collectionGroup": "subscriptions",
+      "fieldPath": "businessId",
       "indexes": [
         { "order": "ASCENDING", "queryScope": "COLLECTION_GROUP" }
       ]

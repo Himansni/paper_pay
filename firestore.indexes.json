@@ -837,6 +837,56 @@
         { "fieldPath": "confirmedAt", "order": "DESCENDING" },
         { "fieldPath": "__name__", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "payments",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "method", "order": "ASCENDING" },
+        { "fieldPath": "confirmedAt", "order": "ASCENDING" },
+        { "fieldPath": "amountPaise", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "payments",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "areaId", "order": "ASCENDING" },
+        { "fieldPath": "confirmedAt", "order": "ASCENDING" },
+        { "fieldPath": "amountPaise", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "paymentReversals",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "areaId", "order": "ASCENDING" },
+        { "fieldPath": "reversedAt", "order": "ASCENDING" },
+        { "fieldPath": "amountPaise", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "bills",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "billingMonth", "order": "ASCENDING" },
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "totalDuePaise", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "collectionState",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "businessId", "order": "ASCENDING" },
+        { "fieldPath": "customerStatus", "order": "ASCENDING" },
+        { "fieldPath": "stateId", "order": "ASCENDING" },
+        { "fieldPath": "outstandingPaise", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": [

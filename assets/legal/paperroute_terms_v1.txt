@@ -1,16 +1,48 @@
-DRAFT — NOT APPROVED FOR PUBLIC RELEASE
+Paperbil / PaperRoute Terms of Service — Version 1
+Effective Date: October 2026
+Product: PaperRoute | Public Brand: Paperbil | Website: https://paperbil.com
 
-PaperRoute Terms of Service — Version 1
+1. ACCEPTANCE OF TERMS
+By registering an agency account, accepting an employee invitation, or using the PaperRoute application ("PaperRoute" or "the Service"), provided by Paperbil ("we", "us", or "our"), you agree to be bound by these Terms of Service. If you do not agree to these terms, do not access or use PaperRoute.
 
-By creating an agency account, you confirm that you are authorized to operate
-the named newspaper agency and that the information you provide is accurate.
-You are responsible for protecting account access, granting employee access
-only to trusted people, and using PaperRoute lawfully.
+2. AGENCY REGISTRATION & ACCOUNT RESPONSIBILITY
+• Agency Head Authority: By registering an Agency account, you represent and warrant that you have full legal authority to operate the named newspaper distribution agency and enter into this agreement.
+• Account Security: You are responsible for safeguarding your login credentials and for all activities occurring under your agency tenant workspace.
+• Staff Access: Agency Owners are responsible for authorizing employee logins, assigning appropriate delivery areas, and promptly deactivating staff members who are no longer associated with the agency.
 
-PaperRoute records operational and financial history to support newspaper
-delivery, billing, and collection workflows. Confirmed financial records are
-preserved for auditability and may be corrected through compensating records
-rather than deletion.
+3. SAAS SUBSCRIPTIONS, PLANS & GRACE PERIODS
+• Initial Free Trial: Eligible newly provisioned agencies receive an initial 30-day free trial granting full operational access within trial capacity limits.
+• Subscription Plans: Continued operational access beyond the trial period requires an active SaaS plan (Starter, Growth, or Agency Pro) based on customer and staff capacity limits.
+• Grace Period & Read-Only Mode: If a trial or subscription period expires without renewal, a 7-day grace period is provided. Following the grace period, the agency workspace transitions into a read-only state until subscription renewal. Historical records remain viewable and exportable.
+• Billing & Fees: Subscription fees for B2B SaaS plans are billed periodically in advance and are non-refundable once the service period begins.
 
-Service availability is not guaranteed. Keep appropriate business records and
-review generated bills and collection entries before relying on them.
+4. FINANCIAL LEDGER INTEGRITY & OPERATIONAL USE
+• Immutable Financial Records: PaperRoute maintains an append-only, auditable ledger for bills, payments, and balance adjustments. Confirmed payment transactions cannot be deleted; accounting corrections must be executed through recorded payment reversals or authorized balance adjustments.
+• Verification Responsibility: The Agency is responsible for reviewing and verifying all newspaper rates, daily circulation counts, calculated monthly bills, and customer statements before distribution.
+• Direct UPI Collections: When customer payments are collected via dynamic UPI QR codes, transactions execute directly between the customer's payment application and the agency's bank account via the Unified Payments Interface (UPI). PaperRoute acts solely as a technical software interface and does not hold, escrow, or intermediate agency funds.
+
+5. PROHIBITED USES
+You agree not to:
+• Reverse engineer, decompile, or attempt to extract source code from the Service.
+• Circumvent plan limits, rate limiters, or security rules through unauthorized scripts or direct database calls.
+• Use the Service to store unlawful, fraudulent, or harassing content.
+• Impersonate another newspaper agency or misrepresent your affiliation.
+
+6. ACCOUNT DELETION & AGENCY TERMINATION
+• Employee Accounts: Employees may request deletion of their account via in-app settings. Personal details will be erased and anonymized, while past collection records remain in the agency ledger.
+• Agency Closure: Agency Heads may close their agency account only after archiving active customer delivery routes and removing employee members.
+• Financial & Audit Record Retention: Historical invoices, monthly bills, payment collection records, payment allocations, reversals, and audit records are retained under the closed agency record as part of the agency's financial history and to maintain accurate accounting, reconciliation, and ledger integrity.
+
+7. DISCLAIMER OF WARRANTIES & LIMITATION OF LIABILITY
+• As-Is Service: PaperRoute is provided on an "AS IS" and "AS AVAILABLE" basis without warranties of any kind, whether express, statutory, or implied.
+• Limitation of Liability: To the maximum extent permitted by applicable law, Paperbil and its operators shall not be liable for any indirect, incidental, special, consequential, or punitive damages, or any loss of profits, revenue, data, or goodwill arising out of or related to your use of the Service.
+
+8. GOVERNING LAW & DISPUTE RESOLUTION
+These Terms shall be governed by and construed in accordance with the laws of India. Any disputes arising under or in connection with these Terms shall be subject to the exclusive jurisdiction of the competent courts in India.
+
+9. OPERATIONAL SUPPORT & CONTACT
+For questions, support, or notices regarding these Terms, please contact our operational support team:
+
+• Operational Support Email: craftares.business@gmail.com
+• Operational WhatsApp Support: +91 8871998609
+• Web: https://paperbil.com/support

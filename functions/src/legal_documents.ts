@@ -2,12 +2,12 @@ export const legalDocuments = {
   terms: {
     version: "terms-v1",
     assetPath: "assets/legal/paperroute_terms_v1.txt",
-    sha256: "683e85126b4eeb065a00308600aa5d8069f2e692b951801f48945a7aa6c6be0b",
+    sha256: "a5207c141927d174c6ab19ee73be1728d0b7473c4f59a868377f2af7f5437083",
   },
   privacy: {
     version: "privacy-v1",
     assetPath: "assets/legal/paperroute_privacy_v1.txt",
-    sha256: "5ef2621bf6916c903e700f56623c155b930252c2075e1c3396a59b8893b892cd",
+    sha256: "d0c63aebe321016df075dbbb0956ffcdbc0e43cbb1777bdfc66f585843bfa1ad",
   },
 } as const;
 

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:paper_route/core/errors/app_exception.dart';
@@ -47,7 +48,7 @@ class _AccountSettingsPageState extends ConsumerState<AccountSettingsPage> {
                         ? 'Closing your Agency Owner account will permanently deactivate your login credentials and close your agency.\n\n'
                             '• Active routes & employees: All active employees must be removed and active customer routes archived prior to deletion.\n'
                             '• Personal data: Your personal name, email, and phone will be permanently erased.\n'
-                            '• Financial records: Past invoices, customer payment collections, and audit logs are legally required to be preserved for commercial accounting and tax compliance.'
+                            '• Financial records: Past invoices, customer payment collections, and audit logs are retained for commercial accounting reconciliation and ledger integrity.'
                         : 'Deleting your Employee account will immediately revoke your access to the agency workspace.\n\n'
                             '• Personal data: Your name, email, and phone number will be permanently deleted from the agency roster.\n'
                             '• Financial records: Previous payments collected by you will remain recorded under an anonymized former employee record to preserve ledger accuracy.',
@@ -401,6 +402,110 @@ class _AccountSettingsPageState extends ConsumerState<AccountSettingsPage> {
             ),
             const SizedBox(height: 24),
             Text(
+              'Help & Support',
+              style: Theme.of(
+                context,
+              ).textTheme.titleSmall?.copyWith(color: AppTheme.mutedInk),
+            ),
+            const SizedBox(height: 8),
+            Card(
+              child: Column(
+                children: [
+                  ListTile(
+                    leading: const Icon(Icons.help_outline_rounded, color: AppTheme.brand),
+                    title: const Text('Help & FAQ'),
+                    subtitle: const Text('Frequently asked questions & usage guide'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => _showHelpAndSupport(context),
+                  ),
+                  const Divider(height: 1, indent: 56),
+                  ListTile(
+                    leading: const Icon(Icons.chat_bubble_outline_rounded, color: Color(0xFF25D366)),
+                    title: const Text('WhatsApp Support'),
+                    subtitle: const Text('+91 8871998609 (Operational)'),
+                    trailing: const Icon(Icons.copy_rounded, size: 18),
+                    onTap: () {
+                      Clipboard.setData(const ClipboardData(text: '+918871998609'));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('WhatsApp number (+91 8871998609) copied to clipboard'),
+                        ),
+                      );
+                    },
+                  ),
+                  const Divider(height: 1, indent: 56),
+                  ListTile(
+                    leading: const Icon(Icons.mail_outline_rounded, color: AppTheme.brand),
+                    title: const Text('Email Support'),
+                    subtitle: const Text('craftares.business@gmail.com'),
+                    trailing: const Icon(Icons.copy_rounded, size: 18),
+                    onTap: () {
+                      Clipboard.setData(const ClipboardData(text: 'craftares.business@gmail.com'));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Support email (craftares.business@gmail.com) copied to clipboard'),
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'Legal & Privacy',
+              style: Theme.of(
+                context,
+              ).textTheme.titleSmall?.copyWith(color: AppTheme.mutedInk),
+            ),
+            const SizedBox(height: 8),
+            Card(
+              child: Column(
+                children: [
+                  ListTile(
+                    leading: const Icon(Icons.privacy_tip_outlined, color: AppTheme.brand),
+                    title: const Text('Privacy Notice'),
+                    subtitle: const Text('Version 1 • Paperbil / PaperRoute'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => _showLegalDocument(
+                      context,
+                      'Privacy Notice (v1)',
+                      'assets/legal/paperroute_privacy_v1.txt',
+                    ),
+                  ),
+                  const Divider(height: 1, indent: 56),
+                  ListTile(
+                    leading: const Icon(Icons.description_outlined, color: AppTheme.brand),
+                    title: const Text('Terms of Service'),
+                    subtitle: const Text('Version 1 • Paperbil / PaperRoute'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => _showLegalDocument(
+                      context,
+                      'Terms of Service (v1)',
+                      'assets/legal/paperroute_terms_v1.txt',
+                    ),
+                  ),
+                  const Divider(height: 1, indent: 56),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    child: Row(
+                      children: [
+                        Icon(Icons.verified_user_outlined, size: 16, color: AppTheme.mutedInk),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Brand: Paperbil • App: PaperRoute V1 • paperbil.com',
+                            style: TextStyle(fontSize: 12, color: AppTheme.mutedInk),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+            Text(
               'Account Management',
               style: Theme.of(
                 context,
@@ -462,6 +567,122 @@ class _AccountSettingsPageState extends ConsumerState<AccountSettingsPage> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Future<void> _showLegalDocument(
+    BuildContext context,
+    String title,
+    String assetPath,
+  ) async {
+    try {
+      final content = await DefaultAssetBundle.of(context).loadString(assetPath);
+      if (!context.mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text(title),
+          content: SingleChildScrollView(
+            child: Text(
+              content,
+              style: const TextStyle(fontSize: 13, height: 1.45),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not load $title: $e')),
+      );
+    }
+  }
+
+  Future<void> _showHelpAndSupport(BuildContext context) async {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.help_outline_rounded, color: AppTheme.brand),
+            SizedBox(width: 8),
+            Text('Help & Support'),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Paperbil Operational Support',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                '• WhatsApp: +91 8871998609\n'
+                '• Email: craftares.business@gmail.com\n'
+                '• Website: https://paperbil.com/support',
+                style: TextStyle(fontSize: 13, height: 1.4),
+              ),
+              const Divider(height: 20),
+              const Text(
+                'Frequently Asked Questions',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              ),
+              const SizedBox(height: 8),
+              _faqItem(
+                'How are monthly bills calculated?',
+                'Bills are calculated by multiplying active delivery days in the calendar month by the newspaper daily rate, accounting for pauses and custom prices.',
+              ),
+              _faqItem(
+                'How do UPI collections work?',
+                'When you collect via UPI, PaperRoute displays your configured agency UPI QR code. Customers pay directly into your bank account.',
+              ),
+              _faqItem(
+                'Is my location tracked?',
+                'No. PaperRoute V1 does not request or track device GPS or location data.',
+              ),
+              _faqItem(
+                'How do I close my agency?',
+                'Archive all customer routes and remove staff members, then use "Delete Account" in settings.',
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _faqItem(String question, String answer) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            question,
+            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            answer,
+            style: const TextStyle(fontSize: 12, color: AppTheme.mutedInk, height: 1.35),
+          ),
+        ],
       ),
     );
   }

@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy Notice — Paperbil / PaperRoute</title>
+  <style>
+    :root {
+      --brand: #1B2A4A;
+      --accent: #00C853;
+      --ink: #1A1D20;
+      --muted: #64748B;
+      --bg: #F8FAFC;
+      --card: #FFFFFF;
+      --border: #E2E8F0;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--ink); line-height: 1.6; padding: 24px 16px; }
+    .container { max-width: 800px; margin: 0 auto; background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 36px 32px; }
+    header { border-bottom: 1px solid var(--border); padding-bottom: 20px; margin-bottom: 28px; }
+    .brand-badge { display: inline-block; background: #EBF3FF; color: var(--brand); font-weight: 700; font-size: 13px; padding: 4px 12px; border-radius: 6px; margin-bottom: 10px; }
+    h1 { font-size: 26px; color: var(--brand); margin-bottom: 8px; }
+    .meta { font-size: 13px; color: var(--muted); }
+    h2 { font-size: 18px; color: var(--brand); margin-top: 28px; margin-bottom: 12px; border-bottom: 1px solid #F1F5F9; padding-bottom: 6px; }
+    p, ul { font-size: 14px; color: #334155; margin-bottom: 14px; }
+    ul { padding-left: 20px; }
+    li { margin-bottom: 6px; }
+    .alert { background: #F0FDF4; border: 1px solid #BBF7D0; border-radius: 8px; padding: 14px 18px; margin: 18px 0; }
+    .alert-title { font-weight: 700; color: #166534; margin-bottom: 4px; font-size: 14px; }
+    .contact-box { background: #F8FAFC; border: 1px solid var(--border); border-radius: 8px; padding: 18px; margin-top: 24px; }
+    a { color: #0284C7; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    footer { margin-top: 32px; border-top: 1px solid var(--border); padding-top: 16px; font-size: 12px; color: var(--muted); text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="brand-badge">Paperbil Trust & Legal</div>
+      <h1>PaperRoute Privacy Notice</h1>
+      <div class="meta">Version 1.0 • Effective: October 2026 • Brand: Paperbil • Product: PaperRoute (https://paperbil.com)</div>
+    </header>
+
+    <h2>1. Introduction & Scope</h2>
+    <p>This Privacy Notice explains how Paperbil ("we", "us", or "our") processes information through the PaperRoute mobile and web software application ("PaperRoute" or "the Service"). PaperRoute is a dedicated multi-tenant operational tool designed for newspaper distributors, delivery agencies, and their authorized staff.</p>
+    <p>Each newspaper distribution agency operates as an independent tenant. The Agency Owner ("Head") controls agency workspace data, authorizes staff accounts, and manages customer delivery records.</p>
+
+    <div class="alert">
+      <div class="alert-title">2. Zero Device Sensor & Location Tracking</div>
+      <p>PaperRoute V1 does <strong>NOT</strong> request, access, collect, track, or store device GPS or sensor location data from your mobile device:</p>
+      <ul>
+        <li><strong>No runtime location permissions:</strong> The Android app does not request <code>ACCESS_FINE_LOCATION</code>, <code>ACCESS_COARSE_LOCATION</code>, or <code>ACCESS_BACKGROUND_LOCATION</code>.</li>
+        <li><strong>No background tracking:</strong> Zero background movement tracking or geofencing.</li>
+        <li><strong>Manual address notes only:</strong> Any latitude or longitude coordinates entered in customer records are manual distributor-provided text notes for delivery sequence mapping only and are never acquired from device GPS hardware.</li>
+      </ul>
+    </div>
+
+    <h2>3. Zero Advertising & Telemetry Tracking</h2>
+    <p>PaperRoute is built strictly for operational business management:</p>
+    <ul>
+      <li>No advertising SDKs or advertising identifiers (no Google Mobile Ads, no Google Advertising ID / AAID).</li>
+      <li>No third-party behavioral tracking or profiling SDKs.</li>
+      <li>No automated crash telemetry SDKs (no Firebase Crashlytics).</li>
+    </ul>
+
+    <h2>4. Information We Store & Process</h2>
+    <p>To operate and secure the Service, PaperRoute stores and processes:</p>
+    <ul>
+      <li><strong>Agency & Owner Information:</strong> Business name, business phone, operating address, owner name, owner email, and authentication UID.</li>
+      <li><strong>Direct UPI QR Information:</strong> Agency-configured UPI Virtual Payment Address (VPA) and payee name, used solely to generate on-screen dynamic QR codes for direct customer payments into the agency's bank account. PaperRoute does not store bank account passwords, debit/credit cards, or CVVs.</li>
+      <li><strong>Employee Information:</strong> Staff name, email, phone number, role, and assigned delivery lines/areas.</li>
+      <li><strong>Customer Operational Information:</strong> Customer name, delivery address, contact number, delivery instructions, newspaper subscriptions, daily rates, delivery pauses, and sequence numbers.</li>
+      <li><strong>Financial & Billing Ledgers:</strong> Monthly billing calculations, line items, price snapshots, balance adjustments, payment collection receipts (amount, mode, collector UID, timestamp), and payment reversals.</li>
+      <li><strong>Authentication & Consent Records:</strong> Credentials managed securely via Firebase Authentication, legal acceptance versions, cryptographic SHA-256 document hashes, timestamps, client platform, and append-only audit trail entries.</li>
+    </ul>
+
+    <h2>5. Technical Infrastructure & Data Storage</h2>
+    <p>PaperRoute is hosted on secure, enterprise-grade cloud infrastructure:</p>
+    <ul>
+      <li><strong>Google Cloud & Firebase:</strong> Authentication, Cloud Firestore database, Cloud Functions, and Firebase App Check hosted in the <code>asia-south1</code> (Mumbai, India) region.</li>
+      <li><strong>Razorpay:</strong> Secure payment processing for agency B2B SaaS subscription checkout via web interface.</li>
+    </ul>
+
+    <h2>6. Data Retention & Account Deletion</h2>
+    <p>Users have full rights to request account deletion:</p>
+    <ul>
+      <li><strong>In-App Deletion:</strong> Users can delete their account at any time in the app via <em>Account Settings > Delete Account</em> requiring password re-authentication.</li>
+      <li><strong>Employee Deletion:</strong> Personal profile and contact information (name, email, phone) are permanently erased and anonymized. Historical payment collection records are retained in anonymized format to preserve ledger accuracy.</li>
+      <li><strong>Agency Head Deletion:</strong> Requires active customer routes to be archived and employee members removed first. The agency entity is closed, owner personal details erased, and authentication credentials permanently destroyed.</li>
+      <li><strong>Financial & Audit Record Retention:</strong> Historical invoices, monthly bills, payment collection records, payment allocations, reversals, and audit records may be retained as part of the agency's financial and audit history and to maintain accurate accounting, reconciliation, and record integrity.</li>
+    </ul>
+
+    <div class="contact-box">
+      <h2>7. Operational Support & Privacy Inquiries</h2>
+      <p>For privacy inquiries, data correction requests, or support questions regarding Paperbil or PaperRoute:</p>
+      <ul>
+        <li><strong>Operational Support Email:</strong> <a href="mailto:craftares.business@gmail.com">craftares.business@gmail.com</a></li>
+        <li><strong>Operational WhatsApp Support:</strong> +91 8871998609</li>
+        <li><strong>Website:</strong> <a href="https://paperbil.com/support">https://paperbil.com/support</a></li>
+        <li><strong>Public Deletion Page:</strong> <a href="https://paperbil.com/delete-account">https://paperbil.com/delete-account</a></li>
+      </ul>
+    </div>
+
+    <footer>
+      &copy; 2026 Paperbil • Product: PaperRoute V1 • <a href="/terms">Terms of Service</a> • <a href="/support">Help & Support</a>
+    </footer>
+  </div>
+</body>
+</html>

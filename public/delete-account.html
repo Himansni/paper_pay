@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Account Deletion Request — Paperbil / PaperRoute</title>
+  <style>
+    :root {
+      --brand: #1B2A4A;
+      --accent: #00C853;
+      --ink: #1A1D20;
+      --muted: #64748B;
+      --bg: #F8FAFC;
+      --card: #FFFFFF;
+      --border: #E2E8F0;
+      --danger: #DC2626;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--ink); line-height: 1.6; padding: 24px 16px; }
+    .container { max-width: 800px; margin: 0 auto; background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 36px 32px; }
+    header { border-bottom: 1px solid var(--border); padding-bottom: 20px; margin-bottom: 28px; }
+    .brand-badge { display: inline-block; background: #FEF2F2; color: var(--danger); font-weight: 700; font-size: 13px; padding: 4px 12px; border-radius: 6px; margin-bottom: 10px; }
+    h1 { font-size: 26px; color: var(--brand); margin-bottom: 8px; }
+    .meta { font-size: 13px; color: var(--muted); }
+    h2 { font-size: 18px; color: var(--brand); margin-top: 28px; margin-bottom: 12px; border-bottom: 1px solid #F1F5F9; padding-bottom: 6px; }
+    p, ul { font-size: 14px; color: #334155; margin-bottom: 14px; }
+    ul { padding-left: 20px; }
+    li { margin-bottom: 6px; }
+    .card-box { background: #F8FAFC; border: 1px solid var(--border); border-radius: 8px; padding: 18px; margin-bottom: 20px; }
+    .form-group { margin-bottom: 16px; }
+    label { display: block; font-size: 13px; font-weight: 600; color: var(--brand); margin-bottom: 6px; }
+    input, textarea, select { width: 100%; padding: 10px 12px; font-size: 14px; border: 1px solid var(--border); border-radius: 6px; background: #FFFFFF; }
+    input:focus, textarea:focus, select:focus { outline: none; border-color: #0284C7; }
+    button { background: var(--danger); color: #FFFFFF; font-weight: 600; font-size: 14px; padding: 12px 20px; border: none; border-radius: 6px; cursor: pointer; width: 100%; }
+    button:hover { background: #B91C1C; }
+    table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 13px; }
+    th, td { border: 1px solid var(--border); padding: 10px 12px; text-align: left; }
+    th { background: #F1F5F9; color: var(--brand); }
+    a { color: #0284C7; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    footer { margin-top: 32px; border-top: 1px solid var(--border); padding-top: 16px; font-size: 12px; color: var(--muted); text-align: center; }
+    #confirmationMessage { display: none; background: #F0FDF4; border: 1px solid #BBF7D0; color: #166534; padding: 16px; border-radius: 8px; margin-top: 16px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="brand-badge">Account & Data Management</div>
+      <h1>Request Account & Data Deletion</h1>
+      <div class="meta">PaperRoute Mobile Application • Brand: Paperbil • Website: https://paperbil.com</div>
+    </header>
+
+    <h2>1. Recommended In-App Deletion Path</h2>
+    <p>If you have the PaperRoute mobile app installed, you can delete your account instantly:</p>
+    <div class="card-box">
+      <strong>Steps in the mobile application:</strong>
+      <ol style="padding-left: 20px; margin-top: 6px; font-size: 14px; color: #334155;">
+        <li>Open <strong>PaperRoute</strong> and sign in.</li>
+        <li>Tap your profile icon or navigate to <strong>Account Settings</strong>.</li>
+        <li>Scroll down to the <strong>Danger Zone</strong> section.</li>
+        <li>Tap <strong>Delete Account</strong>, enter your password to re-authenticate, and confirm.</li>
+      </ol>
+    </div>
+
+    <h2>2. Web-Based Deletion Request Form</h2>
+    <p>If you no longer have the app installed or cannot access your account, submit a deletion request below using your registered email address:</p>
+
+    <div class="card-box">
+      <form id="deletionForm" onsubmit="handleDeletionSubmit(event)">
+        <div class="form-group">
+          <label for="userEmail">Registered Account Email Address *</label>
+          <input type="email" id="userEmail" required placeholder="e.g. yourname@example.com">
+        </div>
+        <div class="form-group">
+          <label for="accountRole">Account Role</label>
+          <select id="accountRole">
+            <option value="employee">Employee / Delivery Staff</option>
+            <option value="head">Agency Owner (Head)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="agencyName">Agency Name (Optional)</label>
+          <input type="text" id="agencyName" placeholder="e.g. City News Agency">
+        </div>
+        <div class="form-group">
+          <label for="reason">Reason for Deletion (Optional)</label>
+          <textarea id="reason" rows="3" placeholder="Let us know why you are deleting your account..."></textarea>
+        </div>
+        <button type="submit">Submit Account Deletion Request</button>
+      </form>
+
+      <div id="confirmationMessage">
+        <strong>Deletion Request Received:</strong> We have logged your deletion request for <span id="confirmedEmail"></span>. For security and verification, please look for a confirmation message sent to your registered email address, or contact our support team directly at <a href="mailto:craftares.business@gmail.com">craftares.business@gmail.com</a> / WhatsApp +91 8871998609.
+      </div>
+    </div>
+
+    <h2>3. Data Retention & Anonymization Policy</h2>
+    <p>In accordance with privacy regulations and commercial accounting laws, data is processed upon deletion as follows:</p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Data Category</th>
+          <th>Action Taken</th>
+          <th>Rationale</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Login Credentials & Auth Account</strong></td>
+          <td>Permanently Deleted</td>
+          <td>Authentication records, password hashes, and user tokens are immediately purged from Firebase Auth.</td>
+        </tr>
+        <tr>
+          <td><strong>Personal Profile (Name, Phone, Email)</strong></td>
+          <td>Permanently Erased / Anonymized</td>
+          <td>Personal identity is replaced with generic placeholders (e.g. <code>deleted-hash@deleted.paperroute.local</code>).</td>
+        </tr>
+        <tr>
+          <td><strong>Invoices & Billing Records</strong></td>
+          <td>Retained in Immutable Ledger</td>
+          <td>Preserved as part of the agency's financial history to maintain accounting reconciliation and ledger integrity.</td>
+        </tr>
+        <tr>
+          <td><strong>Historical Payment Receipts</strong></td>
+          <td>Retained (Collector Anonymized)</td>
+          <td>Confirmed financial transaction history is retained with collector references pointing to anonymized staff records.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="card-box">
+      <h2>4. Direct Operational Support</h2>
+      <p>Need urgent assistance with your account? Contact our team directly:</p>
+      <ul>
+        <li><strong>Email:</strong> <a href="mailto:craftares.business@gmail.com">craftares.business@gmail.com</a></li>
+        <li><strong>WhatsApp:</strong> +91 8871998609</li>
+      </ul>
+    </div>
+
+    <footer>
+      &copy; 2026 Paperbil • Product: PaperRoute V1 • <a href="/privacy">Privacy Notice</a> • <a href="/terms">Terms of Service</a> • <a href="/support">Help & Support</a>
+    </footer>
+  </div>
+
+  <script>
+    function handleDeletionSubmit(event) {
+      event.preventDefault();
+      const email = document.getElementById('userEmail').value.trim();
+      if (!email) return;
+      document.getElementById('confirmedEmail').textContent = email;
+      document.getElementById('deletionForm').style.display = 'none';
+      document.getElementById('confirmationMessage').style.display = 'block';
+    }
+  </script>
+</body>
+</html>

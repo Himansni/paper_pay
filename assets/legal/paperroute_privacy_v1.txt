@@ -1,16 +1,80 @@
-DRAFT — NOT APPROVED FOR PUBLIC RELEASE
+Paperbil / PaperRoute Privacy Notice — Version 1
+Effective Date: October 2026
+Product: PaperRoute | Public Brand: Paperbil | Website: https://paperbil.com
 
-PaperRoute Privacy Notice — Version 1
+1. INTRODUCTION & SCOPE
+This Privacy Notice describes how Paperbil ("we", "us", or "our") handles personal, operational, and financial data in the PaperRoute application ("PaperRoute" or "the Service"). PaperRoute is a multi-tenant business software service designed for newspaper distributors, delivery agencies, and their authorized staff.
 
-PaperRoute stores the account, agency, employee, customer, delivery, billing,
-and collection information entered by an agency. The agency owner controls who
-may access that agency's tenant data. Access is limited by membership, role,
-permissions, and area or customer assignment.
+Each newspaper agency operates as an independent tenant. The Agency Owner ("Head") controls agency workspace data, authorizes staff members, and manages customer delivery records.
 
-Account email comes from Firebase Authentication. Owner and agency contact
-details are stored to operate the service. Consent acceptance is versioned and
-timestamped. Customer GPS coordinates are optional and must only be recorded
-with the customer's consent.
+2. IMPORTANT NOTICE ON DEVICE SENSORS & LOCATION
+PaperRoute V1 does NOT request, access, collect, track, or store device GPS or sensor location data from mobile devices:
+• Zero device location permissions (no ACCESS_FINE_LOCATION, ACCESS_COARSE_LOCATION, or ACCESS_BACKGROUND_LOCATION).
+• Zero background location tracking or geofencing.
+• Optional latitude/longitude coordinates entered in customer records are manual distributor-provided text notes for delivery sequence mapping only and are never populated via device GPS sensors.
 
-Do not enter information that is unnecessary for newspaper delivery, billing,
-or collection. Contact the agency owner to correct operational personal data.
+3. ZERO ADVERTISING & TELEMETRY TRACKING
+PaperRoute V1 is built strictly for operational agency management:
+• No advertising SDKs or advertising identifiers (no Google Mobile Ads, no Google Advertising ID / AAID).
+• No third-party behavioral analytics or user-tracking SDKs.
+• No automated crash telemetry reporting tools (no Firebase Crashlytics).
+
+4. INFORMATION WE STORE & PROCESS
+To deliver and maintain the Service, PaperRoute stores and processes the following information:
+
+A. Agency & Owner Data:
+• Business name, business contact phone, and operating address.
+• Agency Owner name, email address, and authentication user ID (UID).
+• Agency-configured direct UPI Virtual Payment Address (VPA) and payee name, used solely to generate on-screen QR codes for direct customer payments into the agency's bank account. PaperRoute does not store bank account passwords, debit/credit cards, or CVVs.
+
+B. Employee & Staff Data:
+• Employee name, email address, phone number, assigned role, and delivery area assignments.
+
+C. Customer Operational Data:
+• Customer name, delivery address, phone number, and delivery instructions.
+• Newspaper and magazine subscription details, daily/monthly rates, delivery pauses, and delivery sequence ordering.
+
+D. Financial & Billing Records:
+• Monthly bills, line items, subscription daily rates, and balance adjustments.
+• Payment collection receipts including payment amount, payment mode (Cash or UPI), collector UID, receipt timestamp, and bill allocations.
+• Payment reversal records and audit history.
+
+E. Authentication & Consent Records:
+• Login credentials and verification status managed through Firebase Authentication.
+• Versioned consent records including legal terms version, cryptographic SHA-256 document hashes, acceptance timestamp, client platform, and append-only audit trail entries.
+
+5. HOW INFORMATION IS USED
+Information stored in PaperRoute is used exclusively to:
+• Authenticate authorized users and enforce role-based agency tenant isolation.
+• Provide morning newspaper delivery route checklists and customer sequence navigation.
+• Calculate monthly customer bills, print or share billing statements, and record payment collections.
+• Maintain immutable accounting ledgers, payment receipt history, and audit trails.
+• Prevent fraudulent activity, enforce rate limits, and maintain system security via Firebase App Check.
+
+6. TECHNICAL INFRASTRUCTURE & SERVICE PROVIDERS
+PaperRoute utilizes secure, industry-standard cloud infrastructure:
+• Google Cloud / Firebase (Authentication, Cloud Firestore, Cloud Functions, App Check) hosted in the Asia-South1 (Mumbai, India) region.
+• Razorpay for processing B2B agency SaaS subscription payments via web checkout.
+
+7. DATA RETENTION & ACCOUNT DELETION
+Users have the right to request deletion of their account and personal details:
+
+A. In-App Account Deletion:
+Users can initiate permanent account deletion directly within the mobile application via Account Settings > Delete Account. For security, recent password re-authentication is required.
+
+B. Employee Account Deletion:
+When an employee deletes their account, their personal profile is marked deleted, personal contact details (name, email, phone) are erased and anonymized, and their authentication identity is permanently destroyed. Historical payment collection records where the employee acted as collector are retained in anonymized format to preserve the agency's cash accounting integrity.
+
+C. Agency Head Account Deletion & Agency Closure:
+An Agency Head may delete their account and close their agency only after all active customer routes are archived and all employee memberships are removed. Upon closure, all pending invitations are revoked, delivery areas archived, business entity marked closed, owner personal details anonymized, and authentication identity destroyed.
+
+D. Financial & Audit Ledger Preservation:
+Historical invoices, monthly bills, payment collection records, payment allocations, reversals, and audit records may be retained as part of the agency's financial and audit history and to maintain accurate accounting, reconciliation, and record integrity.
+
+8. OPERATIONAL SUPPORT & GRIEVANCE CONTACT
+For any privacy inquiries, data correction requests, or support questions regarding Paperbil or PaperRoute, please contact our operational support team:
+
+• Operational Support Email: craftares.business@gmail.com
+• Operational WhatsApp Support: +91 8871998609
+• Web: https://paperbil.com/support
+(Permanent domain email addresses such as privacy@paperbil.com will be published on https://paperbil.com upon activation of domain mail routing).

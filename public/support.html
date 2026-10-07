@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Help & Support — Paperbil / PaperRoute</title>
+  <style>
+    :root {
+      --brand: #1B2A4A;
+      --accent: #00C853;
+      --ink: #1A1D20;
+      --muted: #64748B;
+      --bg: #F8FAFC;
+      --card: #FFFFFF;
+      --border: #E2E8F0;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--ink); line-height: 1.6; padding: 24px 16px; }
+    .container { max-width: 800px; margin: 0 auto; background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 36px 32px; }
+    header { border-bottom: 1px solid var(--border); padding-bottom: 20px; margin-bottom: 28px; }
+    .brand-badge { display: inline-block; background: #EBF3FF; color: var(--brand); font-weight: 700; font-size: 13px; padding: 4px 12px; border-radius: 6px; margin-bottom: 10px; }
+    h1 { font-size: 26px; color: var(--brand); margin-bottom: 8px; }
+    .meta { font-size: 13px; color: var(--muted); }
+    h2 { font-size: 18px; color: var(--brand); margin-top: 28px; margin-bottom: 12px; border-bottom: 1px solid #F1F5F9; padding-bottom: 6px; }
+    p, ul { font-size: 14px; color: #334155; margin-bottom: 14px; }
+    ul { padding-left: 20px; }
+    li { margin-bottom: 6px; }
+    .channel-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 20px 0; }
+    @media (max-width: 600px) { .channel-grid { grid-template-columns: 1fr; } }
+    .channel-card { background: #F8FAFC; border: 1px solid var(--border); border-radius: 10px; padding: 20px; text-align: center; }
+    .channel-title { font-weight: 700; font-size: 16px; color: var(--brand); margin-bottom: 6px; }
+    .channel-value { font-size: 14px; color: #0284C7; font-weight: 600; margin-bottom: 8px; }
+    .channel-desc { font-size: 12px; color: var(--muted); }
+    .faq-item { margin-bottom: 16px; background: #FAFAFA; border: 1px solid #F1F5F9; border-radius: 8px; padding: 14px 16px; }
+    .faq-q { font-weight: 700; font-size: 14px; color: var(--brand); margin-bottom: 4px; }
+    .faq-a { font-size: 13px; color: #475569; }
+    a { color: #0284C7; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    footer { margin-top: 32px; border-top: 1px solid var(--border); padding-top: 16px; font-size: 12px; color: var(--muted); text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="brand-badge">Paperbil Support Center</div>
+      <h1>PaperRoute Help & Support</h1>
+      <div class="meta">Product: PaperRoute V1 • Public Brand: Paperbil • Domain: https://paperbil.com</div>
+    </header>
+
+    <h2>Operational Support Channels</h2>
+    <p>We provide direct operational assistance to newspaper distributors and delivery staff:</p>
+
+    <div class="channel-grid">
+      <div class="channel-card">
+        <div class="channel-title">WhatsApp Support</div>
+        <div class="channel-value">+91 8871998609</div>
+        <div class="channel-desc">Operational assistance for agency setup, route loading, and daily billing.</div>
+      </div>
+      <div class="channel-card">
+        <div class="channel-title">Email Support</div>
+        <div class="channel-value"><a href="mailto:craftares.business@gmail.com">craftares.business@gmail.com</a></div>
+        <div class="channel-desc">Technical inquiries, billing support, and privacy requests.</div>
+      </div>
+    </div>
+
+    <h2>Frequently Asked Questions</h2>
+
+    <div class="faq-item">
+      <div class="faq-q">1. How are monthly bills calculated in PaperRoute?</div>
+      <div class="faq-a">Bills calculate customer charges by multiplying active delivery days in the calendar month by the newspaper daily rate. All customer-specific pauses, custom pricing terms, and opening outstanding balances are automatically factored into the final bill.</div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q">2. How do UPI collections work?</div>
+      <div class="faq-a">In Business Settings, configure your agency's UPI Virtual Payment Address (VPA). During payment collection, PaperRoute generates a dynamic UPI QR code. The customer scans and transfers money directly into your bank account. PaperRoute logs the confirmed receipt in your agency ledger.</div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q">3. Does PaperRoute track my delivery boys' live GPS location?</div>
+      <div class="faq-a">No. PaperRoute V1 does NOT access, collect, or track device GPS hardware, background location, or sensor coordinates. Delivery sequence ordering is organized manually by the distributor.</div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-q">4. How do I delete my account or close my agency?</div>
+      <div class="faq-a">You can delete your account directly in the app under <em>Account Settings > Delete Account</em>. If you are an Agency Head, archive all active customer routes and remove staff members first, then execute deletion. You can also submit an external request on our <a href="/delete-account">Web Deletion Page</a>.</div>
+    </div>
+
+    <footer>
+      &copy; 2026 Paperbil • Product: PaperRoute V1 • <a href="/privacy">Privacy Notice</a> • <a href="/terms">Terms of Service</a> • <a href="/delete-account">Account Deletion</a>
+    </footer>
+  </div>
+</body>
+</html>

@@ -19,7 +19,7 @@ The public web page must provide a simple, secure, mobile-friendly form accessib
    - Account Role / Agency Name (Optional helper for lookup)
    - Reason for Deletion (Optional)
 2. **Clear Legal & Retention Notice**:
-   - Informs the user of what will be deleted, what will be anonymized, and what statutory financial records must be retained.
+   - Informs the user of what will be deleted, what will be anonymized, and what financial/audit records are retained for accounting integrity.
 3. **Verification Method Selection**:
    - Email verification link (default for unauthenticated web visitors).
 
@@ -76,7 +76,7 @@ sequenceDiagram
    - The agency record in `businesses/{businessId}` is transitioned to `status: "closed"`.
    - The owner's member and profile documents are anonymized.
    - The owner's Firebase Auth identity is deleted.
-   - Historical bills, payments, and audit records remain preserved in Firestore for statutory compliance.
+   - Historical bills, payments, and audit records remain preserved in Firestore for financial accounting reconciliation and ledger integrity.
 
 ---
 
@@ -107,4 +107,4 @@ When publishing on the Google Play Console:
 - Answer: *"Do you provide a link for users to request deletion of their account?"* -> **Yes**.
 - Enter URL: `https://<approved-domain>/delete-account` (or Firebase Hosting URL).
 - Answer: *"Does your app delete all data requested by the user, or retain some data for legitimate reasons?"* -> **Retain some data**.
-- Specify retained data categories: **Financial transaction history and billing audit records retained for statutory commercial accounting and tax compliance.**
+- Specify retained data categories: **Financial transaction history and billing audit records retained for commercial accounting reconciliation and ledger integrity.**
